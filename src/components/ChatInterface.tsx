@@ -14,6 +14,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [appConfig, setAppConfig] = useState({
+    name: 'AI智能助手',
+    description: '基于阿里云DashScope的智能对话'
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -23,6 +27,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // 获取应用配置
+  useEffect(() => {
+    const fetchAppConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          setAppConfig(config);
+        }
+      } catch (error) {
+        console.log('使用默认配置');
+      }
+    };
+    fetchAppConfig();
+  }, []);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -276,8 +296,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           <Bot size={24} />
         </div>
         <div>
-          <h1 style={styles.headerTitle}>AI智能助手</h1>
-          <p style={styles.headerSubtitle}>基于阿里云DashScope的智能对话</p>
+          <h1 style={styles.headerTitle}>{appConfig.name}</h1>
+          <p style={styles.headerSubtitle}>{appConfig.description}</p>
         </div>
       </div>
 
@@ -286,7 +306,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         {messages.length === 0 ? (
           <div style={styles.emptyState}>
             <Bot style={styles.emptyIcon} />
-            <h2 style={styles.emptyTitle}>欢迎使用AI智能助手</h2>
+            <h2 style={styles.emptyTitle}>欢迎使用{appConfig.name}</h2>
             <p style={styles.emptyDescription}>
               我是您的AI助手，可以回答各种问题，帮助您解决问题。请在下方的输入框中输入您的问题。
             </p>

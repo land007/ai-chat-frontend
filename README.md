@@ -62,6 +62,8 @@ chmod +x deploy.sh
 |--------|------|--------|
 | `NODE_ENV` | 运行环境 | `production` |
 | `PORT` | 服务端口 | `3000` |
+| `APP_NAME` | 应用名称 | `AI智能助手` |
+| `APP_DESCRIPTION` | 应用描述 | `基于阿里云DashScope的智能对话` |
 | `DASHSCOPE_API_KEY` | 阿里云API密钥 | `your_api_key_here` |
 | `DASHSCOPE_API_URL` | 阿里云API地址 | `https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion` |
 
@@ -70,12 +72,16 @@ chmod +x deploy.sh
 #### 方法1：使用.env文件
 ```bash
 # 创建.env文件
-echo "DASHSCOPE_API_KEY=sk-your_actual_api_key_here" > .env
+echo "APP_NAME=我的AI助手" > .env
+echo "APP_DESCRIPTION=专业的AI对话助手" >> .env
+echo "DASHSCOPE_API_KEY=sk-your_actual_api_key_here" >> .env
 echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion" >> .env
 ```
 
 #### 方法2：直接设置环境变量
 ```bash
+export APP_NAME="我的AI助手"
+export APP_DESCRIPTION="专业的AI对话助手"
 export DASHSCOPE_API_KEY="sk-your_actual_api_key_here"
 export DASHSCOPE_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion"
 ```

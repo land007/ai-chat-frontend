@@ -6,9 +6,11 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 从环境变量读取API配置
+// 从环境变量读取配置
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || 'your_api_key_here';
 const DASHSCOPE_API_URL = process.env.DASHSCOPE_API_URL || 'https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion';
+const APP_NAME = process.env.APP_NAME || 'AI智能助手';
+const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于阿里云DashScope的智能对话';
 
 // 中间件
 app.use(cors());
@@ -27,6 +29,14 @@ app.get('/api/health', (req, res) => {
     status: 'ok', 
     timestamp: new Date().toISOString(),
     service: 'AI Chat API'
+  });
+});
+
+// 应用配置端点
+app.get('/api/config', (req, res) => {
+  res.json({
+    name: APP_NAME,
+    description: APP_DESCRIPTION
   });
 });
 
