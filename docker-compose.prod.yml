@@ -12,6 +12,7 @@ services:
       # 应用配置
       - APP_NAME=${APP_NAME:-AI智能助手}
       - APP_DESCRIPTION=${APP_DESCRIPTION:-基于阿里云DashScope的智能对话}
+      - WELCOME_MESSAGE=${WELCOME_MESSAGE:-}
       # 阿里云DashScope API配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-your_api_key_here}
       - DASHSCOPE_API_URL=${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}

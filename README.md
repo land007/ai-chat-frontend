@@ -64,6 +64,7 @@ chmod +x deploy.sh
 | `PORT` | 服务端口 | `3000` |
 | `APP_NAME` | 应用名称 | `AI智能助手` |
 | `APP_DESCRIPTION` | 应用描述 | `基于阿里云DashScope的智能对话` |
+| `WELCOME_MESSAGE` | 欢迎语（支持Markdown） | 空（不显示欢迎语） |
 | `DASHSCOPE_API_KEY` | 阿里云API密钥 | `your_api_key_here` |
 | `DASHSCOPE_API_URL` | 阿里云API地址 | `https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion` |
 
@@ -74,6 +75,7 @@ chmod +x deploy.sh
 # 创建.env文件
 echo "APP_NAME=我的AI助手" > .env
 echo "APP_DESCRIPTION=专业的AI对话助手" >> .env
+echo "WELCOME_MESSAGE=您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。" >> .env
 echo "DASHSCOPE_API_KEY=sk-your_actual_api_key_here" >> .env
 echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion" >> .env
 ```
@@ -82,6 +84,7 @@ echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_a
 ```bash
 export APP_NAME="我的AI助手"
 export APP_DESCRIPTION="专业的AI对话助手"
+export WELCOME_MESSAGE="您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。"
 export DASHSCOPE_API_KEY="sk-your_actual_api_key_here"
 export DASHSCOPE_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion"
 ```
@@ -90,6 +93,27 @@ export DASHSCOPE_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual
 直接编辑docker-compose.yml文件中的环境变量部分。
 
 **⚠️ 安全提醒**: 请勿将真实的API密钥提交到代码仓库中！
+
+### 欢迎语配置
+
+应用支持自定义欢迎语，欢迎语会作为第一条AI消息显示在聊天界面中：
+
+- **支持Markdown格式**：欢迎语支持完整的Markdown语法，包括标题、列表、代码块等
+- **自动渲染**：欢迎语会使用与AI回复相同的Markdown渲染器显示
+- **可选配置**：如果不设置`WELCOME_MESSAGE`，则显示默认的空状态界面
+
+#### 欢迎语示例
+```bash
+export WELCOME_MESSAGE="您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。
+
+## 我的核心职责是：
+
+- 解答公司规章制度相关问题
+- 提供财务、人事、考勤等通用办公流程指导
+- 帮助查询公司行政服务信息
+
+请问在办公方面有什么可以帮您的吗？"
+```
 
 ## 访问地址
 

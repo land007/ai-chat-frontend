@@ -16,7 +16,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [appConfig, setAppConfig] = useState({
     name: 'AI智能助手',
-    description: '基于阿里云DashScope的智能对话'
+    description: '基于阿里云DashScope的智能对话',
+    welcomeMessage: ''
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,9 +37,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         if (response.ok) {
           const config = await response.json();
           setAppConfig(config);
+          // 动态设置页面标题
+          document.title = config.name;
+          
+          // 如果有配置的欢迎语，添加为第一条消息
+          if (config.welcomeMessage && config.welcomeMessage.trim()) {
+            const welcomeMessage: ChatMessage = {
+              role: 'assistant',
+              content: config.welcomeMessage,
+              timestamp: Date.now()
+            };
+            setMessages([welcomeMessage]);
+          }
         }
       } catch (error) {
         console.log('使用默认配置');
+        // 设置默认标题
+        document.title = 'AI智能助手';
       }
     };
     fetchAppConfig();
@@ -303,7 +318,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
       {/* 消息区域 */}
       <div style={styles.messagesArea}>
-        {messages.length === 0 ? (
+        {messages.length === 0 && !appConfig.welcomeMessage ? (
           <div style={styles.emptyState}>
             <Bot style={styles.emptyIcon} />
             <h2 style={styles.emptyTitle}>欢迎使用{appConfig.name}</h2>

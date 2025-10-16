@@ -11,6 +11,7 @@ const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || 'your_api_key_here';
 const DASHSCOPE_API_URL = process.env.DASHSCOPE_API_URL || 'https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion';
 const APP_NAME = process.env.APP_NAME || 'AI智能助手';
 const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于阿里云DashScope的智能对话';
+const WELCOME_MESSAGE = process.env.WELCOME_MESSAGE || '';
 
 // 中间件
 app.use(cors());
@@ -36,7 +37,8 @@ app.get('/api/health', (req, res) => {
 app.get('/api/config', (req, res) => {
   res.json({
     name: APP_NAME,
-    description: APP_DESCRIPTION
+    description: APP_DESCRIPTION,
+    welcomeMessage: WELCOME_MESSAGE
   });
 });
 
