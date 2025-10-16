@@ -305,6 +305,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
   return (
     <div style={styles.container}>
+      {/* 添加旋转动画样式 */}
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      
       {/* 头部 */}
       <div style={styles.header}>
         <div style={styles.headerIcon}>
