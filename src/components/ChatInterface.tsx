@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import { ChatMessage, chatAPI } from '../services/api';
+import 'highlight.js/styles/github.css';
 
 interface ChatInterfaceProps {
   className?: string;
@@ -303,7 +307,90 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                 </div>
                 <div>
                   <div style={message.role === 'user' ? styles.messageBubbleUser : styles.messageBubble}>
-                    {message.content}
+                    {message.role === 'assistant' ? (
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeHighlight]}
+                        components={{
+                          code: ({ className, children, ...props }: any) => {
+                            const match = /language-(\w+)/.exec(className || '');
+                            const isInline = !match;
+                            return !isInline ? (
+                              <pre style={{ 
+                                backgroundColor: '#f6f8fa', 
+                                padding: '12px', 
+                                borderRadius: '6px', 
+                                overflow: 'auto',
+                                margin: '8px 0'
+                              }}>
+                                <code className={className} {...props}>
+                                  {children}
+                                </code>
+                              </pre>
+                            ) : (
+                              <code style={{ 
+                                backgroundColor: '#f1f3f4', 
+                                padding: '2px 4px', 
+                                borderRadius: '3px',
+                                fontSize: '0.9em'
+                              }} {...props}>
+                                {children}
+                              </code>
+                            );
+                          },
+                          p: ({ children }) => <p style={{ margin: '8px 0' }}>{children}</p>,
+                          ul: ({ children }) => <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ul>,
+                          ol: ({ children }) => <ol style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ol>,
+                          li: ({ children }) => <li style={{ margin: '4px 0' }}>{children}</li>,
+                          h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '12px 0 8px 0', fontWeight: 'bold' }}>{children}</h1>,
+                          h2: ({ children }) => <h2 style={{ fontSize: '1.3em', margin: '10px 0 6px 0', fontWeight: 'bold' }}>{children}</h2>,
+                          h3: ({ children }) => <h3 style={{ fontSize: '1.1em', margin: '8px 0 4px 0', fontWeight: 'bold' }}>{children}</h3>,
+                          blockquote: ({ children }) => (
+                            <blockquote style={{ 
+                              borderLeft: '4px solid #e1e4e8', 
+                              paddingLeft: '16px', 
+                              margin: '8px 0',
+                              fontStyle: 'italic',
+                              color: '#6a737d'
+                            }}>
+                              {children}
+                            </blockquote>
+                          ),
+                          table: ({ children }) => (
+                            <table style={{ 
+                              borderCollapse: 'collapse', 
+                              width: '100%', 
+                              margin: '8px 0',
+                              border: '1px solid #d0d7de'
+                            }}>
+                              {children}
+                            </table>
+                          ),
+                          th: ({ children }) => (
+                            <th style={{ 
+                              border: '1px solid #d0d7de', 
+                              padding: '8px', 
+                              backgroundColor: '#f6f8fa',
+                              fontWeight: 'bold'
+                            }}>
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td style={{ 
+                              border: '1px solid #d0d7de', 
+                              padding: '8px' 
+                            }}>
+                              {children}
+                            </td>
+                          )
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    ) : (
+                      message.content
+                    )}
                   </div>
                   <div style={message.role === 'user' ? styles.messageTimeUser : styles.messageTime}>
                     {message.timestamp && new Date(message.timestamp).toLocaleTimeString()}
