@@ -373,18 +373,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                               </code>
                             );
                           },
-                          p: ({ children }) => <p style={{ margin: '8px 0' }}>{children}</p>,
-                          ul: ({ children }) => <ul style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ul>,
-                          ol: ({ children }) => <ol style={{ margin: '8px 0', paddingLeft: '20px' }}>{children}</ol>,
-                          li: ({ children }) => <li style={{ margin: '4px 0' }}>{children}</li>,
-                          h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '12px 0 8px 0', fontWeight: 'bold' }}>{children}</h1>,
-                          h2: ({ children }) => <h2 style={{ fontSize: '1.3em', margin: '10px 0 6px 0', fontWeight: 'bold' }}>{children}</h2>,
-                          h3: ({ children }) => <h3 style={{ fontSize: '1.1em', margin: '8px 0 4px 0', fontWeight: 'bold' }}>{children}</h3>,
+                          p: ({ children }) => <p style={{ margin: '4px 0', lineHeight: '1.5' }}>{children}</p>,
+                          ul: ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ul>,
+                          ol: ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ol>,
+                          li: ({ children }) => <li style={{ margin: '2px 0', lineHeight: '1.4' }}>{children}</li>,
+                          strong: ({ children }) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
+                          em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
+                          h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '8px 0 4px 0', fontWeight: 'bold' }}>{children}</h1>,
+                          h2: ({ children }) => <h2 style={{ fontSize: '1.3em', margin: '6px 0 3px 0', fontWeight: 'bold' }}>{children}</h2>,
+                          h3: ({ children }) => <h3 style={{ fontSize: '1.1em', margin: '4px 0 2px 0', fontWeight: 'bold' }}>{children}</h3>,
                           blockquote: ({ children }) => (
                             <blockquote style={{ 
                               borderLeft: '4px solid #e1e4e8', 
                               paddingLeft: '16px', 
-                              margin: '8px 0',
+                              margin: '4px 0',
                               fontStyle: 'italic',
                               color: '#6a737d'
                             }}>
@@ -395,7 +397,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                             <table style={{ 
                               borderCollapse: 'collapse', 
                               width: '100%', 
-                              margin: '8px 0',
+                              margin: '4px 0',
                               border: '1px solid #d0d7de'
                             }}>
                               {children}
@@ -418,6 +420,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                             }}>
                               {children}
                             </td>
+                          ),
+                          a: ({ href, children }) => (
+                            <a 
+                              href={href} 
+                              style={{ 
+                                color: '#0366d6', 
+                                textDecoration: 'underline' 
+                              }}
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                            >
+                              {children}
+                            </a>
+                          ),
+                          hr: () => (
+                            <hr style={{ 
+                              border: 'none', 
+                              borderTop: '1px solid #e1e4e8', 
+                              margin: '8px 0' 
+                            }} />
                           )
                         }}
                       >
