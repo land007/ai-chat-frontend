@@ -1,46 +1,173 @@
-# Getting Started with Create React App
+# AI聊天应用 Docker部署指南
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## 项目简介
 
-## Available Scripts
+这是一个基于React + Express的AI聊天应用，集成了阿里云DashScope API，提供智能对话功能。
 
-In the project directory, you can run:
+## 功能特性
 
-### `npm start`
+- 🤖 AI智能对话
+- 💬 现代化聊天界面
+- 🚀 Express API代理
+- 🐳 Docker容器化部署
+- 📱 响应式设计
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## 快速部署
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+### 1. 构建Docker镜像
 
-### `npm test`
+```bash
+docker build -t land007/ai-chat-app .
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### 2. 使用Docker Compose部署
 
-### `npm run build`
+#### 开发环境
+```bash
+docker-compose up -d
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+#### 生产环境
+```bash
+docker-compose -f docker-compose.prod.yml up -d
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 3. 使用部署脚本
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+# 给脚本添加执行权限
+chmod +x deploy.sh
 
-### `npm run eject`
+# 部署开发环境
+./deploy.sh dev
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+# 部署生产环境
+./deploy.sh prod
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+# 停止服务
+./deploy.sh stop
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+# 查看状态
+./deploy.sh status
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+# 查看日志
+./deploy.sh logs
+```
 
-## Learn More
+## 环境变量配置
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+应用支持以下环境变量：
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+| 变量名 | 描述 | 默认值 |
+|--------|------|--------|
+| `NODE_ENV` | 运行环境 | `production` |
+| `PORT` | 服务端口 | `3000` |
+| `DASHSCOPE_API_KEY` | 阿里云API密钥 | `your_api_key_here` |
+| `DASHSCOPE_API_URL` | 阿里云API地址 | `https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion` |
+
+### 配置方法
+
+#### 方法1：使用.env文件
+```bash
+# 创建.env文件
+echo "DASHSCOPE_API_KEY=sk-your_actual_api_key_here" > .env
+echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion" >> .env
+```
+
+#### 方法2：直接设置环境变量
+```bash
+export DASHSCOPE_API_KEY="sk-your_actual_api_key_here"
+export DASHSCOPE_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion"
+```
+
+#### 方法3：修改docker-compose.yml
+直接编辑docker-compose.yml文件中的环境变量部分。
+
+**⚠️ 安全提醒**: 请勿将真实的API密钥提交到代码仓库中！
+
+## 访问地址
+
+- **开发环境**: http://localhost:3000
+- **生产环境**: http://localhost
+- **API健康检查**: http://localhost:3000/api/health
+
+## API接口
+
+### POST /api/chat
+
+发送聊天消息
+
+**请求体:**
+```json
+{
+  "message": "你好"
+}
+```
+
+**响应:**
+```json
+{
+  "success": true,
+  "message": "你好！我是AI助手，有什么可以帮助您的吗？",
+  "timestamp": "2025-10-16T03:10:08.399Z"
+}
+```
+
+## 项目结构
+
+```
+ai-chat-frontend/
+├── src/                    # React源代码
+│   ├── components/         # React组件
+│   └── services/          # API服务
+├── build/                 # 构建输出
+├── server.js             # Express服务器
+├── Dockerfile            # Docker配置
+├── docker-compose.yml    # 开发环境配置
+├── docker-compose.prod.yml # 生产环境配置
+├── deploy.sh             # 部署脚本
+└── package.json          # 项目配置
+```
+
+## 技术栈
+
+- **前端**: React 19 + TypeScript
+- **后端**: Express.js + Node.js
+- **AI服务**: 阿里云DashScope
+- **容器化**: Docker + Docker Compose
+- **UI组件**: Lucide React图标
+
+## 故障排除
+
+### 1. 端口冲突
+如果3000端口被占用，可以修改docker-compose.yml中的端口映射：
+```yaml
+ports:
+  - "8080:3000"  # 映射到8080端口
+```
+
+### 2. API调用超时
+检查网络连接和API密钥配置是否正确。
+
+### 3. 容器启动失败
+查看容器日志：
+```bash
+docker-compose logs ai-chat-app
+```
+
+## 更新部署
+
+1. 重新构建镜像：
+```bash
+docker build -t land007/ai-chat-app .
+```
+
+2. 重启服务：
+```bash
+docker-compose down
+docker-compose up -d
+```
+
+## 许可证
+
+MIT License
