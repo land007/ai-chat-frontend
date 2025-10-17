@@ -80,7 +80,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     setIsLoading(true);
 
     try {
-      const response = await chatAPI.sendMessage(inputValue.trim());
+      const response = await chatAPI.sendMessage(inputValue.trim(), messages);
       
       const assistantMessage: ChatMessage = {
         id: generateId(),
@@ -144,7 +144,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     setEditingMessageId(null);
 
     try {
-      const response = await chatAPI.sendMessage(editValue.trim());
+      const response = await chatAPI.sendMessage(editValue.trim(), newMessages);
       
       const assistantMessage: ChatMessage = {
         id: generateId(),
@@ -184,7 +184,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     setIsLoading(true);
 
     try {
-      const response = await chatAPI.sendMessage(userMessage.content);
+      const response = await chatAPI.sendMessage(userMessage.content, newMessages);
       
       const assistantMessage: ChatMessage = {
         id: generateId(),

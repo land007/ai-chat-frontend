@@ -21,17 +21,19 @@ export interface ChatError {
 class ChatAPI {
   private readonly apiUrl = '/api/chat';
 
-  async sendMessage(message: string): Promise<string> {
+  async sendMessage(message: string, contextMessages: ChatMessage[] = []): Promise<string> {
     try {
       console.log(`[前端API] 发送消息: ${message}`);
-      
+      console.log(`[前端API] 上下文消息数量: ${contextMessages.length}`);
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: message
+          message: message,
+          contextMessages: contextMessages
         })
       });
 
@@ -42,7 +44,7 @@ class ChatAPI {
 
       const data: ChatResponse = await response.json();
       console.log(`[前端API] 收到响应: ${data.message}`);
-      
+
       return data.message;
     } catch (error) {
       console.error('[前端API] 调用错误:', error);

@@ -65,6 +65,7 @@ chmod +x deploy.sh
 | `APP_NAME` | 应用名称 | `AI智能助手` |
 | `APP_DESCRIPTION` | 应用描述 | `基于阿里云DashScope的智能对话` |
 | `WELCOME_MESSAGE` | 欢迎语（支持Markdown） | 空（不显示欢迎语） |
+| `CONTEXT_MESSAGE_COUNT` | 上下文消息条数 | `5` |
 | `DASHSCOPE_API_KEY` | 阿里云API密钥 | `your_api_key_here` |
 | `DASHSCOPE_API_URL` | 阿里云API地址 | `https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion` |
 
@@ -76,6 +77,7 @@ chmod +x deploy.sh
 echo "APP_NAME=我的AI助手" > .env
 echo "APP_DESCRIPTION=专业的AI对话助手" >> .env
 echo "WELCOME_MESSAGE=您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。" >> .env
+echo "CONTEXT_MESSAGE_COUNT=10" >> .env
 echo "DASHSCOPE_API_KEY=sk-your_actual_api_key_here" >> .env
 echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion" >> .env
 ```
@@ -85,6 +87,7 @@ echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_a
 export APP_NAME="我的AI助手"
 export APP_DESCRIPTION="专业的AI对话助手"
 export WELCOME_MESSAGE="您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。"
+export CONTEXT_MESSAGE_COUNT="10"
 export DASHSCOPE_API_KEY="sk-your_actual_api_key_here"
 export DASHSCOPE_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion"
 ```
@@ -113,6 +116,24 @@ export WELCOME_MESSAGE="您好！我是国交小助手，专门为国交信通�
 - 帮助查询公司行政服务信息
 
 请问在办公方面有什么可以帮您的吗？"
+```
+
+### 上下文配置
+
+应用支持对话上下文功能，AI可以根据之前的对话内容进行回答：
+
+- **上下文条数**：通过`CONTEXT_MESSAGE_COUNT`环境变量配置
+- **默认值**：5条消息（包括用户和AI的对话）
+- **智能截取**：自动取最近的N条消息作为上下文
+- **性能优化**：避免上下文过长影响响应速度
+
+#### 上下文配置示例
+```bash
+# 设置上下文为10条消息
+export CONTEXT_MESSAGE_COUNT="10"
+
+# 设置上下文为3条消息（更快的响应）
+export CONTEXT_MESSAGE_COUNT="3"
 ```
 
 ## 访问地址

@@ -12,6 +12,7 @@ const DASHSCOPE_API_URL = process.env.DASHSCOPE_API_URL || 'https://dashscope.al
 const APP_NAME = process.env.APP_NAME || 'AI智能助手';
 const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于阿里云DashScope的智能对话';
 const WELCOME_MESSAGE = process.env.WELCOME_MESSAGE || '';
+const CONTEXT_MESSAGE_COUNT = parseInt(process.env.CONTEXT_MESSAGE_COUNT || '5', 10);
 
 // 中间件
 app.use(cors());
@@ -45,7 +46,7 @@ app.get('/api/config', (req, res) => {
 // AI聊天API端点
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, contextMessages = [] } = req.body;
     
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ 
@@ -55,13 +56,32 @@ app.post('/api/chat', async (req, res) => {
     }
 
     console.log(`[AI-REQUEST] 用户消息: ${message}`);
+    console.log(`[AI-REQUEST] 上下文消息数量: ${contextMessages.length}`);
+
+    // 构建包含上下文的提示词
+    let fullPrompt = message;
+    
+    if (contextMessages && contextMessages.length > 0) {
+      // 限制上下文消息数量
+      const limitedContext = contextMessages.slice(-CONTEXT_MESSAGE_COUNT);
+      
+      // 构建上下文
+      const contextText = limitedContext.map(msg => {
+        const role = msg.role === 'user' ? '用户' : '助手';
+        return `${role}: ${msg.content}`;
+      }).join('\n');
+      
+      fullPrompt = `以下是之前的对话内容，请根据上下文回答用户的问题：\n\n${contextText}\n\n用户: ${message}`;
+    }
+
+    console.log(`[AI-REQUEST] 完整提示词长度: ${fullPrompt.length}`);
 
     // 转发请求到阿里云DashScope
     const response = await axios.post(
       DASHSCOPE_API_URL,
       {
         input: {
-          prompt: message
+          prompt: fullPrompt
         },
         parameters: {},
         debug: {}
