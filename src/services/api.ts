@@ -4,6 +4,8 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp?: number;
+  feedback?: 'like' | 'dislike' | null;
+  retryCount?: number;
 }
 
 export interface ChatResponse {

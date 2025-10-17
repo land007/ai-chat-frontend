@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X } from 'lucide-react';
+import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -19,6 +19,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [appConfig, setAppConfig] = useState({
     name: 'AI智能助手',
     description: '基于阿里云DashScope的智能对话',
@@ -207,6 +209,89 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     }
   };
 
+  // 清空对话
+  const handleClearChat = () => {
+    setShowClearConfirm(true);
+  };
+
+  const handleConfirmClear = () => {
+    setMessages([]);
+    setShowClearConfirm(false);
+    setEditingMessageId(null);
+    setEditValue('');
+  };
+
+  const handleCancelClear = () => {
+    setShowClearConfirm(false);
+  };
+
+  // 复制消息
+  const handleCopyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      // 可以添加一个toast提示
+      console.log('消息已复制到剪贴板');
+    } catch (error) {
+      console.error('复制失败:', error);
+    }
+  };
+
+  // 消息反馈
+  const handleMessageFeedback = (messageId: string, feedback: 'like' | 'dislike') => {
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId 
+        ? { ...msg, feedback: msg.feedback === feedback ? null : feedback }
+        : msg
+    ));
+  };
+
+  // 重试消息
+  const handleRetryMessage = async (messageId: string) => {
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return;
+
+    const userMessage = messages[messageIndex - 1];
+    if (!userMessage || userMessage.role !== 'user') return;
+
+    // 增加重试次数
+    const retryCount = (messages[messageIndex].retryCount || 0) + 1;
+    
+    // 删除当前AI回复
+    const newMessages = messages.slice(0, messageIndex);
+    setMessages(newMessages);
+    setIsLoading(true);
+
+    try {
+      const response = await chatAPI.sendMessage(userMessage.content, newMessages);
+      
+      const assistantMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: response,
+        timestamp: Date.now(),
+        retryCount: retryCount
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
+        timestamp: Date.now(),
+        retryCount: retryCount
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 切换主题
+  const handleToggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -225,17 +310,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     }
   };
 
-  const styles = {
+  // 动态样式，支持深色主题
+  const getStyles = () => {
+    const isDark = isDarkMode;
+    const bgColor = isDark ? '#1f2937' : '#f9fafb';
+    const surfaceColor = isDark ? '#374151' : 'white';
+    const textColor = isDark ? '#f9fafb' : '#111827';
+    const borderColor = isDark ? '#4b5563' : '#e5e7eb';
+    const mutedColor = isDark ? '#9ca3af' : '#6b7280';
+    
+    return {
     container: {
       display: 'flex',
       flexDirection: 'column' as const,
       height: '100vh',
-      backgroundColor: '#f9fafb',
+      backgroundColor: bgColor,
+      color: textColor,
       ...(className && {})
     },
     header: {
-      backgroundColor: 'white',
-      borderBottom: '1px solid #e5e7eb',
+      backgroundColor: surfaceColor,
+      borderBottom: `1px solid ${borderColor}`,
       padding: '16px 24px',
       display: 'flex',
       alignItems: 'center',
@@ -400,12 +495,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       color: '#374151',
       opacity: 1
     },
-    messageActions: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '4px',
-      marginTop: '4px'
-    },
     editContainer: {
       marginTop: '8px',
       padding: '12px',
@@ -501,11 +590,124 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     sendButtonDisabled: {
       opacity: 0.5,
       cursor: 'not-allowed'
+    },
+    // 新增功能样式
+    headerActions: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      marginLeft: 'auto'
+    },
+    actionButton: {
+      background: 'none',
+      border: 'none',
+      padding: '8px',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      color: mutedColor,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'all 0.2s ease',
+      opacity: 0.7
+    },
+    actionButtonHover: {
+      backgroundColor: isDark ? '#4b5563' : '#f3f4f6',
+      color: textColor,
+      opacity: 1
+    },
+    messageActions: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+      marginTop: '4px'
+    },
+    feedbackButtons: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+      marginTop: '4px'
+    },
+    feedbackButton: {
+      background: 'none',
+      border: 'none',
+      padding: '4px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      color: mutedColor,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'all 0.2s ease',
+      opacity: 0.7
+    },
+    feedbackButtonActive: {
+      color: isDark ? '#10b981' : '#059669',
+      opacity: 1
+    },
+    feedbackButtonDislike: {
+      color: isDark ? '#ef4444' : '#dc2626',
+      opacity: 1
+    },
+    clearConfirmModal: {
+      position: 'fixed' as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000
+    },
+    clearConfirmContent: {
+      backgroundColor: surfaceColor,
+      padding: '24px',
+      borderRadius: '12px',
+      border: `1px solid ${borderColor}`,
+      maxWidth: '400px',
+      width: '90%'
+    },
+    clearConfirmTitle: {
+      fontSize: '18px',
+      fontWeight: 'bold',
+      marginBottom: '12px',
+      color: textColor
+    },
+    clearConfirmText: {
+      fontSize: '14px',
+      color: mutedColor,
+      marginBottom: '20px',
+      lineHeight: '1.5'
+    },
+    clearConfirmButtons: {
+      display: 'flex',
+      gap: '12px',
+      justifyContent: 'flex-end'
+    },
+    clearConfirmButton: {
+      padding: '8px 16px',
+      borderRadius: '6px',
+      border: 'none',
+      fontSize: '14px',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      fontWeight: '500'
+    },
+    clearConfirmButtonCancel: {
+      backgroundColor: isDark ? '#4b5563' : '#f3f4f6',
+      color: textColor
+    },
+    clearConfirmButtonConfirm: {
+      backgroundColor: '#ef4444',
+      color: 'white'
     }
   };
+};
 
   return (
-    <div style={styles.container}>
+    <div style={getStyles().container}>
       {/* 添加旋转动画样式 */}
       <style>
         {`
@@ -517,23 +719,51 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       </style>
       
       {/* 头部 */}
-      <div style={styles.header}>
-        <div style={styles.headerIcon}>
+      <div style={getStyles().header}>
+        <div style={getStyles().headerIcon}>
           <Bot size={24} />
         </div>
         <div>
-          <h1 style={styles.headerTitle}>{appConfig.name}</h1>
-          <p style={styles.headerSubtitle}>{appConfig.description}</p>
+          <h1 style={getStyles().headerTitle}>{appConfig.name}</h1>
+          <p style={getStyles().headerSubtitle}>{appConfig.description}</p>
+        </div>
+        <div style={getStyles().headerActions}>
+          <button
+            style={getStyles().actionButton}
+            onClick={handleToggleTheme}
+            onMouseEnter={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+            }}
+            onMouseLeave={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButton);
+            }}
+            title={isDarkMode ? "切换到浅色主题" : "切换到深色主题"}
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          <button
+            style={getStyles().actionButton}
+            onClick={handleClearChat}
+            onMouseEnter={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+            }}
+            onMouseLeave={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButton);
+            }}
+            title="清空对话"
+          >
+            <Trash2 size={18} />
+          </button>
         </div>
       </div>
 
       {/* 消息区域 */}
-      <div style={styles.messagesArea}>
+      <div style={getStyles().messagesArea}>
         {messages.length === 0 && !appConfig.welcomeMessage ? (
-          <div style={styles.emptyState}>
-            <Bot style={styles.emptyIcon} />
-            <h2 style={styles.emptyTitle}>欢迎使用{appConfig.name}</h2>
-            <p style={styles.emptyDescription}>
+          <div style={getStyles().emptyState}>
+            <Bot style={getStyles().emptyIcon} />
+            <h2 style={getStyles().emptyTitle}>欢迎使用{appConfig.name}</h2>
+            <p style={getStyles().emptyDescription}>
               我是您的AI助手，可以回答各种问题，帮助您解决问题。请在下方的输入框中输入您的问题。
             </p>
           </div>
@@ -541,10 +771,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           messages.map((message, index) => (
             <div
               key={index}
-              style={message.role === 'user' ? styles.messageContainerUser : styles.messageContainer}
+              style={message.role === 'user' ? getStyles().messageContainerUser : getStyles().messageContainer}
             >
-              <div style={message.role === 'user' ? styles.messageContentUser : styles.messageContent}>
-                <div style={message.role === 'user' ? styles.avatarUser : styles.avatar}>
+              <div style={message.role === 'user' ? getStyles().messageContentUser : getStyles().messageContent}>
+                <div style={message.role === 'user' ? getStyles().avatarUser : getStyles().avatar}>
                   {message.role === 'user' ? (
                     <User size={16} />
                   ) : (
@@ -552,7 +782,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   )}
                 </div>
                 <div>
-                  <div style={message.role === 'user' ? styles.messageBubbleUser : styles.messageBubble}>
+                  <div style={message.role === 'user' ? getStyles().messageBubbleUser : getStyles().messageBubble}>
                     {message.role === 'assistant' ? (
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
@@ -660,82 +890,131 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                       message.content
                     )}
                   </div>
-                  <div style={message.role === 'user' ? styles.messageTimeUser : styles.messageTime}>
+                  <div style={message.role === 'user' ? getStyles().messageTimeUser : getStyles().messageTime}>
                     {message.timestamp && new Date(message.timestamp).toLocaleTimeString()}
                   </div>
                   {message.role === 'assistant' && (
-                    <div style={styles.messageActions}>
+                    <div style={getStyles().messageActions}>
                       <button
-                        style={styles.regenerateButton}
-                        onClick={() => handleEditMessage(message.id)}
+                        style={getStyles().actionButton}
+                        onClick={() => handleCopyMessage(message.content)}
                         onMouseEnter={(e) => {
-                          Object.assign(e.currentTarget.style, styles.regenerateButtonHover);
+                          Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
                         }}
                         onMouseLeave={(e) => {
-                          Object.assign(e.currentTarget.style, styles.regenerateButton);
+                          Object.assign(e.currentTarget.style, getStyles().actionButton);
+                        }}
+                        title="复制消息"
+                      >
+                        <Copy size={14} />
+                      </button>
+                      <button
+                        style={getStyles().actionButton}
+                        onClick={() => handleEditMessage(message.id)}
+                        onMouseEnter={(e) => {
+                          Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+                        }}
+                        onMouseLeave={(e) => {
+                          Object.assign(e.currentTarget.style, getStyles().actionButton);
                         }}
                         title="编辑问题"
                       >
                         <Edit3 size={14} />
                       </button>
                       <button
-                        style={styles.regenerateButton}
+                        style={getStyles().actionButton}
                         onClick={() => handleRegenerateMessage(message.id)}
                         onMouseEnter={(e) => {
-                          Object.assign(e.currentTarget.style, styles.regenerateButtonHover);
+                          Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
                         }}
                         onMouseLeave={(e) => {
-                          Object.assign(e.currentTarget.style, styles.regenerateButton);
+                          Object.assign(e.currentTarget.style, getStyles().actionButton);
                         }}
                         title="重新生成"
                       >
                         <RotateCcw size={14} />
+                      </button>
+                      {message.content.includes('抱歉，我暂时无法回复您的消息') && (
+                        <button
+                          style={getStyles().actionButton}
+                          onClick={() => handleRetryMessage(message.id)}
+                          onMouseEnter={(e) => {
+                            Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+                          }}
+                          onMouseLeave={(e) => {
+                            Object.assign(e.currentTarget.style, getStyles().actionButton);
+                          }}
+                          title="重试"
+                        >
+                          <RefreshCw size={14} />
+                        </button>
+                      )}
+                      {/* 反馈按钮 */}
+                      <button
+                        style={{
+                          ...getStyles().feedbackButton,
+                          ...(message.feedback === 'like' ? getStyles().feedbackButtonActive : {})
+                        }}
+                        onClick={() => handleMessageFeedback(message.id, 'like')}
+                        title="点赞"
+                      >
+                        <ThumbsUp size={14} />
+                      </button>
+                      <button
+                        style={{
+                          ...getStyles().feedbackButton,
+                          ...(message.feedback === 'dislike' ? getStyles().feedbackButtonDislike : {})
+                        }}
+                        onClick={() => handleMessageFeedback(message.id, 'dislike')}
+                        title="点踩"
+                      >
+                        <ThumbsDown size={14} />
                       </button>
                     </div>
                   )}
                   
                   {/* 编辑模式 */}
                   {message.role === 'assistant' && editingMessageId === message.id && (
-                    <div style={styles.editContainer}>
+                    <div style={getStyles().editContainer}>
                       <textarea
-                        style={styles.editInput}
+                        style={getStyles().editInput}
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         placeholder="修改您的问题..."
                         rows={2}
                         onFocus={(e) => {
-                          Object.assign(e.currentTarget.style, styles.editInputFocus);
+                          Object.assign(e.currentTarget.style, getStyles().editInputFocus);
                         }}
                         onBlur={(e) => {
-                          Object.assign(e.currentTarget.style, styles.editInput);
+                          Object.assign(e.currentTarget.style, getStyles().editInput);
                         }}
                         onKeyDown={handleEditKeyPress}
                       />
-                      <div style={styles.editButtons}>
+                      <div style={getStyles().editButtons}>
                         <button
-                          style={{...styles.editButton, ...styles.cancelButton}}
+                          style={{...getStyles().editButton, ...getStyles().cancelButton}}
                           onClick={handleCancelEdit}
                           onMouseEnter={(e) => {
-                            Object.assign(e.currentTarget.style, styles.cancelButtonHover);
+                            Object.assign(e.currentTarget.style, getStyles().cancelButtonHover);
                           }}
                           onMouseLeave={(e) => {
-                            Object.assign(e.currentTarget.style, styles.cancelButton);
+                            Object.assign(e.currentTarget.style, getStyles().cancelButton);
                           }}
                         >
                           <X size={14} style={{ marginRight: '4px' }} />
                           取消
                         </button>
                         <button
-                          style={{...styles.editButton, ...styles.confirmButton}}
+                          style={{...getStyles().editButton, ...getStyles().confirmButton}}
                           onClick={handleConfirmEdit}
                           disabled={!editValue.trim() || isLoading}
                           onMouseEnter={(e) => {
                             if (!e.currentTarget.disabled) {
-                              Object.assign(e.currentTarget.style, styles.confirmButtonHover);
+                              Object.assign(e.currentTarget.style, getStyles().confirmButtonHover);
                             }
                           }}
                           onMouseLeave={(e) => {
-                            Object.assign(e.currentTarget.style, styles.confirmButton);
+                            Object.assign(e.currentTarget.style, getStyles().confirmButton);
                           }}
                         >
                           <Check size={14} style={{ marginRight: '4px' }} />
@@ -751,14 +1030,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         )}
         
         {isLoading && (
-          <div style={styles.loadingContainer}>
-            <div style={styles.loadingContent}>
-              <div style={styles.avatar}>
+          <div style={getStyles().loadingContainer}>
+            <div style={getStyles().loadingContent}>
+              <div style={getStyles().avatar}>
                 <Bot size={16} />
               </div>
-              <div style={styles.loadingBubble}>
+              <div style={getStyles().loadingBubble}>
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={styles.loadingText}>AI正在思考...</span>
+                <span style={getStyles().loadingText}>AI正在思考...</span>
               </div>
             </div>
           </div>
@@ -767,17 +1046,43 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* 清空确认对话框 */}
+      {showClearConfirm && (
+        <div style={getStyles().clearConfirmModal}>
+          <div style={getStyles().clearConfirmContent}>
+            <div style={getStyles().clearConfirmTitle}>确认清空对话</div>
+            <div style={getStyles().clearConfirmText}>
+              您确定要清空所有对话记录吗？此操作无法撤销。
+            </div>
+            <div style={getStyles().clearConfirmButtons}>
+              <button
+                style={{...getStyles().clearConfirmButton, ...getStyles().clearConfirmButtonCancel}}
+                onClick={handleCancelClear}
+              >
+                取消
+              </button>
+              <button
+                style={{...getStyles().clearConfirmButton, ...getStyles().clearConfirmButtonConfirm}}
+                onClick={handleConfirmClear}
+              >
+                确认清空
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 输入区域 */}
-      <div style={styles.inputArea}>
-        <div style={styles.inputContainer}>
+      <div style={getStyles().inputArea}>
+        <div style={getStyles().inputContainer}>
           <textarea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="输入您的问题..."
             style={{
-              ...styles.textarea,
-              ...(inputValue.trim() ? styles.textareaFocus : {})
+              ...getStyles().textarea,
+              ...(inputValue.trim() ? getStyles().textareaFocus : {})
             }}
             rows={1}
           />
@@ -785,8 +1090,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isLoading}
             style={{
-              ...styles.sendButton,
-              ...((!inputValue.trim() || isLoading) ? styles.sendButtonDisabled : {})
+              ...getStyles().sendButton,
+              ...((!inputValue.trim() || isLoading) ? getStyles().sendButtonDisabled : {})
             }}
             onMouseEnter={(e) => {
               if (!(!inputValue.trim() || isLoading)) {
