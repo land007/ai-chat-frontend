@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw } from 'lucide-react';
+import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { useTranslation } from 'react-i18next';
 import { ChatMessage, chatAPI } from '../services/api';
 import 'highlight.js/styles/github.css';
 
@@ -14,6 +15,7 @@ interface ChatInterfaceProps {
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
+  const { t, i18n } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -96,7 +98,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
+        content: t('messages.errorMessage'),
         timestamp: Date.now()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -160,7 +162,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
+        content: t('messages.errorMessage'),
         timestamp: Date.now()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -200,7 +202,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
+        content: t('messages.errorMessage'),
         timestamp: Date.now()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -229,10 +231,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const handleCopyMessage = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
-      // 可以添加一个toast提示
-      console.log('消息已复制到剪贴板');
+      console.log(t('messages.copySuccess'));
     } catch (error) {
-      console.error('复制失败:', error);
+      console.error(t('messages.copyError'), error);
     }
   };
 
@@ -277,7 +278,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
+        content: t('messages.errorMessage'),
         timestamp: Date.now(),
         retryCount: retryCount
       };
@@ -290,6 +291,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   // 切换主题
   const handleToggleTheme = () => {
     setIsDarkMode(!isDarkMode);
+  };
+
+  // 切换语言
+  const handleToggleLanguage = () => {
+    const newLang = i18n.language === 'zh' ? 'en' : 'zh';
+    i18n.changeLanguage(newLang);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -734,6 +741,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         <div style={getStyles().headerActions}>
           <button
             style={getStyles().actionButton}
+            onClick={handleToggleLanguage}
+            onMouseEnter={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+            }}
+            onMouseLeave={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButton);
+            }}
+            title={t('ui.switchLanguage')}
+          >
+            <Globe size={18} />
+          </button>
+          <button
+            style={getStyles().actionButton}
             onClick={handleToggleTheme}
             onMouseEnter={(e) => {
               Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
@@ -741,7 +761,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             onMouseLeave={(e) => {
               Object.assign(e.currentTarget.style, getStyles().actionButton);
             }}
-            title={isDarkMode ? "切换到浅色主题" : "切换到深色主题"}
+            title={isDarkMode ? t('ui.lightTheme') : t('ui.darkTheme')}
           >
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
@@ -754,7 +774,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             onMouseLeave={(e) => {
               Object.assign(e.currentTarget.style, getStyles().actionButton);
             }}
-            title="清空对话"
+            title={t('ui.clear')}
           >
             <Trash2 size={18} />
           </button>
@@ -766,9 +786,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         {messages.length === 0 && !appConfig.welcomeMessage ? (
           <div style={getStyles().emptyState}>
             <Bot style={getStyles().emptyIcon} />
-            <h2 style={getStyles().emptyTitle}>欢迎使用{appConfig.name}</h2>
+            <h2 style={getStyles().emptyTitle}>{t('app.welcome')}</h2>
             <p style={getStyles().emptyDescription}>
-              我是您的AI助手，可以回答各种问题，帮助您解决问题。请在下方的输入框中输入您的问题。
+              {t('app.welcomeDescription')}
             </p>
           </div>
         ) : (
@@ -909,7 +929,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                         onMouseLeave={(e) => {
                           Object.assign(e.currentTarget.style, getStyles().actionButton);
                         }}
-                        title="复制消息"
+                        title={t('ui.copy')}
                       >
                         <Copy size={14} />
                       </button>
@@ -922,7 +942,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                         onMouseLeave={(e) => {
                           Object.assign(e.currentTarget.style, getStyles().actionButton);
                         }}
-                        title="编辑问题"
+                        title={t('ui.edit')}
                       >
                         <Edit3 size={14} />
                       </button>
@@ -935,11 +955,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                         onMouseLeave={(e) => {
                           Object.assign(e.currentTarget.style, getStyles().actionButton);
                         }}
-                        title="重新生成"
+                        title={t('ui.regenerate')}
                       >
                         <RotateCcw size={14} />
                       </button>
-                      {message.content.includes('抱歉，我暂时无法回复您的消息') && (
+                      {message.content.includes(t('messages.errorMessage')) && (
                         <button
                           style={getStyles().actionButton}
                           onClick={() => handleRetryMessage(message.id)}
@@ -949,7 +969,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           onMouseLeave={(e) => {
                             Object.assign(e.currentTarget.style, getStyles().actionButton);
                           }}
-                          title="重试"
+                          title={t('ui.retry')}
                         >
                           <RefreshCw size={14} />
                         </button>
@@ -961,7 +981,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           ...(message.feedback === 'like' ? getStyles().feedbackButtonActive : {})
                         }}
                         onClick={() => handleMessageFeedback(message.id, 'like')}
-                        title="点赞"
+                        title={t('ui.like')}
                       >
                         <ThumbsUp size={14} />
                       </button>
@@ -971,7 +991,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           ...(message.feedback === 'dislike' ? getStyles().feedbackButtonDislike : {})
                         }}
                         onClick={() => handleMessageFeedback(message.id, 'dislike')}
-                        title="点踩"
+                        title={t('ui.dislike')}
                       >
                         <ThumbsDown size={14} />
                       </button>
@@ -985,7 +1005,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                         style={getStyles().editInput}
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        placeholder="修改您的问题..."
+                        placeholder={t('ui.editPlaceholder')}
                         rows={2}
                         onFocus={(e) => {
                           Object.assign(e.currentTarget.style, getStyles().editInputFocus);
@@ -1007,7 +1027,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           }}
                         >
                           <X size={14} style={{ marginRight: '4px' }} />
-                          取消
+                          {t('ui.cancel')}
                         </button>
                         <button
                           style={{...getStyles().editButton, ...getStyles().confirmButton}}
@@ -1023,7 +1043,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           }}
                         >
                           <Check size={14} style={{ marginRight: '4px' }} />
-                          确认
+                          {t('ui.confirm')}
                         </button>
                       </div>
                     </div>
@@ -1042,7 +1062,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               </div>
               <div style={getStyles().loadingBubble}>
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={getStyles().loadingText}>AI正在思考...</span>
+                <span style={getStyles().loadingText}>{t('ui.loading')}</span>
               </div>
             </div>
           </div>
@@ -1055,22 +1075,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       {showClearConfirm && (
         <div style={getStyles().clearConfirmModal}>
           <div style={getStyles().clearConfirmContent}>
-            <div style={getStyles().clearConfirmTitle}>确认清空对话</div>
+            <div style={getStyles().clearConfirmTitle}>{t('messages.clearConfirm')}</div>
             <div style={getStyles().clearConfirmText}>
-              您确定要清空所有对话记录吗？此操作无法撤销。
+              {t('messages.clearConfirmText')}
             </div>
             <div style={getStyles().clearConfirmButtons}>
               <button
                 style={{...getStyles().clearConfirmButton, ...getStyles().clearConfirmButtonCancel}}
                 onClick={handleCancelClear}
               >
-                取消
+                {t('ui.cancel')}
               </button>
               <button
                 style={{...getStyles().clearConfirmButton, ...getStyles().clearConfirmButtonConfirm}}
                 onClick={handleConfirmClear}
               >
-                确认清空
+                {t('messages.clearConfirmButton')}
               </button>
             </div>
           </div>
@@ -1084,7 +1104,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="输入您的问题..."
+            placeholder={t('ui.inputPlaceholder')}
             style={{
               ...getStyles().textarea,
               ...(inputValue.trim() ? getStyles().textareaFocus : {})

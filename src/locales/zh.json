@@ -1,0 +1,38 @@
+{
+  "app": {
+    "name": "AI智能助手",
+    "description": "基于阿里云DashScope的智能对话",
+    "welcome": "欢迎使用AI智能助手",
+    "welcomeDescription": "我是您的AI助手，可以回答各种问题，帮助您解决问题。请在下方的输入框中输入您的问题。"
+  },
+  "ui": {
+    "inputPlaceholder": "输入您的问题...",
+    "loading": "AI正在思考...",
+    "send": "发送",
+    "clear": "清空对话",
+    "copy": "复制消息",
+    "edit": "编辑问题",
+    "regenerate": "重新生成",
+    "retry": "重试",
+    "like": "点赞",
+    "dislike": "点踩",
+    "lightTheme": "切换到浅色主题",
+    "darkTheme": "切换到深色主题",
+    "switchLanguage": "切换语言",
+    "confirm": "确认",
+    "cancel": "取消",
+    "editPlaceholder": "修改您的问题..."
+  },
+  "messages": {
+    "clearConfirm": "确认清空对话",
+    "clearConfirmText": "您确定要清空所有对话记录吗？此操作无法撤销。",
+    "clearConfirmButton": "确认清空",
+    "errorMessage": "抱歉，我暂时无法回复您的消息。请稍后重试。",
+    "copySuccess": "消息已复制到剪贴板",
+    "copyError": "复制失败"
+  },
+  "languages": {
+    "zh": "中文",
+    "en": "English"
+  }
+}

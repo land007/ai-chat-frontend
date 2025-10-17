@@ -1,0 +1,38 @@
+{
+  "app": {
+    "name": "AI Assistant",
+    "description": "Intelligent conversation based on Alibaba Cloud DashScope",
+    "welcome": "Welcome to AI Assistant",
+    "welcomeDescription": "I am your AI assistant, I can answer various questions and help you solve problems. Please enter your question in the input box below."
+  },
+  "ui": {
+    "inputPlaceholder": "Enter your question...",
+    "loading": "AI is thinking...",
+    "send": "Send",
+    "clear": "Clear Chat",
+    "copy": "Copy Message",
+    "edit": "Edit Question",
+    "regenerate": "Regenerate",
+    "retry": "Retry",
+    "like": "Like",
+    "dislike": "Dislike",
+    "lightTheme": "Switch to Light Theme",
+    "darkTheme": "Switch to Dark Theme",
+    "switchLanguage": "Switch Language",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "editPlaceholder": "Modify your question..."
+  },
+  "messages": {
+    "clearConfirm": "Confirm Clear Chat",
+    "clearConfirmText": "Are you sure you want to clear all chat records? This action cannot be undone.",
+    "clearConfirmButton": "Confirm Clear",
+    "errorMessage": "Sorry, I cannot reply to your message at the moment. Please try again later.",
+    "copySuccess": "Message copied to clipboard",
+    "copyError": "Copy failed"
+  },
+  "languages": {
+    "zh": "中文",
+    "en": "English"
+  }
+}
