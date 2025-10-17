@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RotateCcw } from 'lucide-react';
+import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -17,6 +17,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
   const [appConfig, setAppConfig] = useState({
     name: 'AI智能助手',
     description: '基于阿里云DashScope的智能对话',
@@ -101,15 +103,78 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     }
   };
 
-  // 重新提问功能
-  const handleRegenerateMessage = async (messageId: string) => {
-    if (isLoading) return;
-
-    // 找到要重新提问的消息位置
+  // 进入编辑模式
+  const handleEditMessage = (messageId: string) => {
     const messageIndex = messages.findIndex(msg => msg.id === messageId);
     if (messageIndex === -1) return;
 
-    // 找到对应的用户消息
+    const userMessage = messages[messageIndex - 1];
+    if (!userMessage || userMessage.role !== 'user') return;
+
+    setEditingMessageId(messageId);
+    setEditValue(userMessage.content);
+  };
+
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditValue('');
+  };
+
+  // 确认编辑并重新提问
+  const handleConfirmEdit = async () => {
+    if (!editingMessageId || !editValue.trim() || isLoading) return;
+
+    const messageIndex = messages.findIndex(msg => msg.id === editingMessageId);
+    if (messageIndex === -1) return;
+
+    // 找到对应的用户消息并更新其内容
+    const userMessageIndex = messageIndex - 1;
+    const updatedUserMessage: ChatMessage = {
+      ...messages[userMessageIndex],
+      content: editValue.trim(),
+      timestamp: Date.now()
+    };
+
+    // 删除从该位置开始的所有后续消息，但保留更新后的用户消息
+    const newMessages = messages.slice(0, userMessageIndex);
+    newMessages.push(updatedUserMessage);
+    setMessages(newMessages);
+    setIsLoading(true);
+    setEditingMessageId(null);
+
+    try {
+      const response = await chatAPI.sendMessage(editValue.trim());
+      
+      const assistantMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: response,
+        timestamp: Date.now()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+      setEditValue('');
+    }
+  };
+
+  // 直接重新生成（不修改问题）
+  const handleRegenerateMessage = async (messageId: string) => {
+    if (isLoading) return;
+
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return;
+
     const userMessage = messages[messageIndex - 1];
     if (!userMessage || userMessage.role !== 'user') return;
 
@@ -146,6 +211,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  // 编辑模式的键盘事件处理
+  const handleEditKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleConfirmEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEdit();
     }
   };
 
@@ -329,6 +405,59 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       alignItems: 'center',
       gap: '4px',
       marginTop: '4px'
+    },
+    editContainer: {
+      marginTop: '8px',
+      padding: '12px',
+      backgroundColor: '#f8fafc',
+      borderRadius: '8px',
+      border: '1px solid #e2e8f0'
+    },
+    editInput: {
+      width: '100%',
+      padding: '8px 12px',
+      border: '1px solid #d1d5db',
+      borderRadius: '6px',
+      fontSize: '14px',
+      lineHeight: '1.5',
+      resize: 'vertical' as const,
+      minHeight: '40px',
+      fontFamily: 'inherit',
+      outline: 'none',
+      transition: 'border-color 0.2s ease'
+    },
+    editInputFocus: {
+      borderColor: '#3b82f6',
+      boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)'
+    },
+    editButtons: {
+      display: 'flex',
+      gap: '8px',
+      marginTop: '8px',
+      justifyContent: 'flex-end'
+    },
+    editButton: {
+      padding: '6px 12px',
+      borderRadius: '6px',
+      border: 'none',
+      fontSize: '14px',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      fontWeight: '500'
+    },
+    confirmButton: {
+      backgroundColor: '#3b82f6',
+      color: 'white'
+    },
+    confirmButtonHover: {
+      backgroundColor: '#2563eb'
+    },
+    cancelButton: {
+      backgroundColor: '#f3f4f6',
+      color: '#374151'
+    },
+    cancelButtonHover: {
+      backgroundColor: '#e5e7eb'
     },
     inputArea: {
       backgroundColor: 'white',
@@ -538,6 +667,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                     <div style={styles.messageActions}>
                       <button
                         style={styles.regenerateButton}
+                        onClick={() => handleEditMessage(message.id)}
+                        onMouseEnter={(e) => {
+                          Object.assign(e.currentTarget.style, styles.regenerateButtonHover);
+                        }}
+                        onMouseLeave={(e) => {
+                          Object.assign(e.currentTarget.style, styles.regenerateButton);
+                        }}
+                        title="编辑问题"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        style={styles.regenerateButton}
                         onClick={() => handleRegenerateMessage(message.id)}
                         onMouseEnter={(e) => {
                           Object.assign(e.currentTarget.style, styles.regenerateButtonHover);
@@ -545,10 +687,61 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                         onMouseLeave={(e) => {
                           Object.assign(e.currentTarget.style, styles.regenerateButton);
                         }}
-                        title="重新提问"
+                        title="重新生成"
                       >
                         <RotateCcw size={14} />
                       </button>
+                    </div>
+                  )}
+                  
+                  {/* 编辑模式 */}
+                  {message.role === 'assistant' && editingMessageId === message.id && (
+                    <div style={styles.editContainer}>
+                      <textarea
+                        style={styles.editInput}
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        placeholder="修改您的问题..."
+                        rows={2}
+                        onFocus={(e) => {
+                          Object.assign(e.currentTarget.style, styles.editInputFocus);
+                        }}
+                        onBlur={(e) => {
+                          Object.assign(e.currentTarget.style, styles.editInput);
+                        }}
+                        onKeyDown={handleEditKeyPress}
+                      />
+                      <div style={styles.editButtons}>
+                        <button
+                          style={{...styles.editButton, ...styles.cancelButton}}
+                          onClick={handleCancelEdit}
+                          onMouseEnter={(e) => {
+                            Object.assign(e.currentTarget.style, styles.cancelButtonHover);
+                          }}
+                          onMouseLeave={(e) => {
+                            Object.assign(e.currentTarget.style, styles.cancelButton);
+                          }}
+                        >
+                          <X size={14} style={{ marginRight: '4px' }} />
+                          取消
+                        </button>
+                        <button
+                          style={{...styles.editButton, ...styles.confirmButton}}
+                          onClick={handleConfirmEdit}
+                          disabled={!editValue.trim() || isLoading}
+                          onMouseEnter={(e) => {
+                            if (!e.currentTarget.disabled) {
+                              Object.assign(e.currentTarget.style, styles.confirmButtonHover);
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            Object.assign(e.currentTarget.style, styles.confirmButton);
+                          }}
+                        >
+                          <Check size={14} style={{ marginRight: '4px' }} />
+                          确认
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
