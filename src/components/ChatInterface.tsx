@@ -434,9 +434,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     messageBubble: {
       padding: '12px 16px',
       borderRadius: '16px',
-      backgroundColor: 'white',
-      color: '#111827',
-      border: '1px solid #e5e7eb',
+      backgroundColor: surfaceColor,
+      color: textColor,
+      border: `1px solid ${borderColor}`,
       whiteSpace: 'pre-wrap' as const
     },
     messageBubbleUser: {
@@ -468,14 +468,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     loadingBubble: {
       padding: '12px 16px',
       borderRadius: '16px',
-      backgroundColor: 'white',
-      border: '1px solid #e5e7eb',
+      backgroundColor: surfaceColor,
+      border: `1px solid ${borderColor}`,
       display: 'flex',
       alignItems: 'center',
       gap: '8px'
     },
     loadingText: {
-      color: '#6b7280'
+      color: mutedColor
     },
     regenerateButton: {
       background: 'none',
@@ -549,8 +549,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       backgroundColor: '#e5e7eb'
     },
     inputArea: {
-      backgroundColor: 'white',
-      borderTop: '1px solid #e5e7eb',
+      backgroundColor: surfaceColor,
+      borderTop: `1px solid ${borderColor}`,
       padding: '16px 24px'
     },
     inputContainer: {
@@ -793,7 +793,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                             const isInline = !match;
                             return !isInline ? (
                               <pre style={{ 
-                                backgroundColor: '#f6f8fa', 
+                                backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
                                 padding: '12px', 
                                 borderRadius: '6px', 
                                 overflow: 'auto',
@@ -805,10 +805,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                               </pre>
                             ) : (
                               <code style={{ 
-                                backgroundColor: '#f1f3f4', 
+                                backgroundColor: isDarkMode ? '#4b5563' : '#f1f3f4', 
                                 padding: '2px 4px', 
                                 borderRadius: '3px',
-                                fontSize: '0.9em'
+                                fontSize: '0.9em',
+                                color: isDarkMode ? '#f9fafb' : '#111827'
                               }} {...props}>
                                 {children}
                               </code>
@@ -848,7 +849,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                             <th style={{ 
                               border: '1px solid #d0d7de', 
                               padding: '8px', 
-                              backgroundColor: '#f6f8fa',
+                              backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa',
                               fontWeight: 'bold'
                             }}>
                               {children}
