@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { ChatMessage, chatAPI } from '../services/api';
 import 'highlight.js/styles/github.css';
+
+// 生成唯一ID的工具函数
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
 interface ChatInterfaceProps {
   className?: string;
@@ -43,6 +46,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           // 如果有配置的欢迎语，添加为第一条消息
           if (config.welcomeMessage && config.welcomeMessage.trim()) {
             const welcomeMessage: ChatMessage = {
+              id: generateId(),
               role: 'assistant',
               content: config.welcomeMessage,
               timestamp: Date.now()
@@ -63,6 +67,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     if (!inputValue.trim() || isLoading) return;
 
     const userMessage: ChatMessage = {
+      id: generateId(),
       role: 'user',
       content: inputValue.trim(),
       timestamp: Date.now()
@@ -76,6 +81,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       const response = await chatAPI.sendMessage(inputValue.trim());
       
       const assistantMessage: ChatMessage = {
+        id: generateId(),
         role: 'assistant',
         content: response,
         timestamp: Date.now()
@@ -84,6 +90,48 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       const errorMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 重新提问功能
+  const handleRegenerateMessage = async (messageId: string) => {
+    if (isLoading) return;
+
+    // 找到要重新提问的消息位置
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex === -1) return;
+
+    // 找到对应的用户消息
+    const userMessage = messages[messageIndex - 1];
+    if (!userMessage || userMessage.role !== 'user') return;
+
+    // 删除从该位置开始的所有后续消息
+    const newMessages = messages.slice(0, messageIndex);
+    setMessages(newMessages);
+    setIsLoading(true);
+
+    try {
+      const response = await chatAPI.sendMessage(userMessage.content);
+      
+      const assistantMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: response,
+        timestamp: Date.now()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        id: generateId(),
         role: 'assistant',
         content: '抱歉，我暂时无法回复您的消息。请稍后重试。',
         timestamp: Date.now()
@@ -257,6 +305,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     },
     loadingText: {
       color: '#6b7280'
+    },
+    regenerateButton: {
+      background: 'none',
+      border: 'none',
+      padding: '4px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      color: '#6b7280',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      transition: 'all 0.2s ease',
+      opacity: 0.7
+    },
+    regenerateButtonHover: {
+      backgroundColor: '#f3f4f6',
+      color: '#374151',
+      opacity: 1
+    },
+    messageActions: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+      marginTop: '4px'
     },
     inputArea: {
       backgroundColor: 'white',
@@ -462,6 +534,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   <div style={message.role === 'user' ? styles.messageTimeUser : styles.messageTime}>
                     {message.timestamp && new Date(message.timestamp).toLocaleTimeString()}
                   </div>
+                  {message.role === 'assistant' && (
+                    <div style={styles.messageActions}>
+                      <button
+                        style={styles.regenerateButton}
+                        onClick={() => handleRegenerateMessage(message.id)}
+                        onMouseEnter={(e) => {
+                          Object.assign(e.currentTarget.style, styles.regenerateButtonHover);
+                        }}
+                        onMouseLeave={(e) => {
+                          Object.assign(e.currentTarget.style, styles.regenerateButton);
+                        }}
+                        title="重新提问"
+                      >
+                        <RotateCcw size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

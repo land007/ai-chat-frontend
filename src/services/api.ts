@@ -1,5 +1,6 @@
 // API服务 - 通过本地后端代理调用阿里云DashScope
 export interface ChatMessage {
+  id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp?: number;
