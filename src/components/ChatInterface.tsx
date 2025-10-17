@@ -436,7 +436,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       borderRadius: '16px',
       backgroundColor: surfaceColor,
       color: textColor,
-      border: `1px solid ${borderColor}`,
+      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       whiteSpace: 'pre-wrap' as const
     },
     messageBubbleUser: {
@@ -469,7 +469,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       padding: '12px 16px',
       borderRadius: '16px',
       backgroundColor: surfaceColor,
-      border: `1px solid ${borderColor}`,
+      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       display: 'flex',
       alignItems: 'center',
       gap: '8px'
@@ -498,14 +498,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     editContainer: {
       marginTop: '8px',
       padding: '12px',
-      backgroundColor: '#f8fafc',
+      backgroundColor: isDark ? '#2d3748' : '#f8fafc',
       borderRadius: '8px',
-      border: '1px solid #e2e8f0'
+      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
     },
     editInput: {
       width: '100%',
       padding: '8px 12px',
-      border: '1px solid #d1d5db',
+      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       borderRadius: '6px',
       fontSize: '14px',
       lineHeight: '1.5',
@@ -513,7 +513,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       minHeight: '40px',
       fontFamily: 'inherit',
       outline: 'none',
-      transition: 'border-color 0.2s ease'
+      transition: 'border-color 0.2s ease',
+      backgroundColor: surfaceColor,
+      color: textColor
     },
     editInputFocus: {
       borderColor: '#3b82f6',
@@ -561,14 +563,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     textarea: {
       flex: 1,
       padding: '12px 16px',
-      border: '1px solid #d1d5db',
+      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       borderRadius: '16px',
       resize: 'none' as const,
       outline: 'none',
       fontSize: '16px',
       fontFamily: 'inherit',
       minHeight: '48px',
-      maxHeight: '120px'
+      maxHeight: '120px',
+      backgroundColor: surfaceColor,
+      color: textColor
     },
     textareaFocus: {
       borderColor: '#3b82f6',
@@ -665,7 +669,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       backgroundColor: surfaceColor,
       padding: '24px',
       borderRadius: '12px',
-      border: `1px solid ${borderColor}`,
+      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       maxWidth: '400px',
       width: '90%'
     },
@@ -826,11 +830,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           h3: ({ children }) => <h3 style={{ fontSize: '1.1em', margin: '4px 0 2px 0', fontWeight: 'bold' }}>{children}</h3>,
                           blockquote: ({ children }) => (
                             <blockquote style={{ 
-                              borderLeft: '4px solid #e1e4e8', 
+                              borderLeft: `4px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
                               paddingLeft: '16px', 
                               margin: '4px 0',
                               fontStyle: 'italic',
-                              color: '#6a737d'
+                              color: isDarkMode ? '#9ca3af' : '#6b7280'
                             }}>
                               {children}
                             </blockquote>
@@ -840,14 +844,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                               borderCollapse: 'collapse', 
                               width: '100%', 
                               margin: '4px 0',
-                              border: '1px solid #d0d7de'
+                              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
                             }}>
                               {children}
                             </table>
                           ),
                           th: ({ children }) => (
                             <th style={{ 
-                              border: '1px solid #d0d7de', 
+                              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
                               padding: '8px', 
                               backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa',
                               fontWeight: 'bold'
@@ -857,7 +861,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           ),
                           td: ({ children }) => (
                             <td style={{ 
-                              border: '1px solid #d0d7de', 
+                              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
                               padding: '8px' 
                             }}>
                               {children}
@@ -879,7 +883,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                           hr: () => (
                             <hr style={{ 
                               border: 'none', 
-                              borderTop: '1px solid #e1e4e8', 
+                              borderTop: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
                               margin: '8px 0' 
                             }} />
                           )
