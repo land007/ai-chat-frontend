@@ -39,7 +39,11 @@ app.get('/api/config', (req, res) => {
   res.json({
     name: APP_NAME,
     description: APP_DESCRIPTION,
-    welcomeMessage: WELCOME_MESSAGE
+    welcomeMessage: WELCOME_MESSAGE,
+    tts: {
+      enabled: process.env.REACT_APP_TTS_ENABLED === 'true',
+      apiUrl: process.env.REACT_APP_TTS_API_URL || ''
+    }
   });
 });
 

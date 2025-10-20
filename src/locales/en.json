@@ -21,7 +21,11 @@
     "switchLanguage": "Switch Language",
     "confirm": "Confirm",
     "cancel": "Cancel",
-    "editPlaceholder": "Modify your question..."
+    "editPlaceholder": "Modify your question...",
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "generating": "Generating..."
   },
   "messages": {
     "clearConfirm": "Confirm Clear Chat",

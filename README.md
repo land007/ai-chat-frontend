@@ -118,6 +118,74 @@ export WELCOME_MESSAGE="您好！我是国交小助手，专门为国交信通�
 请问在办公方面有什么可以帮您的吗？"
 ```
 
+### TTS语音播报配置
+
+应用支持TTS（Text-to-Speech）语音播报功能，可以将AI回复转换为语音播放：
+
+- **启用TTS**：设置`TTS_ENABLED=true`启用语音播报功能
+- **TTS服务URL**：通过`TTS_API_URL`配置TTS服务的HTTP接口地址
+- **灵活参数**：TTS参数通过URL参数传递，支持voice、speed、volume、language等
+- **文本高亮**：播放时高亮显示当前阅读位置
+- **播放控制**：支持播放、暂停、停止等操作
+
+#### TTS配置示例
+
+```bash
+# 启用TTS功能
+export TTS_ENABLED=true
+
+# 使用模板字符串方式（推荐）
+export TTS_API_URL="http://localhost:8080/tts?voice={voice}&speed={speed}&volume={volume}&language={language}&text={text}"
+
+# 混合使用模板字符串和固定参数
+export TTS_API_URL="http://localhost:8080/tts?voice=default&speed={speed}&volume=1.0&language={language}&text={text}"
+
+# 或者使用标准参数方式
+export TTS_API_URL="http://localhost:8080/tts?voice=default&speed=1.0&volume=1.0&language=zh-CN"
+
+# 或者使用不同的参数名
+export TTS_API_URL="http://localhost:8080/speak?v={voice}&rate={speed}&vol={volume}&lang={language}&text={text}"
+
+# 或者使用中文参数名
+export TTS_API_URL="http://localhost:8080/tts?声音={voice}&速度={speed}&音量={volume}&语言={language}&text={text}"
+```
+
+#### TTS服务接口规范
+
+TTS服务应该支持GET请求，支持多种参数传递方式：
+
+**方式1：全模板字符串（最灵活）**
+- 在URL中使用`{参数名}`占位符
+- 支持所有参数的动态替换：`{voice}`, `{speed}`, `{volume}`, `{language}`, `{text}`等
+- 系统会自动替换为实际的参数值
+- 支持URL编码，处理特殊字符
+
+**方式2：混合使用**
+- 部分参数使用模板字符串，部分使用固定值
+- 灵活配置，满足不同TTS服务的需求
+
+**方式3：标准参数**
+- 系统会自动添加`text`参数
+- 保留URL中的所有其他参数
+
+**支持的模板变量**：
+- `{text}`: 要转换的文本内容
+- `{voice}`: 语音类型
+- `{speed}`: 播放速度
+- `{volume}`: 音量
+- `{language}`: 语言代码
+- 支持任意自定义参数名
+
+**参数灵活性**：
+- 参数名可以自定义（如voice、v、声音等）
+- 参数值支持字符串格式
+- 支持不同TTS服务的参数命名规范
+- 自动处理URL编码
+
+**返回格式**：
+- 直接返回音频文件（Content-Type: audio/*）
+- 或返回JSON格式：`{"success": true, "audioUrl": "音频文件URL"}`
+
 ### 上下文配置
 
 应用支持对话上下文功能，AI可以根据之前的对话内容进行回答：

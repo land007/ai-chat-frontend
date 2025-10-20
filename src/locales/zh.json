@@ -21,7 +21,11 @@
     "switchLanguage": "切换语言",
     "confirm": "确认",
     "cancel": "取消",
-    "editPlaceholder": "修改您的问题..."
+    "editPlaceholder": "修改您的问题...",
+    "play": "播放",
+    "pause": "暂停",
+    "stop": "停止",
+    "generating": "生成中..."
   },
   "messages": {
     "clearConfirm": "确认清空对话",

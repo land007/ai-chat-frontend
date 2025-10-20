@@ -17,6 +17,9 @@ services:
       # 阿里云DashScope API配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-your_api_key_here}
       - DASHSCOPE_API_URL=${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}
+      # TTS语音播报配置
+      - REACT_APP_TTS_ENABLED=${TTS_ENABLED:-true}
+      - REACT_APP_TTS_API_URL=${TTS_API_URL:-http://localhost:8080/tts?voice=default&speed=1.0&volume=1.0&language=zh-CN&text={text}}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
