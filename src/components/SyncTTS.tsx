@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Volume2, Play, Pause, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ttsService } from '../services/tts';
@@ -24,7 +24,6 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
   const [error, setError] = useState<string | null>(null);
   
   // 进度状态
-  const [typewriterProgress, setTypewriterProgress] = useState(0);
   const [ttsProgress, setTtsProgress] = useState(0);
   const [currentParagraph, setCurrentParagraph] = useState<string | undefined>(undefined);
   
@@ -77,10 +76,7 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
     }
   };
 
-  // 处理打字机进度
-  const handleTypewriterProgress = (progress: number) => {
-    setTypewriterProgress(progress);
-  };
+  // 打字机不显示进度条，保留段落完成回调
 
   // 播放/暂停切换
   const handlePlayPause = async () => {
@@ -137,7 +133,6 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
         <TypewriterEffect
           text={text}
           speed={30}
-          onProgress={handleTypewriterProgress}
           onParagraphComplete={handleParagraphComplete}
           isDarkMode={isDarkMode}
         />
@@ -187,7 +182,6 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
         <TypewriterEffect
           text={text}
           speed={30}
-          onProgress={handleTypewriterProgress}
           onParagraphComplete={handleParagraphComplete}
           isDarkMode={isDarkMode}
         />
@@ -233,26 +227,6 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
             <Square size={14} />
           </button>
         )}
-
-        {/* 打字机进度 */}
-        <div style={{
-          flex: 1,
-          height: '4px',
-          backgroundColor: '#e5e7eb',
-          borderRadius: '2px',
-          overflow: 'hidden',
-          marginRight: '8px'
-        }}>
-          <div
-            style={{
-              width: `${typewriterProgress * 100}%`,
-              height: '100%',
-              backgroundColor: '#10b981',
-              transition: 'width 0.3s ease'
-            }}
-            title={`打字机进度: ${Math.round(typewriterProgress * 100)}%`}
-          />
-        </div>
 
         {/* TTS播放进度 */}
         <div style={{

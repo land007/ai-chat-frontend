@@ -7,7 +7,6 @@ import 'highlight.js/styles/github.css';
 interface TypewriterEffectProps {
   text: string;
   speed?: number; // 打字速度（毫秒）
-  onProgress?: (progress: number) => void; // 打字机进度回调
   onParagraphComplete?: (paragraph: string, index: number) => void; // 段落完成回调
   className?: string;
   isDarkMode?: boolean; // 暗色模式
@@ -16,7 +15,6 @@ interface TypewriterEffectProps {
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   text,
   speed = 50,
-  onProgress,
   onParagraphComplete,
   className = '',
   isDarkMode = false
@@ -73,10 +71,6 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         // 更新显示文本
         setDisplayedText(text.slice(0, newIndex));
         
-        // 计算进度
-        const progress = newIndex / text.length;
-        onProgress?.(progress);
-        
         // 检查是否完成当前段落
         const currentText = text.slice(0, newIndex);
         const currentParagraph = paragraphsRef.current[currentParagraphIndexRef.current];
@@ -99,7 +93,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         return newIndex;
       });
     }, speed);
-  }, [text, speed, onProgress, onParagraphComplete]);
+  }, [text, speed, onParagraphComplete]);
 
   // 停止打字机效果
   const stopTyping = useCallback(() => {
