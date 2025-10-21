@@ -1,16 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ChatMessage, chatAPI } from '../services/api';
+import { chatAPI } from '@/services/api';
 import TypewriterEffect from './TypewriterEffect';
+import { 
+  ChatMessage, 
+  ChatInterfaceProps
+} from '@/types';
+import { generateId } from '@/utils';
 import 'highlight.js/styles/github.css';
-
-// 生成唯一ID的工具函数
-const generateId = () => Math.random().toString(36).substr(2, 9);
-
-interface ChatInterfaceProps {
-  className?: string;
-}
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const { t, i18n } = useTranslation();

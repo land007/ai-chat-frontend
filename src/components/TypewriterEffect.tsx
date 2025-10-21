@@ -2,19 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { TypewriterEffectProps } from '@/types';
 import 'highlight.js/styles/github.css';
-
-interface TypewriterEffectProps {
-  text: string;
-  speed?: number; // 打字速度，毫秒
-  onComplete?: () => void;
-  className?: string;
-  style?: React.CSSProperties;
-  enabled?: boolean; // 是否启用打字机效果
-  isDarkMode?: boolean; // 是否深色模式
-  isStreaming?: boolean; // 是否正在流式传输
-  isThinking?: boolean; // 是否正在思考（不显示光标）
-}
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   text,

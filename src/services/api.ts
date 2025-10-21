@@ -1,36 +1,10 @@
 // API服务 - 通过本地后端代理调用阿里云DashScope
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp?: number;
-  feedback?: 'like' | 'dislike' | null;
-  retryCount?: number;
-}
-
-export interface ChatResponse {
-  success: boolean;
-  message: string;
-  timestamp: string;
-}
-
-export interface ChatError {
-  error: string;
-  code: string;
-  details?: any;
-}
-
-export interface StreamChunk {
-  content: string;
-  done: boolean;
-  timestamp: string;
-}
-
-export interface StreamError {
-  error: string;
-  code: string;
-  details?: any;
-}
+import { 
+  ChatMessage, 
+  ChatResponse, 
+  ChatError, 
+  StreamChunk
+} from '@/types';
 
 class ChatAPI {
   private readonly apiUrl = '/api/chat';
