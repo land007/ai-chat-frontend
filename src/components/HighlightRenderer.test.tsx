@@ -9,7 +9,7 @@ import HighlightRenderer, { HighlightRendererProps } from './HighlightRenderer';
 
 // Mock ReactMarkdown
 jest.mock('react-markdown', () => {
-  return function MockReactMarkdown({ children, components }: any) {
+  return function MockReactMarkdown({ children, components }: { children?: React.ReactNode; components?: Record<string, React.ComponentType<{ children?: React.ReactNode }>> }) {
     const { p: PComponent } = components || {};
     
     if (PComponent) {

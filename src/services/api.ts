@@ -17,7 +17,7 @@ export interface ChatResponse {
 export interface ChatError {
   error: string;
   code: string;
-  details?: any;
+  details?: unknown;
 }
 
 class ChatAPI {

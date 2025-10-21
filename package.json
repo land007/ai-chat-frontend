@@ -35,9 +35,11 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "server": "node server.js",
+    "server": "ts-node --project server-tsconfig.json server.ts",
+    "server:build": "tsc --project server-tsconfig.json",
+    "server:prod": "node dist/server.js",
     "dev": "concurrently \"npm run start\" \"npm run server\"",
-    "start:prod": "npm run build && npm run server"
+    "start:prod": "npm run build && npm run server:build && npm run server:prod"
   },
   "eslintConfig": {
     "extends": [
@@ -61,6 +63,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.23",
     "concurrently": "^9.2.1",
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2"
   }
 }

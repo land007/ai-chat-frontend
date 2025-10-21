@@ -139,7 +139,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
         components={{
-          code: ({ className, children, ...props }: any) => {
+          code: ({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode; className?: string }) => {
             const match = /language-(\w+)/.exec(className || '');
             const isInline = !match;
             return !isInline ? (

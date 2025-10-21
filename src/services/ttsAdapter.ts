@@ -12,7 +12,7 @@ export interface TTSOptions {
   speed?: number;
   volume?: number;
   language?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface TTSResponse {

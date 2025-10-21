@@ -140,7 +140,7 @@ export const HighlightRenderer: React.FC<HighlightRendererProps> = ({
       );
     },
     // 代码块样式
-    code: ({ children, className, ...props }: any) => {
+    code: ({ children, className, ...props }: React.HTMLAttributes<HTMLElement> & { children?: React.ReactNode; className?: string }) => {
       const isInline = !className;
       if (isInline) {
         return (

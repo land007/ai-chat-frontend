@@ -99,7 +99,7 @@ class TTSService {
     speed?: number;
     volume?: number;
     language?: string;
-    [key: string]: any; // 支持任意参数
+    [key: string]: unknown; // 支持任意参数
   } = {}): Promise<string> {
     if (!this.isAvailable()) {
       throw new Error('TTS服务不可用');
@@ -178,7 +178,7 @@ class TTSService {
     speed?: number;
     volume?: number;
     language?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   } = {}): Promise<void> {
     console.log('[TTS] playText方法被调用，文本长度:', text.length);
     
@@ -204,7 +204,7 @@ class TTSService {
     speed?: number;
     volume?: number;
     language?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   } = {}): Promise<void> {
     if (this.currentParagraphIndex >= this.currentParagraphs.length) {
       // 所有段落播放完成
