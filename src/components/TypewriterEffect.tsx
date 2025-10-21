@@ -191,25 +191,6 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   return (
     <div className={className} style={style}>
       {renderMarkdown(displayedText)}
-      {(isTyping || isStreaming) && !isThinking && (
-        <span 
-          style={{ 
-            animation: 'blink 1s infinite',
-            marginLeft: '2px',
-            color: isDarkMode ? '#9ca3af' : '#6b7280'
-          }}
-        >
-          |
-        </span>
-      )}
-      <style>
-        {`
-          @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0; }
-          }
-        `}
-      </style>
     </div>
   );
 };
