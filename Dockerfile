@@ -14,7 +14,10 @@ RUN npm ci --legacy-peer-deps
 COPY . .
 
 # 构建React应用
-RUN npm run build
+RUN CI=false npm run build
+
+# 构建TypeScript服务器
+RUN npm run server:build
 
 # 生产阶段
 FROM node:20-alpine AS production
@@ -31,8 +34,8 @@ RUN npm ci --only=production --legacy-peer-deps
 # 从构建阶段复制构建产物
 COPY --from=builder /app/build ./build
 
-# 复制服务器文件
-COPY server.js ./
+# 从构建阶段复制编译后的服务器文件
+COPY --from=builder /app/dist/server.js ./
 
 # 暴露端口
 EXPOSE 3000

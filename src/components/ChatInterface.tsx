@@ -81,26 +81,58 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     setInputValue('');
     setIsLoading(true);
 
-    try {
-      const response = await chatAPI.sendMessage(inputValue.trim(), messages);
-      
-      const assistantMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: response,
-        timestamp: Date.now()
-      };
+    // 创建助手消息，内容为空，等待流式填充
+    const assistantMessageId = generateId();
+    const assistantMessage: ChatMessage = {
+      id: assistantMessageId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now()
+    };
 
-      setMessages(prev => [...prev, assistantMessage]);
+    setMessages(prev => [...prev, assistantMessage]);
+
+    try {
+      // 使用流式API
+      await chatAPI.sendMessageStream(
+        inputValue.trim(), 
+        messages,
+        {
+          onStart: () => {
+            console.log('[ChatInterface] 流式响应开始');
+          },
+          onContent: (content: string) => {
+            // 实时更新助手消息内容
+            setMessages(prev => prev.map(msg => 
+              msg.id === assistantMessageId 
+                ? { ...msg, content: msg.content + content }
+                : msg
+            ));
+          },
+          onDone: () => {
+            console.log('[ChatInterface] 流式响应完成');
+            setIsLoading(false);
+          },
+          onError: (error: string, code?: string) => {
+            console.error('[ChatInterface] 流式响应错误:', error, code);
+            // 更新助手消息为错误信息
+            setMessages(prev => prev.map(msg => 
+              msg.id === assistantMessageId 
+                ? { ...msg, content: t('messages.errorMessage') }
+                : msg
+            ));
+            setIsLoading(false);
+          }
+        }
+      );
     } catch (error) {
-      const errorMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: t('messages.errorMessage'),
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
+      console.error('[ChatInterface] 发送消息失败:', error);
+      // 更新助手消息为错误信息
+      setMessages(prev => prev.map(msg => 
+        msg.id === assistantMessageId 
+          ? { ...msg, content: t('messages.errorMessage') }
+          : msg
+      ));
       setIsLoading(false);
     }
   };

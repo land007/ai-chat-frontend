@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -6,7 +6,7 @@ import 'highlight.js/styles/github.css';
 
 interface TypewriterEffectProps {
   text: string;
-  speed?: number; // 打字速度（毫秒）
+  speed?: number; // 保留接口兼容性，但不再使用
   onParagraphComplete?: (paragraph: string, index: number) => void; // 段落完成回调
   className?: string;
   isDarkMode?: boolean; // 暗色模式
@@ -15,123 +15,13 @@ interface TypewriterEffectProps {
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   text,
-  speed = 50,
+  speed = 50, // 保留参数但不使用
   onParagraphComplete,
   className = '',
   isDarkMode = false,
   currentPlayingParagraph
 }) => {
-  const [displayedText, setDisplayedText] = useState('');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isTyping, setIsTyping] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const paragraphsRef = useRef<string[]>([]);
-  const currentParagraphIndexRef = useRef(0);
-
-  // 分割文本为段落
-  const splitIntoParagraphs = useCallback((text: string): string[] => {
-    const paragraphs = text
-      .split(/\n\s*\n/) // 按双换行符分割
-      .map(p => p.trim())
-      .filter(p => p.length > 0);
-    
-    // 如果段落太长，进一步分割
-    const result: string[] = [];
-    paragraphs.forEach(paragraph => {
-      if (paragraph.length > 200) {
-        // 长段落按句子分割
-        const sentences = paragraph.split(/[。！？.!?]/).filter(s => s.trim().length > 0);
-        sentences.forEach(sentence => {
-          if (sentence.trim().length > 0) {
-            result.push(sentence.trim());
-          }
-        });
-      } else {
-        result.push(paragraph);
-      }
-    });
-    
-    return result;
-  }, []);
-
-  // 开始打字机效果
-  const startTyping = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-
-    paragraphsRef.current = splitIntoParagraphs(text);
-    currentParagraphIndexRef.current = 0;
-    setCurrentIndex(0);
-    setDisplayedText('');
-    setIsTyping(true);
-
-    intervalRef.current = setInterval(() => {
-      setCurrentIndex(prevIndex => {
-        const newIndex = prevIndex + 1;
-        
-        // 更新显示文本
-        setDisplayedText(text.slice(0, newIndex));
-        
-        // 检查是否完成当前段落
-        const currentText = text.slice(0, newIndex);
-        const currentParagraph = paragraphsRef.current[currentParagraphIndexRef.current];
-        
-        if (currentParagraph && currentText.includes(currentParagraph)) {
-          // 段落完成
-          onParagraphComplete?.(currentParagraph, currentParagraphIndexRef.current);
-          currentParagraphIndexRef.current++;
-        }
-        
-        // 检查是否完成所有文本
-        if (newIndex >= text.length) {
-          setIsTyping(false);
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-        }
-        
-        return newIndex;
-      });
-    }, speed);
-  }, [text, speed, onParagraphComplete]);
-
-  // 停止打字机效果
-  const stopTyping = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsTyping(false);
-  }, []);
-
-  // 重置打字机效果
-  const resetTyping = useCallback(() => {
-    stopTyping();
-    setCurrentIndex(0);
-    setDisplayedText('');
-    currentParagraphIndexRef.current = 0;
-  }, [stopTyping]);
-
-  // 当text变化时重新开始打字
-  useEffect(() => {
-    startTyping();
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [text]); // 只在text变化时重新开始
-
-  // 组件卸载时清理
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
+  // 直接显示接收到的文本，不添加任何打字效果
 
   return (
     <div className={className}>
@@ -252,7 +142,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           )
         }}
       >
-        {displayedText + (isTyping ? '|' : '')}
+        {text}
       </ReactMarkdown>
     </div>
   );

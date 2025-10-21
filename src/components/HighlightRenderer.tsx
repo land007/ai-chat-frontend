@@ -104,6 +104,8 @@ export const HighlightRenderer: React.FC<HighlightRendererProps> = ({
   }, [text]);
 
   // 检查段落是否正在播放
+  // 只有当 currentPlayingParagraph 不为 undefined 时才可能高亮
+  // 这确保了高亮功能与TTS功能绑定
   const isParagraphPlaying = React.useCallback((paragraphText: string): boolean => {
     return Boolean(currentPlayingParagraph && paragraphText.includes(currentPlayingParagraph));
   }, [currentPlayingParagraph]);

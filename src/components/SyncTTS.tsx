@@ -88,7 +88,31 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
     };
   }, []);
 
-  // 处理段落完成
+  // 监听文本变化，自动播放TTS
+  React.useEffect(() => {
+    if (!isTTSAvailable || !ttsOrchestratorRef.current || !isPlaying || isPaused) {
+      return;
+    }
+
+    // 当文本变化时，自动播放TTS
+    const playCurrentText = async () => {
+      try {
+        setIsLoading(true);
+        await ttsOrchestratorRef.current!.playText(text, {});
+        setIsLoading(false);
+      } catch (err) {
+        console.error('TTS自动播放错误:', err);
+        setError(err instanceof Error ? err.message : '自动播放失败');
+        setIsLoading(false);
+      }
+    };
+
+    // 延迟一点时间让文本稳定
+    const timer = setTimeout(playCurrentText, 100);
+    return () => clearTimeout(timer);
+  }, [text, isTTSAvailable, isPlaying, isPaused]);
+
+  // 处理段落完成（保留用于手动触发）
   const handleParagraphComplete = React.useCallback(async (paragraph: string, index: number) => {
     console.log(`[SyncTTS] 段落${index + 1}完成:`, paragraph);
     
@@ -158,16 +182,17 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
     setCurrentParagraph(undefined);
   };
 
-  // 如果TTS不可用，不显示控件
+  // 如果TTS不可用，只显示普通文本，不高亮，不调用段落完成回调
+  // 高亮功能与TTS功能绑定，只有在TTS可用时才显示高亮
   if (!isTTSAvailable) {
     return (
       <div className={className}>
         <HighlightRenderer
           text={text}
-          currentPlayingParagraph={currentParagraph}
+          currentPlayingParagraph={undefined} // 不传递高亮段落，确保不高亮
           isDarkMode={isDarkMode}
           typewriterSpeed={30}
-          onParagraphComplete={handleParagraphComplete}
+          onParagraphComplete={undefined} // 不传递段落完成回调，避免不必要的调用
         />
       </div>
     );
