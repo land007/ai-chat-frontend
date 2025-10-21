@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Volume2, Play, Pause, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { ttsService } from '../services/tts';
-import TypewriterEffect from './TypewriterEffect';
+import { createTTSOrchestrator, TTSOrchestrator } from '../services/ttsOrchestrator';
+import HighlightRenderer from './HighlightRenderer';
 
 interface SyncTTSProps {
   text: string;
@@ -23,50 +23,82 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // 进度状态
+  // TTS编排器状态
   const [ttsProgress, setTtsProgress] = useState(0);
   const [currentParagraph, setCurrentParagraph] = useState<string | undefined>(undefined);
+  const [isTTSAvailable, setIsTTSAvailable] = useState(false);
   
-  // 段落状态
-  const [paragraphs, setParagraphs] = useState<string[]>([]);
-  const [currentParagraphIndex, setCurrentParagraphIndex] = useState(0);
-  const [completedParagraphs, setCompletedParagraphs] = useState<Set<number>>(new Set());
-
-  // 检查TTS是否可用
-  const isTTSAvailable = ttsService.isAvailable();
+  // TTS编排器引用
+  const ttsOrchestratorRef = useRef<TTSOrchestrator | null>(null);
 
   useEffect(() => {
-    // 设置TTS进度回调
-    ttsService.setProgressCallback((progress) => {
-      setTtsProgress(progress);
-    });
-
-    // 设置TTS完成回调
-    ttsService.setCompleteCallback(() => {
-      setIsPlaying(false);
-      setIsPaused(false);
-      setTtsProgress(0);
-      setCurrentParagraph(undefined);
-    });
-
+    // 初始化TTS编排器
+    const initTTS = async () => {
+      try {
+        const orchestrator = createTTSOrchestrator({
+          tts: {
+            enabled: true,
+            apiUrl: '' // 将从API加载
+          }
+        });
+        
+        // 设置回调
+        orchestrator.setCallbacks({
+          onProgress: (progress) => {
+            setTtsProgress(progress);
+          },
+          onParagraphChange: (paragraph, index) => {
+            console.log(`[SyncTTS] 段落切换到第${index + 1}个:`, paragraph);
+            setCurrentParagraph(paragraph);
+          },
+          onComplete: () => {
+            setIsPlaying(false);
+            setIsPaused(false);
+            setTtsProgress(0);
+            setCurrentParagraph(undefined);
+          },
+          onError: (error) => {
+            console.error('[SyncTTS] TTS错误:', error);
+            setError(error.message);
+            setIsLoading(false);
+            setIsPlaying(false);
+            setIsPaused(false);
+          },
+          onReady: (ready) => {
+            setIsTTSAvailable(ready);
+          }
+        });
+        
+        ttsOrchestratorRef.current = orchestrator;
+        
+        // 初始化TTS
+        await orchestrator.loadConfigFromAPI();
+      } catch (error) {
+        console.error('[SyncTTS] TTS初始化失败:', error);
+        setIsTTSAvailable(false);
+      }
+    };
+    
+    initTTS();
+    
     return () => {
-      ttsService.stop();
+      if (ttsOrchestratorRef.current) {
+        ttsOrchestratorRef.current.stop();
+      }
     };
   }, []);
 
   // 处理段落完成
-  const handleParagraphComplete = async (paragraph: string, index: number) => {
+  const handleParagraphComplete = React.useCallback(async (paragraph: string, index: number) => {
     console.log(`[SyncTTS] 段落${index + 1}完成:`, paragraph);
     
-    setCompletedParagraphs(prev => new Set([...Array.from(prev), index]));
-    setCurrentParagraphIndex(index);
     setCurrentParagraph(paragraph);
 
     // 如果TTS正在播放，播放这个段落
-    if (isPlaying && !isPaused) {
+    if (isPlaying && !isPaused && ttsOrchestratorRef.current) {
       try {
         setIsLoading(true);
-        await ttsService.playText(paragraph, {});
+        await ttsOrchestratorRef.current.playText(paragraph, {});
         setIsLoading(false);
       } catch (err) {
         console.error('TTS段落播放错误:', err);
@@ -74,13 +106,13 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
         setIsLoading(false);
       }
     }
-  };
+  }, [isPlaying, isPaused]);
 
   // 打字机不显示进度条，保留段落完成回调
 
   // 播放/暂停切换
   const handlePlayPause = async () => {
-    if (!isTTSAvailable) {
+    if (!isTTSAvailable || !ttsOrchestratorRef.current) {
       setError('TTS服务不可用');
       return;
     }
@@ -90,23 +122,21 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
 
       if (isPlaying && !isPaused) {
         // 暂停播放
-        ttsService.pause();
+        ttsOrchestratorRef.current.pause();
         setIsPaused(true);
       } else if (isPaused) {
         // 恢复播放
-        await ttsService.resume();
+        ttsOrchestratorRef.current.resume();
         setIsPaused(false);
       } else {
         // 开始播放
         setIsPlaying(true);
         setIsPaused(false);
         
-        // 播放当前段落（如果有）
-        if (currentParagraph) {
-          setIsLoading(true);
-          await ttsService.playText(currentParagraph, {});
-          setIsLoading(false);
-        }
+        // 播放整个文本
+        setIsLoading(true);
+        await ttsOrchestratorRef.current.playText(text, {});
+        setIsLoading(false);
       }
     } catch (err) {
       console.error('TTS播放错误:', err);
@@ -119,7 +149,9 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
 
   // 停止播放
   const handleStop = () => {
-    ttsService.stop();
+    if (ttsOrchestratorRef.current) {
+      ttsOrchestratorRef.current.stop();
+    }
     setIsPlaying(false);
     setIsPaused(false);
     setTtsProgress(0);
@@ -130,11 +162,12 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
   if (!isTTSAvailable) {
     return (
       <div className={className}>
-        <TypewriterEffect
+        <HighlightRenderer
           text={text}
-          speed={30}
-          onParagraphComplete={handleParagraphComplete}
+          currentPlayingParagraph={currentParagraph}
           isDarkMode={isDarkMode}
+          typewriterSpeed={30}
+          onParagraphComplete={handleParagraphComplete}
         />
       </div>
     );
@@ -177,13 +210,14 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
         </div>
       )}
 
-      {/* 打字机效果 */}
+      {/* 高亮渲染器 */}
       <div style={{ marginBottom: '12px' }}>
-        <TypewriterEffect
+        <HighlightRenderer
           text={text}
-          speed={30}
-          onParagraphComplete={handleParagraphComplete}
+          currentPlayingParagraph={currentParagraph}
           isDarkMode={isDarkMode}
+          typewriterSpeed={30}
+          onParagraphComplete={handleParagraphComplete}
         />
       </div>
 
@@ -248,23 +282,6 @@ const SyncTTS: React.FC<SyncTTSProps> = ({
         </div>
       </div>
 
-      {/* 当前播放段落显示 */}
-      {currentParagraph && (
-        <div style={{
-          padding: '8px',
-          backgroundColor: '#f0f8ff',
-          borderRadius: '6px',
-          border: '2px solid #3b82f6',
-          fontSize: '14px',
-          lineHeight: '1.5',
-          marginTop: '8px'
-        }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#3b82f6' }}>
-            正在播放段落 {currentParagraphIndex + 1}:
-          </div>
-          {currentParagraph}
-        </div>
-      )}
     </div>
   );
 };

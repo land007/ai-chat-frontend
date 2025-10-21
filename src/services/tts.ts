@@ -13,12 +13,14 @@ export interface TTSResponse {
 class TTSService {
   private config: TTSConfig;
   private currentAudio: HTMLAudioElement | null = null;
+  private nextAudio: HTMLAudioElement | null = null; // 预加载下一个段落
   private isPlaying = false;
   private currentText = '';
   private currentParagraphs: string[] = [];
   private currentParagraphIndex = 0;
   private onProgressCallback?: (progress: number) => void;
   private onCompleteCallback?: () => void;
+  private onParagraphChangeCallback?: (paragraph: string, index: number) => void; // 段落切换回调
 
   constructor() {
     this.config = {
@@ -170,7 +172,7 @@ class TTSService {
     }
   }
 
-  // 播放完整文本（段落方式）
+  // 播放完整文本（队列方式）
   async playText(text: string, options: {
     voice?: string;
     speed?: number;
@@ -192,12 +194,12 @@ class TTSService {
     console.log(`[TTS] 开始播放，共${this.currentParagraphs.length}个段落`);
     console.log('[TTS] 分割后的段落:', this.currentParagraphs);
 
-    // 播放第一个段落
-    await this.playNextParagraph(options);
+    // 开始播放第一个段落
+    await this.playCurrentAndPrepareNext(options);
   }
 
-  // 播放下一个段落
-  private async playNextParagraph(options: {
+  // 播放当前段落并预加载下一个
+  private async playCurrentAndPrepareNext(options: {
     voice?: string;
     speed?: number;
     volume?: number;
@@ -209,6 +211,7 @@ class TTSService {
       console.log('[TTS] 所有段落播放完成');
       this.isPlaying = false;
       this.currentAudio = null;
+      this.nextAudio = null;
       this.currentText = '';
       this.currentParagraphs = [];
       this.currentParagraphIndex = 0;
@@ -221,27 +224,46 @@ class TTSService {
     const currentParagraph = this.currentParagraphs[this.currentParagraphIndex];
     console.log(`[TTS] 播放第${this.currentParagraphIndex + 1}个段落:`, currentParagraph);
 
+    // 通知段落切换
+    if (this.onParagraphChangeCallback) {
+      this.onParagraphChangeCallback(currentParagraph, this.currentParagraphIndex);
+    }
+
     try {
       // 生成当前段落的音频
       const audioUrl = await this.generateAudio(currentParagraph, options);
       
-      // 播放音频
+      // 播放当前段落
       await this.playSingleAudio(audioUrl, currentParagraph);
       
-      // 播放完成后，播放下一个段落
+      // 播放完成后，切换到下一个段落
       this.currentParagraphIndex++;
       if (this.isPlaying) {
-        // 短暂停顿后播放下一段
-        setTimeout(() => {
-          if (this.isPlaying) {
-            this.playNextParagraph(options);
-          }
-        }, 500); // 500ms停顿
+        // 无缝播放下一个段落
+        await this.playCurrentAndPrepareNext(options);
       }
     } catch (error) {
       console.error('[TTS] 段落播放错误:', error);
-      this.isPlaying = false;
-      throw error;
+      
+      // 重试一次
+      try {
+        console.log('[TTS] 重试播放段落:', currentParagraph);
+        const audioUrl = await this.generateAudio(currentParagraph, options);
+        await this.playSingleAudio(audioUrl, currentParagraph);
+        
+        // 重试成功后继续
+        this.currentParagraphIndex++;
+        if (this.isPlaying) {
+          await this.playCurrentAndPrepareNext(options);
+        }
+      } catch (retryError) {
+        console.error('[TTS] 重试失败，跳过段落:', retryError);
+        // 重试失败，跳过当前段落
+        this.currentParagraphIndex++;
+        if (this.isPlaying) {
+          await this.playCurrentAndPrepareNext(options);
+        }
+      }
     }
   }
 
@@ -286,12 +308,21 @@ class TTSService {
 
   // 停止播放
   stop(): void {
+    console.log('[TTS] 停止播放');
+    this.isPlaying = false;
+    
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.currentTime = 0;
       this.currentAudio = null;
     }
-    this.isPlaying = false;
+    
+    if (this.nextAudio) {
+      this.nextAudio.pause();
+      this.nextAudio.currentTime = 0;
+      this.nextAudio = null;
+    }
+    
     this.currentText = '';
     this.currentParagraphs = [];
     this.currentParagraphIndex = 0;
@@ -335,6 +366,11 @@ class TTSService {
   // 设置完成回调
   setCompleteCallback(callback: () => void): void {
     this.onCompleteCallback = callback;
+  }
+
+  // 设置段落切换回调
+  setParagraphChangeCallback(callback: (paragraph: string, index: number) => void): void {
+    this.onParagraphChangeCallback = callback;
   }
 
   // 获取配置

@@ -10,6 +10,7 @@ interface TypewriterEffectProps {
   onParagraphComplete?: (paragraph: string, index: number) => void; // 段落完成回调
   className?: string;
   isDarkMode?: boolean; // 暗色模式
+  currentPlayingParagraph?: string; // 当前正在播放的段落
 }
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
@@ -17,7 +18,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   speed = 50,
   onParagraphComplete,
   className = '',
-  isDarkMode = false
+  isDarkMode = false,
+  currentPlayingParagraph
 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -164,7 +166,23 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               </code>
             );
           },
-          p: ({ children }) => <p style={{ margin: '4px 0', lineHeight: '1.5' }}>{children}</p>,
+          p: ({ children }) => {
+            const paragraphText = typeof children === 'string' ? children : '';
+            const isPlaying = currentPlayingParagraph && paragraphText.includes(currentPlayingParagraph);
+            return (
+              <p style={{ 
+                margin: '4px 0', 
+                lineHeight: '1.5',
+                backgroundColor: isPlaying ? (isDarkMode ? '#2d3748' : '#f0f8ff') : 'transparent',
+                border: isPlaying ? `2px solid ${isDarkMode ? '#3b82f6' : '#3b82f6'}` : 'none',
+                borderRadius: isPlaying ? '4px' : '0',
+                padding: isPlaying ? '8px' : '0',
+                transition: 'all 0.3s ease'
+              }}>
+                {children}
+              </p>
+            );
+          },
           ul: ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ul>,
           ol: ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ol>,
           li: ({ children }) => <li style={{ margin: '2px 0', lineHeight: '1.4' }}>{children}</li>,
