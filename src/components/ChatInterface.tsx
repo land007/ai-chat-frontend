@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ChatMessage, chatAPI } from '../services/api';
+import TypewriterEffect from './TypewriterEffect';
 import 'highlight.js/styles/github.css';
 
 // 生成唯一ID的工具函数
@@ -23,12 +21,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [editValue, setEditValue] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isStreamingEnabled, setIsStreamingEnabled] = useState(true); // 流式传输开关
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null); // 当前流式传输的消息ID
+  const [isStreamingThinking, setIsStreamingThinking] = useState(false); // 流式传输思考状态
   const [appConfig, setAppConfig] = useState({
     name: 'AI智能助手',
     description: '基于阿里云DashScope的智能对话',
     welcomeMessage: ''
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const hasAddedStreamingMessageRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -80,30 +82,94 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputValue.trim();
     setInputValue('');
     setIsLoading(true);
 
-    try {
-      const response = await chatAPI.sendMessage(inputValue.trim(), messages);
-      
+    if (isStreamingEnabled) {
+      // 流式传输模式
+      const assistantMessageId = generateId();
       const assistantMessage: ChatMessage = {
-        id: generateId(),
+        id: assistantMessageId,
         role: 'assistant',
-        content: response,
+        content: '',
         timestamp: Date.now()
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      const errorMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: t('messages.errorMessage'),
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+      // 先设置思考状态，不立即添加空消息
+      setStreamingMessageId(assistantMessageId);
+      setIsStreamingThinking(true);
+      hasAddedStreamingMessageRef.current = false;
+
+      try {
+        await chatAPI.sendMessageStream(
+          currentInput,
+          messages,
+          (content: string, done: boolean) => {
+            // 当有内容到达时，停止思考状态并添加消息
+            if (content && !hasAddedStreamingMessageRef.current) {
+              setIsStreamingThinking(false);
+              setMessages(prev => [...prev, assistantMessage]);
+              hasAddedStreamingMessageRef.current = true;
+            }
+            
+            // 更新消息内容
+            if (content) {
+              setMessages(prev => prev.map(msg => 
+                msg.id === assistantMessageId 
+                  ? { ...msg, content }
+                  : msg
+              ));
+            }
+            
+            if (done) {
+              setStreamingMessageId(null);
+              setIsStreamingThinking(false);
+              hasAddedStreamingMessageRef.current = false;
+              setIsLoading(false);
+            }
+          },
+          (error: string) => {
+            // 错误处理：停止思考状态并添加错误消息
+            setIsStreamingThinking(false);
+            setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
+            setStreamingMessageId(null);
+            hasAddedStreamingMessageRef.current = false;
+            setIsLoading(false);
+          }
+        );
+      } catch (error) {
+        // 异常处理：停止思考状态并添加错误消息
+        setIsStreamingThinking(false);
+        setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
+        setStreamingMessageId(null);
+        hasAddedStreamingMessageRef.current = false;
+        setIsLoading(false);
+      }
+    } else {
+      // 非流式传输模式
+      try {
+        const response = await chatAPI.sendMessage(currentInput, messages);
+        
+        const assistantMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: response,
+          timestamp: Date.now()
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+      } catch (error) {
+        const errorMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: t('messages.errorMessage'),
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -297,6 +363,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const handleToggleLanguage = () => {
     const newLang = i18n.language === 'zh' ? 'en' : 'zh';
     i18n.changeLanguage(newLang);
+  };
+
+  // 切换流式传输
+  const handleToggleStreaming = () => {
+    setIsStreamingEnabled(!isStreamingEnabled);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -740,6 +811,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         </div>
         <div style={getStyles().headerActions}>
           <button
+            style={{
+              ...getStyles().actionButton,
+              ...(isStreamingEnabled ? { color: '#10b981' } : {})
+            }}
+            onClick={handleToggleStreaming}
+            onMouseEnter={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+            }}
+            onMouseLeave={(e) => {
+              Object.assign(e.currentTarget.style, {
+                ...getStyles().actionButton,
+                ...(isStreamingEnabled ? { color: '#10b981' } : {})
+              });
+            }}
+            title={isStreamingEnabled ? '关闭流式传输' : '开启流式传输'}
+          >
+            <Zap size={18} />
+          </button>
+          <button
             style={getStyles().actionButton}
             onClick={handleToggleLanguage}
             onMouseEnter={(e) => {
@@ -808,109 +898,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                 <div>
                   <div style={message.role === 'user' ? getStyles().messageBubbleUser : getStyles().messageBubble}>
                     {message.role === 'assistant' ? (
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeHighlight]}
-                        components={{
-                          code: ({ className, children, ...props }: any) => {
-                            const match = /language-(\w+)/.exec(className || '');
-                            const isInline = !match;
-                            return !isInline ? (
-                              <pre style={{ 
-                                backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
-                                padding: '12px', 
-                                borderRadius: '6px', 
-                                overflow: 'auto',
-                                margin: '8px 0'
-                              }}>
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
-                              </pre>
-                            ) : (
-                              <code style={{ 
-                                backgroundColor: isDarkMode ? '#4b5563' : '#f1f3f4', 
-                                padding: '2px 4px', 
-                                borderRadius: '3px',
-                                fontSize: '0.9em',
-                                color: isDarkMode ? '#f9fafb' : '#111827'
-                              }} {...props}>
-                                {children}
-                              </code>
-                            );
-                          },
-                          p: ({ children }) => <p style={{ margin: '4px 0', lineHeight: '1.5' }}>{children}</p>,
-                          ul: ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ul>,
-                          ol: ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ol>,
-                          li: ({ children }) => <li style={{ margin: '2px 0', lineHeight: '1.4' }}>{children}</li>,
-                          strong: ({ children }) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
-                          em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
-                          h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '8px 0 4px 0', fontWeight: 'bold' }}>{children}</h1>,
-                          h2: ({ children }) => <h2 style={{ fontSize: '1.3em', margin: '6px 0 3px 0', fontWeight: 'bold' }}>{children}</h2>,
-                          h3: ({ children }) => <h3 style={{ fontSize: '1.1em', margin: '4px 0 2px 0', fontWeight: 'bold' }}>{children}</h3>,
-                          blockquote: ({ children }) => (
-                            <blockquote style={{ 
-                              borderLeft: `4px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
-                              paddingLeft: '16px', 
-                              margin: '4px 0',
-                              fontStyle: 'italic',
-                              color: isDarkMode ? '#9ca3af' : '#6b7280'
-                            }}>
-                              {children}
-                            </blockquote>
-                          ),
-                          table: ({ children }) => (
-                            <table style={{ 
-                              borderCollapse: 'collapse', 
-                              width: '100%', 
-                              margin: '4px 0',
-                              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
-                            }}>
-                              {children}
-                            </table>
-                          ),
-                          th: ({ children }) => (
-                            <th style={{ 
-                              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
-                              padding: '8px', 
-                              backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa',
-                              fontWeight: 'bold'
-                            }}>
-                              {children}
-                            </th>
-                          ),
-                          td: ({ children }) => (
-                            <td style={{ 
-                              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
-                              padding: '8px' 
-                            }}>
-                              {children}
-                            </td>
-                          ),
-                          a: ({ href, children }) => (
-                            <a 
-                              href={href} 
-                              style={{ 
-                                color: '#0366d6', 
-                                textDecoration: 'underline' 
-                              }}
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                            >
-                              {children}
-                            </a>
-                          ),
-                          hr: () => (
-                            <hr style={{ 
-                              border: 'none', 
-                              borderTop: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
-                              margin: '8px 0' 
-                            }} />
-                          )
-                        }}
-                      >
-                        {message.content}
-                      </ReactMarkdown>
+                      <TypewriterEffect
+                        text={message.content}
+                        enabled={!isStreamingEnabled}
+                        isDarkMode={isDarkMode}
+                        isStreaming={streamingMessageId === message.id}
+                        isThinking={isStreamingThinking && streamingMessageId === message.id}
+                      />
                     ) : (
                       message.content
                     )}
@@ -1054,7 +1048,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           ))
         )}
         
-        {isLoading && (
+        {isLoading && !isStreamingEnabled && (
           <div style={getStyles().loadingContainer}>
             <div style={getStyles().loadingContent}>
               <div style={getStyles().avatar}>
@@ -1063,6 +1057,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               <div style={getStyles().loadingBubble}>
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
                 <span style={getStyles().loadingText}>{t('ui.loading')}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {isStreamingThinking && (
+          <div style={getStyles().loadingContainer}>
+            <div style={getStyles().loadingContent}>
+              <div style={getStyles().avatar}>
+                <Bot size={16} />
+              </div>
+              <div style={getStyles().loadingBubble}>
+                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                <span style={getStyles().loadingText}>思考中...</span>
               </div>
             </div>
           </div>

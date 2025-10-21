@@ -43,10 +43,10 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// AI聊天API端点
+// AI聊天API端点 - 流式传输版本
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, contextMessages = [] } = req.body;
+    const { message, contextMessages = [], stream = false } = req.body;
     
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ 
@@ -57,6 +57,7 @@ app.post('/api/chat', async (req, res) => {
 
     console.log(`[AI-REQUEST] 用户消息: ${message}`);
     console.log(`[AI-REQUEST] 上下文消息数量: ${contextMessages.length}`);
+    console.log(`[AI-REQUEST] 流式传输: ${stream}`);
 
     // 构建包含上下文的提示词
     let fullPrompt = message;
@@ -76,64 +77,128 @@ app.post('/api/chat', async (req, res) => {
 
     console.log(`[AI-REQUEST] 完整提示词长度: ${fullPrompt.length}`);
 
-    // 转发请求到阿里云DashScope
-    const response = await axios.post(
-      DASHSCOPE_API_URL,
-      {
-        input: {
-          prompt: fullPrompt
+    if (stream) {
+      // 流式传输模式
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+      });
+
+      // 模拟流式传输（因为DashScope可能不支持流式）
+      const response = await axios.post(
+        DASHSCOPE_API_URL,
+        {
+          input: {
+            prompt: fullPrompt
+          },
+          parameters: {},
+          debug: {}
         },
-        parameters: {},
-        debug: {}
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 30000 // 30秒超时
+        {
+          headers: {
+            'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000
+        }
+      );
+
+      if (response.data && response.data.output && response.data.output.text) {
+        const fullText = response.data.output.text;
+        
+        // 模拟打字机效果，逐字符发送
+        for (let i = 0; i <= fullText.length; i++) {
+          const chunk = fullText.slice(0, i);
+          res.write(`data: ${JSON.stringify({ 
+            content: chunk, 
+            done: i === fullText.length,
+            timestamp: new Date().toISOString()
+          })}\n\n`);
+          
+          // 控制发送速度，模拟真实打字效果
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        
+        res.write('data: [DONE]\n\n');
+        res.end();
+      } else {
+        res.write(`data: ${JSON.stringify({ 
+          error: 'AI服务响应格式异常',
+          code: 'INVALID_RESPONSE'
+        })}\n\n`);
+        res.end();
       }
-    );
-
-    console.log(`[AI-RESPONSE] 状态: ${response.status}`);
-
-    if (response.data && response.data.output && response.data.output.text) {
-      res.json({
-        success: true,
-        message: response.data.output.text,
-        timestamp: new Date().toISOString()
-      });
     } else {
-      console.error('[AI-ERROR] 响应格式异常:', response.data);
-      res.status(500).json({
-        error: 'AI服务响应格式异常',
-        code: 'INVALID_RESPONSE'
-      });
+      // 非流式传输模式（保持原有逻辑）
+      const response = await axios.post(
+        DASHSCOPE_API_URL,
+        {
+          input: {
+            prompt: fullPrompt
+          },
+          parameters: {},
+          debug: {}
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000
+        }
+      );
+
+      console.log(`[AI-RESPONSE] 状态: ${response.status}`);
+
+      if (response.data && response.data.output && response.data.output.text) {
+        res.json({
+          success: true,
+          message: response.data.output.text,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        console.error('[AI-ERROR] 响应格式异常:', response.data);
+        res.status(500).json({
+          error: 'AI服务响应格式异常',
+          code: 'INVALID_RESPONSE'
+        });
+      }
     }
 
   } catch (error) {
     console.error('[AI-ERROR] API调用失败:', error.message);
     
-    if (error.response) {
-      // API返回了错误响应
-      console.error('[AI-ERROR] API错误响应:', error.response.status, error.response.data);
-      res.status(error.response.status).json({
-        error: 'AI服务暂时不可用',
+    if (req.body.stream) {
+      // 流式传输错误处理
+      res.write(`data: ${JSON.stringify({ 
+        error: 'AI服务调用失败',
         code: 'API_ERROR',
-        details: error.response.data
-      });
-    } else if (error.code === 'ECONNABORTED') {
-      // 请求超时
-      res.status(408).json({
-        error: '请求超时，请稍后重试',
-        code: 'TIMEOUT'
-      });
+        details: error.message
+      })}\n\n`);
+      res.end();
     } else {
-      // 其他网络错误
-      res.status(500).json({
-        error: '网络连接失败，请检查网络设置',
-        code: 'NETWORK_ERROR'
-      });
+      // 非流式传输错误处理
+      if (error.response) {
+        console.error('[AI-ERROR] API错误响应:', error.response.status, error.response.data);
+        res.status(error.response.status).json({
+          error: 'AI服务暂时不可用',
+          code: 'API_ERROR',
+          details: error.response.data
+        });
+      } else if (error.code === 'ECONNABORTED') {
+        res.status(408).json({
+          error: '请求超时，请稍后重试',
+          code: 'TIMEOUT'
+        });
+      } else {
+        res.status(500).json({
+          error: '网络连接失败，请检查网络设置',
+          code: 'NETWORK_ERROR'
+        });
+      }
     }
   }
 });
