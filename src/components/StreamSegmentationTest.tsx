@@ -52,15 +52,14 @@ const StreamSegmentationTest: React.FC = () => {
 
 ## 5. 代码块保持完整
 
-\`\`\`javascript
-// 代码中的句号不应该被拆分
+` + '```javascript\n' + `// 代码中的句号不应该被拆分
 const API_URL = "https://api.example.com/v1";
 const PI = 3.14159;
 console.log("Hello. World!"); // 字符串中的句号
 function calculate() {
   return 2.5 * 3.0; // 小数点
 }
-\`\`\`
+` + '```' + `
 
 ## 6. 引用块测试
 

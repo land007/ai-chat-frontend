@@ -33,7 +33,12 @@ export class StreamTextSegmenter {
    * @returns 新增的完整段落数组
    */
   addChunk(chunk: string): TextSegment[] {
-    this.buffer += chunk;
+    // 如果在代码块中，追加到codeBlockBuffer；否则追加到buffer
+    if (this.inCodeBlock) {
+      this.codeBlockBuffer += chunk;
+    } else {
+      this.buffer += chunk;
+    }
     return this.extractCompleteSegments();
   }
 
@@ -48,19 +53,29 @@ export class StreamTextSegmenter {
   private extractCompleteSegments(): TextSegment[] {
     const newSegments: TextSegment[] = [];
 
-    // 1. 优先处理代码块
+    // 1. 优先处理代码块（如果已经在代码块中，继续等待结束标记）
+    if (this.inCodeBlock) {
+      // 如果在代码块中，不处理普通段落，直接返回
+      if (this.handleCodeBlock(newSegments)) {
+        return newSegments;
+      }
+      // 代码块未完成，返回空数组
+      return newSegments;
+    }
+
+    // 2. 检测代码块开始（非代码块状态）
     if (this.handleCodeBlock(newSegments)) {
       return newSegments;
     }
 
-    // 2. 检查是否有完整段落（以\n\n分隔）
+    // 3. 检查是否有完整段落（以\n\n分隔）
     const paragraphMatch = this.buffer.match(/([\s\S]*?)\n\n/);
     
     if (paragraphMatch) {
       const completeText = paragraphMatch[1].trim();
       
       if (completeText) {
-        // 3. 根据内容类型决定如何分段
+        // 4. 根据内容类型决定如何分段
         this.processBlock(completeText, newSegments);
       }
 
@@ -194,22 +209,26 @@ export class StreamTextSegmenter {
 
     // 检测代码块结束
     if (this.inCodeBlock) {
-      const codeEndMatch = this.codeBlockBuffer.match(/```[\s\S]*?```/);
-      
-      if (codeEndMatch) {
-        // 找到完整代码块
-        const codeBlock = codeEndMatch[0];
-        const segment = this.createSegment(codeBlock, true);
-        this.segments.push(segment);
-        newSegments.push(segment);
+      // 查找第二个```（代码块结束标记）
+      const firstBacktick = this.codeBlockBuffer.indexOf('```');
+      if (firstBacktick >= 0) {
+        const secondBacktickIndex = this.codeBlockBuffer.indexOf('```', firstBacktick + 3);
+        
+        if (secondBacktickIndex > 0) {
+          // 找到完整代码块，包含结束的```
+          const codeBlock = this.codeBlockBuffer.substring(0, secondBacktickIndex + 3);
+          const segment = this.createSegment(codeBlock.trim(), true);
+          this.segments.push(segment);
+          newSegments.push(segment);
 
-        // 更新缓冲区
-        const remainingAfterCode = this.codeBlockBuffer.substring(codeBlock.length);
-        this.buffer = remainingAfterCode;
-        this.codeBlockBuffer = '';
-        this.inCodeBlock = false;
+          // 更新缓冲区
+          const remainingAfterCode = this.codeBlockBuffer.substring(secondBacktickIndex + 3);
+          this.buffer = remainingAfterCode;
+          this.codeBlockBuffer = '';
+          this.inCodeBlock = false;
 
-        return true;
+          return true;
+        }
       }
     }
 
