@@ -98,6 +98,26 @@ export interface I18nInstance {
   changeLanguage: (lng: Language) => Promise<void>;
 }
 
+// 音频队列相关类型
+export interface AudioQueueItem {
+  url: string;
+  textRef: any;
+}
+
+export interface AudioQueuePlayerHandle {
+  enqueue: (item: AudioQueueItem) => void;
+  pause: () => void;
+  resume: () => void;
+  clear: () => void;
+  isPlaying: () => boolean;
+  setAutoPlay: (autoPlay: boolean) => void;
+}
+
+export interface AudioQueuePlayerProps {
+  onPlayingChange?: (textRef: any) => void;
+  autoPlay?: boolean;
+}
+
 // 环境变量类型
 export interface EnvironmentVariables {
   DASHSCOPE_API_KEY?: string;
