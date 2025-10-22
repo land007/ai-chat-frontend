@@ -98,6 +98,14 @@ export interface I18nInstance {
   changeLanguage: (lng: Language) => Promise<void>;
 }
 
+// 文本分段相关类型
+export interface TextSegment {
+  id: string;
+  text: string;
+  type: 'paragraph' | 'code' | 'heading' | 'list' | 'quote';
+  isComplete: boolean;
+}
+
 // 音频队列相关类型
 export interface AudioQueueItem {
   url: string;
