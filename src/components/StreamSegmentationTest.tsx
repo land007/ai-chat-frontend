@@ -34,11 +34,23 @@ const StreamSegmentationTest: React.FC = () => {
 - 实时响应用户输入
 - 内存使用效率高
 - 提供更好的用户体验
+- 支持复杂markdown结构
+
+### 表格支持测试
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 文本分段 | ✅ | 实时识别完整段落 |
+| 高亮显示 | ✅ | 点击高亮对应内容 |
+| Markdown渲染 | ✅ | 保持原有格式 |
 
 \`\`\`javascript
 // 代码块测试
 const greeting = "Hello World";
 console.log(greeting);
+function test() {
+  return "测试多行代码";
+}
 \`\`\`
 
 最后一段总结内容，演示完整的分段流程。`;
@@ -450,23 +462,110 @@ console.log(greeting);
               {isRunning && <span style={styles.cursor} />}
             </div>
           ) : (
-            <div style={styles.markdownContainer}>
-              {segments.map((segment) => (
-                <div
-                  key={segment.id}
-                  style={{
-                    ...styles.markdownSegment,
-                    ...(highlightedSegmentId === segment.id ? styles.markdownSegmentHighlight : {})
-                  }}
-                >
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
-                  >
-                    {segment.text}
-                  </ReactMarkdown>
-                </div>
-              ))}
+            <div style={styles.markdownContainer} className="markdown-with-segments">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+                components={{
+                  // 自定义渲染器，为每个元素添加data属性
+                  p: ({ node, children, ...props }) => {
+                    const text = String(children).substring(0, 100);
+                    const segment = segments.find(s => {
+                      const segText = s.text.substring(0, 100);
+                      return segText.includes(text) || text.includes(segText);
+                    });
+                    return (
+                      <p 
+                        {...props}
+                        data-segment-id={segment?.id}
+                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
+                      >
+                        {children}
+                      </p>
+                    );
+                  },
+                  h1: ({ node, children, ...props }) => {
+                    const text = String(children);
+                    const segment = segments.find(s => s.text.includes(text));
+                    return (
+                      <h1 
+                        {...props}
+                        data-segment-id={segment?.id}
+                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
+                      >
+                        {children}
+                      </h1>
+                    );
+                  },
+                  h2: ({ node, children, ...props }) => {
+                    const text = String(children);
+                    const segment = segments.find(s => s.text.includes(text));
+                    return (
+                      <h2 
+                        {...props}
+                        data-segment-id={segment?.id}
+                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
+                      >
+                        {children}
+                      </h2>
+                    );
+                  },
+                  h3: ({ node, children, ...props }) => {
+                    const text = String(children);
+                    const segment = segments.find(s => s.text.includes(text));
+                    return (
+                      <h3 
+                        {...props}
+                        data-segment-id={segment?.id}
+                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
+                      >
+                        {children}
+                      </h3>
+                    );
+                  },
+                  ul: ({ node, children, ...props }) => {
+                    // 找到对应的列表段落
+                    const segment = segments.find(s => s.type === 'list' && s.text.includes('-'));
+                    return (
+                      <ul 
+                        {...props}
+                        data-segment-id={segment?.id}
+                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
+                      >
+                        {children}
+                      </ul>
+                    );
+                  },
+                  table: ({ node, children, ...props }) => {
+                    // 找到对应的表格段落
+                    const segment = segments.find(s => s.text.includes('|'));
+                    return (
+                      <table 
+                        {...props}
+                        data-segment-id={segment?.id}
+                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
+                      >
+                        {children}
+                      </table>
+                    );
+                  },
+                  pre: ({ node, children, ...props }) => {
+                    // 代码块预处理
+                    const segment = segments.find(s => s.type === 'code');
+                    return (
+                      <pre 
+                        {...props}
+                        data-segment-id={segment?.id}
+                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
+                      >
+                        {children}
+                      </pre>
+                    );
+                  }
+                }}
+              >
+                {inputText}
+              </ReactMarkdown>
               {isRunning && (
                 <div style={{ 
                   display: 'inline-flex',
@@ -561,6 +660,129 @@ console.log(greeting);
         @keyframes blink {
           0%, 50% { opacity: 1; }
           51%, 100% { opacity: 0; }
+        }
+
+        /* Markdown段落高亮样式 */
+        .markdown-with-segments .segment-highlighted {
+          background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%);
+          border-left: 4px solid #3b82f6;
+          padding-left: 16px;
+          margin-left: -16px;
+          padding-top: 8px;
+          padding-bottom: 8px;
+          margin-top: 4px;
+          margin-bottom: 4px;
+          border-radius: 6px;
+          box-shadow: 0 2px 12px rgba(59, 130, 246, 0.2);
+          transform: translateX(4px);
+          transition: all 0.3s ease;
+        }
+
+        /* 表格高亮特殊处理 */
+        .markdown-with-segments table.segment-highlighted {
+          padding-left: 8px;
+          margin-left: -8px;
+        }
+
+        /* 代码块高亮特殊处理 */
+        .markdown-with-segments pre.segment-highlighted,
+        .markdown-with-segments pre code.segment-highlighted {
+          border-left-color: #3b82f6;
+        }
+
+        /* 列表高亮 */
+        .markdown-with-segments ul.segment-highlighted,
+        .markdown-with-segments ol.segment-highlighted {
+          padding-left: 32px;
+        }
+
+        /* Markdown基础样式 */
+        .markdown-with-segments {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+          line-height: 1.6;
+        }
+
+        .markdown-with-segments h1 {
+          font-size: 2em;
+          font-weight: 600;
+          margin-top: 24px;
+          margin-bottom: 16px;
+          border-bottom: 1px solid #e5e7eb;
+          padding-bottom: 8px;
+        }
+
+        .markdown-with-segments h2 {
+          font-size: 1.5em;
+          font-weight: 600;
+          margin-top: 20px;
+          margin-bottom: 12px;
+          border-bottom: 1px solid #f3f4f6;
+          padding-bottom: 6px;
+        }
+
+        .markdown-with-segments h3 {
+          font-size: 1.25em;
+          font-weight: 600;
+          margin-top: 16px;
+          margin-bottom: 10px;
+        }
+
+        .markdown-with-segments p {
+          margin-top: 0;
+          margin-bottom: 16px;
+        }
+
+        .markdown-with-segments ul, 
+        .markdown-with-segments ol {
+          padding-left: 24px;
+          margin-bottom: 16px;
+        }
+
+        .markdown-with-segments li {
+          margin-bottom: 4px;
+        }
+
+        .markdown-with-segments table {
+          border-collapse: collapse;
+          width: 100%;
+          margin-bottom: 16px;
+          font-size: 14px;
+        }
+
+        .markdown-with-segments table th,
+        .markdown-with-segments table td {
+          border: 1px solid #e5e7eb;
+          padding: 8px 12px;
+          text-align: left;
+        }
+
+        .markdown-with-segments table th {
+          background-color: #f9fafb;
+          font-weight: 600;
+        }
+
+        .markdown-with-segments table tr:hover {
+          background-color: #f9fafb;
+        }
+
+        .markdown-with-segments pre {
+          background-color: #f6f8fa;
+          border-radius: 6px;
+          padding: 16px;
+          overflow-x: auto;
+          margin-bottom: 16px;
+        }
+
+        .markdown-with-segments code {
+          font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+          font-size: 13px;
+        }
+
+        .markdown-with-segments :not(pre) > code {
+          background-color: #f6f8fa;
+          padding: 2px 6px;
+          border-radius: 3px;
+          font-size: 85%;
         }
       `}</style>
     </div>
