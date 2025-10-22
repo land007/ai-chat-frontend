@@ -102,7 +102,7 @@ export interface I18nInstance {
 export interface TextSegment {
   id: string;
   text: string;
-  type: 'paragraph' | 'code' | 'heading' | 'list' | 'quote';
+  type: 'paragraph' | 'code' | 'heading' | 'list' | 'quote' | 'table';
   isComplete: boolean;
 }
 

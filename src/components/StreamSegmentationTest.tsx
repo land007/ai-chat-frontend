@@ -20,40 +20,58 @@ const StreamSegmentationTest: React.FC = () => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentIndexRef = useRef(0);
 
-  // 测试数据
-  const testMarkdown = `# 欢迎使用流式分段测试
+  // 测试数据 - 专门测试新的句子级分段功能
+  const testMarkdown = `# 智能分段测试
 
-这是第一段内容，用来测试基本的段落识别功能。
+## 1. 句子级分段测试
 
-这是第二段内容，包含多行文本。
-可以看到段落是如何被实时识别的。
+这是一个包含多个句子的段落。第一句话测试中文句号。第二句话测试感叹号！第三句话测试问号？
 
-## 功能特点
+这段测试英文标点. This is the first English sentence. The second one tests exclamation mark! And this one tests question mark?
 
-流式处理有以下优势：
+## 2. 特殊情况测试
+
+这段包含数字3.14和小数点，还有网址www.example.com，不应该被错误拆分。文件名test.js也应该保持完整。省略号...也不应该被当作句子结束。
+
+## 3. 列表保持完整
+
+以下是功能列表，应该作为一个整体：
 - 实时响应用户输入
 - 内存使用效率高
 - 提供更好的用户体验
 - 支持复杂markdown结构
 
-### 表格支持测试
+## 4. 表格保持完整
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| 文本分段 | ✅ | 实时识别完整段落 |
-| 高亮显示 | ✅ | 点击高亮对应内容 |
-| Markdown渲染 | ✅ | 保持原有格式 |
+| 句子分段 | ✅ | 支持中英文标点：。！？.!? |
+| 列表识别 | ✅ | 连续列表项作为整体 |
+| 表格识别 | ✅ | 整张表格不拆分 |
+| 代码块 | ✅ | 保持代码完整性 |
+
+## 5. 代码块保持完整
 
 \`\`\`javascript
-// 代码块测试
-const greeting = "Hello World";
-console.log(greeting);
-function test() {
-  return "测试多行代码";
+// 代码中的句号不应该被拆分
+const API_URL = "https://api.example.com/v1";
+const PI = 3.14159;
+console.log("Hello. World!"); // 字符串中的句号
+function calculate() {
+  return 2.5 * 3.0; // 小数点
 }
 \`\`\`
 
-最后一段总结内容，演示完整的分段流程。`;
+## 6. 引用块测试
+
+> 这是一个引用块。它包含多个句子。应该保持完整！
+
+## 7. 混合内容测试
+
+人工智能技术正在快速发展。AI可以帮助我们解决很多问题！你觉得未来会怎样？让我们拭目以待。
+
+这段演示了TTS播放的理想分段效果。每个句子会被单独高亮。用户体验会更好！`;
+
 
   const speedMap = {
     fast: 30,
@@ -145,7 +163,8 @@ function test() {
       heading: '#3b82f6',
       code: '#10b981',
       list: '#f59e0b',
-      quote: '#8b5cf6'
+      quote: '#8b5cf6',
+      table: '#ec4899'
     };
     return colors[type] || '#6b7280';
   };
@@ -157,7 +176,8 @@ function test() {
       heading: '#',
       code: '</>',
       list: '•',
-      quote: '"'
+      quote: '"',
+      table: '⊞'
     };
     return icons[type] || '¶';
   };
@@ -447,6 +467,49 @@ function test() {
           </div>
         </div>
       </div>
+
+      {/* Stats Panel */}
+      {segments.length > 0 && (
+        <div style={{
+          backgroundColor: '#f0f9ff',
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '16px',
+          border: '1px solid #bae6fd',
+          display: 'flex',
+          gap: '24px',
+          flexWrap: 'wrap' as const
+        }}>
+          <div style={{ flex: '1', minWidth: '150px' }}>
+            <div style={{ fontSize: '12px', color: '#0369a1', marginBottom: '4px' }}>
+              总段落数
+            </div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0c4a6e' }}>
+              {segments.length}
+            </div>
+          </div>
+          
+          {Object.entries(segmenterRef.current.getStats().types || {}).map(([type, count]) => (
+            <div key={type} style={{ flex: '1', minWidth: '120px' }}>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ 
+                  backgroundColor: getTypeColor(type), 
+                  color: 'white',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  fontWeight: '600'
+                }}>
+                  {getTypeIcon(type)} {type}
+                </span>
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#374151' }}>
+                {count}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Content */}
       <div style={styles.content}>
