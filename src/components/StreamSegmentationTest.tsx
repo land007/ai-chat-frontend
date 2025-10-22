@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, RotateCcw, Zap } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import { StreamTextSegmenter } from '../utils/StreamTextSegmenter';
 import { TextSegment } from '@/types';
+import 'highlight.js/styles/github.css';
 
 const StreamSegmentationTest: React.FC = () => {
   const segmenterRef = useRef(new StreamTextSegmenter());
@@ -11,6 +15,8 @@ const StreamSegmentationTest: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [speed, setSpeed] = useState<'fast' | 'medium' | 'slow'>('medium');
+  const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
+  const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentIndexRef = useRef(0);
 
@@ -103,6 +109,12 @@ console.log(greeting);
     setBuffer('');
     setProgress(0);
     currentIndexRef.current = 0;
+    setHighlightedSegmentId(null);
+  };
+
+  // 点击段落高亮
+  const handleSegmentClick = (segmentId: string) => {
+    setHighlightedSegmentId(segmentId);
   };
 
   // 清理effect
@@ -262,6 +274,29 @@ console.log(greeting);
       wordBreak: 'break-word' as const,
       position: 'relative' as const
     },
+    markdownContainer: {
+      background: 'white',
+      border: '1px solid #e5e7eb',
+      borderRadius: '8px',
+      padding: '16px',
+      minHeight: '400px',
+      maxHeight: '520px',
+      overflowY: 'auto' as const
+    },
+    markdownSegment: {
+      padding: '12px',
+      borderRadius: '8px',
+      marginBottom: '8px',
+      transition: 'all 0.3s ease',
+      position: 'relative' as const
+    },
+    markdownSegmentHighlight: {
+      background: 'linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%)',
+      borderLeft: '4px solid #3b82f6',
+      paddingLeft: '16px',
+      boxShadow: '0 2px 12px rgba(59, 130, 246, 0.2)',
+      transform: 'translateX(4px)'
+    },
     cursor: {
       display: 'inline-block',
       width: '2px',
@@ -297,7 +332,17 @@ console.log(greeting);
       background: '#f9fafb',
       border: '1px solid #e5e7eb',
       borderRadius: '8px',
-      transition: 'all 0.2s'
+      transition: 'all 0.2s',
+      cursor: 'pointer'
+    },
+    segmentHighlighted: {
+      background: '#dbeafe',
+      borderColor: '#3b82f6',
+      boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1)'
+    },
+    segmentHover: {
+      background: '#f3f4f6',
+      borderColor: '#9ca3af'
     },
     segmentHeader: {
       display: 'flex',
@@ -393,15 +438,49 @@ console.log(greeting);
 
       {/* Content */}
       <div style={styles.content}>
-        {/* Left Panel - Input */}
+        {/* Left Panel - Markdown Rendering */}
         <div style={styles.panel}>
           <div style={styles.panelTitle}>
-            📝 流式输入区（模拟SSE）
+            📝 Markdown渲染区（点击右侧段落高亮对应内容）
           </div>
-          <div style={styles.inputArea}>
-            {inputText}
-            {isRunning && <span style={styles.cursor} />}
-          </div>
+          
+          {segments.length === 0 ? (
+            <div style={styles.inputArea}>
+              {inputText}
+              {isRunning && <span style={styles.cursor} />}
+            </div>
+          ) : (
+            <div style={styles.markdownContainer}>
+              {segments.map((segment) => (
+                <div
+                  key={segment.id}
+                  style={{
+                    ...styles.markdownSegment,
+                    ...(highlightedSegmentId === segment.id ? styles.markdownSegmentHighlight : {})
+                  }}
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight]}
+                  >
+                    {segment.text}
+                  </ReactMarkdown>
+                </div>
+              ))}
+              {isRunning && (
+                <div style={{ 
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  color: '#3b82f6',
+                  fontSize: '12px',
+                  marginTop: '8px'
+                }}>
+                  <span style={styles.cursor} />
+                  <span style={{ marginLeft: '8px' }}>正在输入...</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {buffer && (
             <div style={styles.bufferInfo}>
@@ -428,25 +507,50 @@ console.log(greeting);
                 </div>
               </div>
             ) : (
-              segments.map((segment, index) => (
-                <div key={segment.id} style={styles.segment}>
-                  <div style={styles.segmentHeader}>
-                    <span
-                      style={{
-                        ...styles.segmentType,
-                        background: getTypeColor(segment.type)
-                      }}
-                    >
-                      {getTypeIcon(segment.type)} {segment.type}
-                    </span>
-                    <span style={styles.segmentId}>{segment.id}</span>
-                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>
-                      {segment.text.length} 字符
-                    </span>
+              segments.map((segment, index) => {
+                const isHighlighted = highlightedSegmentId === segment.id;
+                const isHovered = hoveredSegmentId === segment.id;
+                
+                return (
+                  <div 
+                    key={segment.id} 
+                    style={{
+                      ...styles.segment,
+                      ...(isHighlighted ? styles.segmentHighlighted : {}),
+                      ...(isHovered && !isHighlighted ? styles.segmentHover : {})
+                    }}
+                    onClick={() => handleSegmentClick(segment.id)}
+                    onMouseEnter={() => setHoveredSegmentId(segment.id)}
+                    onMouseLeave={() => setHoveredSegmentId(null)}
+                  >
+                    <div style={styles.segmentHeader}>
+                      <span
+                        style={{
+                          ...styles.segmentType,
+                          background: getTypeColor(segment.type)
+                        }}
+                      >
+                        {getTypeIcon(segment.type)} {segment.type}
+                      </span>
+                      <span style={styles.segmentId}>{segment.id}</span>
+                      <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                        {segment.text.length} 字符
+                      </span>
+                      {isHighlighted && (
+                        <span style={{ 
+                          fontSize: '11px', 
+                          color: '#3b82f6',
+                          fontWeight: '600',
+                          marginLeft: 'auto'
+                        }}>
+                          ✓ 已高亮
+                        </span>
+                      )}
+                    </div>
+                    <div style={styles.segmentText}>{segment.text}</div>
                   </div>
-                  <div style={styles.segmentText}>{segment.text}</div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
