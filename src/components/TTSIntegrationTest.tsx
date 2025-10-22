@@ -16,8 +16,17 @@ const TTSIntegrationTest: React.FC = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [queueLength, setQueueLength] = useState(0);
   
+  // 流式模式状态
+  const [isStreamMode, setIsStreamMode] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamProgress, setStreamProgress] = useState(0);
+  const [buffer, setBuffer] = useState('');
+  const [streamSpeed, setStreamSpeed] = useState<'fast' | 'medium' | 'slow'>('medium');
+  
   // Refs
   const audioPlayerRef = useRef<AudioQueuePlayerHandle>(null);
+  const segmenterRef = useRef<StreamTextSegmenter>(new StreamTextSegmenter());
+  const currentStreamIndexRef = useRef(0);
   
   // 测试数据 - 复用StreamSegmentationTest的markdown
   const testMarkdown = `# 智能分段测试
@@ -76,20 +85,29 @@ function calculate() {
     return `https://dub.qhkly.com/download?text=${encodedText}&name=zh-CN-XuyuNeural&lang=zh-CN&role=Default&style=Default&rate=%2B0&pitch=%2B0&volume=%2B0&format=riff-24khz-16bit-mono-pcm`;
   };
 
-  // 初始化：分段处理
+  // 速度映射
+  const speedMap = {
+    fast: 20,
+    medium: 50,
+    slow: 100
+  };
+
+  // 初始化：静态模式分段处理
   useEffect(() => {
-    const segmenter = new StreamTextSegmenter();
-    
-    // 模拟流式输入，逐字符添加
-    for (const char of testMarkdown) {
-      segmenter.addChunk(char);
+    if (!isStreamMode) {
+      const segmenter = new StreamTextSegmenter();
+      
+      // 模拟流式输入，逐字符添加
+      for (const char of testMarkdown) {
+        segmenter.addChunk(char);
+      }
+      
+      // 完成输入，获取最终segments
+      const finalSegments = segmenter.finalize();
+      setSegments(finalSegments);
     }
-    
-    // 完成输入，获取最终segments
-    const finalSegments = segmenter.finalize();
-    setSegments(finalSegments);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isStreamMode]);
 
   // 播放状态回调
   const handlePlayingChange = (textRef: any) => {
@@ -154,6 +172,174 @@ function calculate() {
     setQueueLength(0);
   };
 
+  // 流式播放：开始
+  const handleStartStream = async () => {
+    // 重置状态
+    segmenterRef.current = new StreamTextSegmenter();
+    setSegments([]);
+    setBuffer('');
+    setStreamProgress(0);
+    currentStreamIndexRef.current = 0;
+    setIsStreaming(true);
+    setIsPlaying(true);
+    
+    // 清空队列
+    audioPlayerRef.current?.clear();
+    
+    // 开始流式输入
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    
+    for (let i = 0; i < testMarkdown.length; i++) {
+      if (!isStreaming && i > currentStreamIndexRef.current) break;
+      
+      const char = testMarkdown[i];
+      
+      // 添加字符到分段器
+      const newSegments = segmenterRef.current.addChunk(char);
+      
+      // 更新缓冲区
+      setBuffer(segmenterRef.current.getBuffer());
+      
+      // 如果有新的完整segments，入队TTS
+      if (newSegments.length > 0) {
+        const allSegments = segmenterRef.current.getSegments();
+        setSegments(allSegments);
+        
+        // 将新segments入队TTS
+        newSegments.forEach(segment => {
+          audioPlayerRef.current?.enqueue({
+            url: generateTTSUrl(segment.text),
+            textRef: segment
+          });
+        });
+        
+        setQueueLength(prev => prev + newSegments.length);
+      }
+      
+      // 更新进度
+      setStreamProgress(((i + 1) / testMarkdown.length) * 100);
+      currentStreamIndexRef.current = i + 1;
+      
+      // 延迟（模拟打字机）
+      await sleep(speedMap[streamSpeed]);
+    }
+    
+    // 完成输入，处理剩余缓冲区
+    const finalSegments = segmenterRef.current.finalize();
+    if (finalSegments.length > 0) {
+      const allSegments = segmenterRef.current.getSegments();
+      setSegments(allSegments);
+      
+      // 将最后的segments入队TTS
+      finalSegments.forEach(segment => {
+        audioPlayerRef.current?.enqueue({
+          url: generateTTSUrl(segment.text),
+          textRef: segment
+        });
+      });
+      
+      setQueueLength(prev => prev + finalSegments.length);
+    }
+    
+    setBuffer('');
+    setIsStreaming(false);
+    setStreamProgress(100);
+  };
+
+  // 流式播放：暂停
+  const handlePauseStream = () => {
+    setIsStreaming(false);
+  };
+
+  // 流式播放：继续
+  const handleResumeStream = async () => {
+    if (currentStreamIndexRef.current >= testMarkdown.length) {
+      return;
+    }
+    
+    setIsStreaming(true);
+    
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    
+    for (let i = currentStreamIndexRef.current; i < testMarkdown.length; i++) {
+      if (!isStreaming) break;
+      
+      const char = testMarkdown[i];
+      
+      const newSegments = segmenterRef.current.addChunk(char);
+      setBuffer(segmenterRef.current.getBuffer());
+      
+      if (newSegments.length > 0) {
+        const allSegments = segmenterRef.current.getSegments();
+        setSegments(allSegments);
+        
+        newSegments.forEach(segment => {
+          audioPlayerRef.current?.enqueue({
+            url: generateTTSUrl(segment.text),
+            textRef: segment
+          });
+        });
+        
+        setQueueLength(prev => prev + newSegments.length);
+      }
+      
+      setStreamProgress(((i + 1) / testMarkdown.length) * 100);
+      currentStreamIndexRef.current = i + 1;
+      
+      await sleep(speedMap[streamSpeed]);
+    }
+    
+    const finalSegments = segmenterRef.current.finalize();
+    if (finalSegments.length > 0) {
+      const allSegments = segmenterRef.current.getSegments();
+      setSegments(allSegments);
+      
+      finalSegments.forEach(segment => {
+        audioPlayerRef.current?.enqueue({
+          url: generateTTSUrl(segment.text),
+          textRef: segment
+        });
+      });
+      
+      setQueueLength(prev => prev + finalSegments.length);
+    }
+    
+    setBuffer('');
+    setIsStreaming(false);
+    setStreamProgress(100);
+  };
+
+  // 流式播放：停止
+  const handleStopStream = () => {
+    setIsStreaming(false);
+    audioPlayerRef.current?.clear();
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentSegmentId(null);
+    setQueueLength(0);
+    setStreamProgress(0);
+    setBuffer('');
+    currentStreamIndexRef.current = 0;
+  };
+
+  // 切换模式
+  const handleToggleMode = () => {
+    // 停止当前播放
+    handleStop();
+    setIsStreaming(false);
+    setStreamProgress(0);
+    setBuffer('');
+    currentStreamIndexRef.current = 0;
+    
+    // 切换模式
+    setIsStreamMode(!isStreamMode);
+    
+    // 如果切换到静态模式，重新加载segments
+    if (isStreamMode) {
+      setSegments([]);
+    }
+  };
+
   // 统计信息计算
   const getSegmentStats = () => {
     const stats = {
@@ -214,34 +400,147 @@ function calculate() {
         padding: '16px',
         borderBottom: '1px solid #e5e7eb',
         backgroundColor: '#f9fafb',
-        flexShrink: 0
+        flexShrink: 0,
+        flexWrap: 'wrap'
       }}>
+        {/* 模式切换 */}
         <button 
-          onClick={handlePlayAll} 
-          disabled={isPlaying}
-          style={buttonStyle(isPlaying)}
+          onClick={handleToggleMode}
+          style={{
+            ...buttonStyle(),
+            backgroundColor: isStreamMode ? '#10b981' : '#6b7280'
+          }}
         >
-          <Play size={16} />
-          播放全文
+          {isStreamMode ? '🌊 流式模式' : '📄 静态模式'}
         </button>
         
-        {isPlaying && (
+        <div style={{ width: '1px', height: '24px', backgroundColor: '#d1d5db' }} />
+        
+        {/* 静态模式控制 */}
+        {!isStreamMode && (
           <>
-            {isPaused ? (
-              <button onClick={handleResume} style={buttonStyle()}>
+            <button 
+              onClick={handlePlayAll} 
+              disabled={isPlaying}
+              style={buttonStyle(isPlaying)}
+            >
+              <Play size={16} />
+              播放全文
+            </button>
+            
+            {isPlaying && (
+              <>
+                {isPaused ? (
+                  <button onClick={handleResume} style={buttonStyle()}>
+                    <Play size={16} />
+                    继续
+                  </button>
+                ) : (
+                  <button onClick={handlePause} style={buttonStyle()}>
+                    <Pause size={16} />
+                    暂停
+                  </button>
+                )}
+                <button onClick={handleStop} style={stopButtonStyle}>
+                  <Square size={16} />
+                  停止
+                </button>
+              </>
+            )}
+          </>
+        )}
+        
+        {/* 流式模式控制 */}
+        {isStreamMode && (
+          <>
+            {!isStreaming && streamProgress === 0 && (
+              <button 
+                onClick={handleStartStream}
+                style={buttonStyle()}
+              >
                 <Play size={16} />
-                继续
-              </button>
-            ) : (
-              <button onClick={handlePause} style={buttonStyle()}>
-                <Pause size={16} />
-                暂停
+                开始流式播放
               </button>
             )}
-            <button onClick={handleStop} style={stopButtonStyle}>
-              <Square size={16} />
-              停止
-            </button>
+            
+            {isStreaming && (
+              <>
+                <button onClick={handlePauseStream} style={buttonStyle()}>
+                  <Pause size={16} />
+                  暂停输入
+                </button>
+                <button onClick={handleStopStream} style={stopButtonStyle}>
+                  <Square size={16} />
+                  停止
+                </button>
+              </>
+            )}
+            
+            {!isStreaming && streamProgress > 0 && streamProgress < 100 && (
+              <>
+                <button onClick={handleResumeStream} style={buttonStyle()}>
+                  <Play size={16} />
+                  继续输入
+                </button>
+                <button onClick={handleStopStream} style={stopButtonStyle}>
+                  <Square size={16} />
+                  停止
+                </button>
+              </>
+            )}
+            
+            {/* 速度控制 */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', color: '#6b7280' }}>速度:</span>
+              {(['fast', 'medium', 'slow'] as const).map(speed => (
+                <button
+                  key={speed}
+                  onClick={() => setStreamSpeed(speed)}
+                  disabled={isStreaming}
+                  style={{
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    backgroundColor: streamSpeed === speed ? '#3b82f6' : '#e5e7eb',
+                    color: streamSpeed === speed ? 'white' : '#6b7280',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: isStreaming ? 'not-allowed' : 'pointer',
+                    opacity: isStreaming ? 0.5 : 1
+                  }}
+                >
+                  {speed === 'fast' ? '快' : speed === 'medium' ? '中' : '慢'}
+                </button>
+              ))}
+            </div>
+            
+            {/* 进度条 */}
+            {streamProgress > 0 && (
+              <div style={{ 
+                flex: 1, 
+                minWidth: '120px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <div style={{
+                  flex: 1,
+                  height: '6px',
+                  backgroundColor: '#e5e7eb',
+                  borderRadius: '3px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${streamProgress}%`,
+                    backgroundColor: '#3b82f6',
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+                <span style={{ fontSize: '12px', color: '#6b7280', minWidth: '45px' }}>
+                  {streamProgress.toFixed(0)}%
+                </span>
+              </div>
+            )}
           </>
         )}
         
@@ -328,6 +627,19 @@ function calculate() {
                 </ReactMarkdown>
               </div>
             ))}
+            
+            {/* 流式模式：显示缓冲区 */}
+            {isStreamMode && buffer && (
+              <span style={{
+                display: 'inline',
+                color: '#9ca3af',
+                opacity: 0.7,
+                fontStyle: 'italic',
+                transition: 'opacity 0.3s ease'
+              }}>
+                {buffer}
+              </span>
+            )}
           </div>
         </div>
       </div>
