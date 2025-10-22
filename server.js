@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,13 @@ const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于阿里云DashScope
 const WELCOME_MESSAGE = process.env.WELCOME_MESSAGE || '';
 const CONTEXT_MESSAGE_COUNT = parseInt(process.env.CONTEXT_MESSAGE_COUNT || '5', 10);
 
+// 企业微信认证配置
+const WEWORK_CORP_ID = process.env.WEWORK_CORP_ID || '';
+const WEWORK_AGENT_ID = process.env.WEWORK_AGENT_ID || '';
+const WEWORK_CORP_SECRET = process.env.WEWORK_CORP_SECRET || '';
+const WEWORK_REDIRECT_URI = process.env.WEWORK_REDIRECT_URI || '';
+const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-in-production';
+
 // 中间件
 app.use(cors());
 app.use(express.json());
@@ -24,8 +32,114 @@ app.use((req, res, next) => {
   next();
 });
 
+// ==================== 企业微信API服务 ====================
+
+/**
+ * 获取企业微信access_token
+ */
+async function getWeworkAccessToken() {
+  try {
+    const url = `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${WEWORK_CORP_ID}&corpsecret=${WEWORK_CORP_SECRET}`;
+    const response = await axios.get(url);
+    
+    if (response.data.errcode === 0) {
+      console.log('[企业微信] access_token获取成功');
+      return response.data.access_token;
+    } else {
+      console.error('[企业微信] 获取access_token失败:', response.data);
+      throw new Error(`获取access_token失败: ${response.data.errmsg}`);
+    }
+  } catch (error) {
+    console.error('[企业微信] 获取access_token异常:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * 通过code获取用户UserId
+ */
+async function getUserIdByCode(code) {
+  try {
+    const accessToken = await getWeworkAccessToken();
+    const url = `https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token=${accessToken}&code=${code}`;
+    const response = await axios.get(url);
+    
+    if (response.data.errcode === 0) {
+      console.log('[企业微信] 获取UserId成功:', response.data.userid || response.data.UserId);
+      return response.data.userid || response.data.UserId;
+    } else {
+      console.error('[企业微信] 获取UserId失败:', response.data);
+      throw new Error(`获取用户信息失败: ${response.data.errmsg}`);
+    }
+  } catch (error) {
+    console.error('[企业微信] 获取UserId异常:', error.message);
+    throw error;
+  }
+}
+
+/**
+ * 通过UserId获取用户详细信息
+ */
+async function getUserInfo(userId) {
+  try {
+    const accessToken = await getWeworkAccessToken();
+    const url = `https://qyapi.weixin.qq.com/cgi-bin/user/get?access_token=${accessToken}&userid=${userId}`;
+    const response = await axios.get(url);
+    
+    if (response.data.errcode === 0) {
+      console.log('[企业微信] 获取用户信息成功:', response.data.name);
+      return {
+        userId: response.data.userid,
+        name: response.data.name,
+        department: response.data.department,
+        position: response.data.position,
+        mobile: response.data.mobile,
+        email: response.data.email
+      };
+    } else {
+      console.error('[企业微信] 获取用户详细信息失败:', response.data);
+      throw new Error(`获取用户详细信息失败: ${response.data.errmsg}`);
+    }
+  } catch (error) {
+    console.error('[企业微信] 获取用户详细信息异常:', error.message);
+    throw error;
+  }
+}
+
+// ==================== JWT认证中间件 ====================
+
+/**
+ * JWT验证中间件
+ */
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    console.log('[认证] 缺少token');
+    return res.status(401).json({ 
+      error: '未授权访问',
+      code: 'NO_TOKEN'
+    });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      console.log('[认证] token验证失败:', err.message);
+      return res.status(403).json({ 
+        error: 'token无效或已过期',
+        code: 'INVALID_TOKEN'
+      });
+    }
+    
+    req.user = user;
+    console.log('[认证] 用户验证成功:', user.userId);
+    next();
+  });
+}
+
 // API路由 - 必须在静态文件服务之前定义
-// 健康检查端点
+// 健康检查端点（无需认证）
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -34,7 +148,142 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 应用配置端点
+// ==================== 认证路由 ====================
+
+/**
+ * 发起企业微信OAuth授权
+ */
+app.get('/api/auth/wework/redirect', (req, res) => {
+  try {
+    console.log('[认证] 发起企业微信授权');
+    
+    if (!WEWORK_CORP_ID || !WEWORK_AGENT_ID || !WEWORK_REDIRECT_URI) {
+      return res.status(500).json({
+        error: '企业微信配置不完整',
+        code: 'WEWORK_CONFIG_INCOMPLETE'
+      });
+    }
+
+    // 构建企业微信授权URL
+    const redirectUrl = `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${WEWORK_CORP_ID}&redirect_uri=${encodeURIComponent(WEWORK_REDIRECT_URI)}&response_type=code&scope=snsapi_base&state=STATE#wechat_redirect`;
+    
+    console.log('[认证] 授权URL:', redirectUrl);
+    
+    res.json({
+      redirectUrl: redirectUrl
+    });
+  } catch (error) {
+    console.error('[认证] 生成授权URL失败:', error.message);
+    res.status(500).json({
+      error: '生成授权URL失败',
+      code: 'REDIRECT_ERROR'
+    });
+  }
+});
+
+/**
+ * 企业微信OAuth回调处理
+ */
+app.get('/api/auth/wework/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    
+    console.log('[认证] 收到授权回调, code:', code);
+    
+    if (!code) {
+      return res.status(400).json({
+        error: '缺少授权code',
+        code: 'NO_CODE'
+      });
+    }
+
+    // 1. 通过code获取userId
+    const userId = await getUserIdByCode(code);
+    
+    if (!userId) {
+      return res.status(400).json({
+        error: '获取用户ID失败',
+        code: 'NO_USERID'
+      });
+    }
+
+    // 2. 获取用户详细信息
+    const userInfo = await getUserInfo(userId);
+    
+    // 3. 生成JWT token
+    const token = jwt.sign(
+      {
+        userId: userInfo.userId,
+        name: userInfo.name
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('[认证] JWT token生成成功, 用户:', userInfo.name);
+
+    res.json({
+      success: true,
+      token: token,
+      user: {
+        userId: userInfo.userId,
+        name: userInfo.name
+      }
+    });
+  } catch (error) {
+    console.error('[认证] 授权回调处理失败:', error.message);
+    res.status(500).json({
+      error: '授权失败，请重试',
+      code: 'AUTH_CALLBACK_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 获取当前登录用户信息
+ */
+app.get('/api/auth/userinfo', authenticateToken, (req, res) => {
+  try {
+    console.log('[认证] 获取用户信息');
+    res.json({
+      success: true,
+      user: {
+        userId: req.user.userId,
+        name: req.user.name
+      }
+    });
+  } catch (error) {
+    console.error('[认证] 获取用户信息失败:', error.message);
+    res.status(500).json({
+      error: '获取用户信息失败',
+      code: 'USERINFO_ERROR'
+    });
+  }
+});
+
+/**
+ * 退出登录
+ */
+app.post('/api/auth/logout', (req, res) => {
+  try {
+    console.log('[认证] 用户退出登录');
+    res.json({
+      success: true,
+      message: '退出成功'
+    });
+  } catch (error) {
+    console.error('[认证] 退出登录失败:', error.message);
+    res.status(500).json({
+      error: '退出登录失败',
+      code: 'LOGOUT_ERROR'
+    });
+  }
+});
+
+// ==================== 业务API ====================
+
+// 应用配置端点（公开访问，无需认证）
 app.get('/api/config', (req, res) => {
   res.json({
     name: APP_NAME,
@@ -43,8 +292,8 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// AI聊天API端点 - 流式传输版本
-app.post('/api/chat', async (req, res) => {
+// AI聊天API端点 - 流式传输版本（需要认证）
+app.post('/api/chat', authenticateToken, async (req, res) => {
   try {
     const { message, contextMessages = [], stream = false } = req.body;
     

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, Zap } from 'lucide-react';
+import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, Zap, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/contexts/AuthContext';
 import { chatAPI } from '@/services/api';
 import TypewriterEffect from './TypewriterEffect';
 import { 
@@ -12,6 +13,7 @@ import 'highlight.js/styles/github.css';
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const { t, i18n } = useTranslation();
+  const { user, logout } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -807,6 +809,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           <h1 style={getStyles().headerTitle}>{appConfig.name}</h1>
           <p style={getStyles().headerSubtitle}>{appConfig.description}</p>
         </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {user && (
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              padding: '6px 12px',
+              backgroundColor: isDarkMode ? '#374151' : '#f3f4f6',
+              borderRadius: '8px'
+            }}>
+              <User size={16} style={{ color: '#6b7280' }} />
+              <span style={{ fontSize: '14px', color: isDarkMode ? '#f9fafb' : '#374151' }}>
+                {user.name}
+              </span>
+            </div>
+          )}
+        </div>
         <div style={getStyles().headerActions}>
           <button
             style={{
@@ -865,6 +884,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             title={t('ui.clear')}
           >
             <Trash2 size={18} />
+          </button>
+          <button
+            style={getStyles().actionButton}
+            onClick={logout}
+            onMouseEnter={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+            }}
+            onMouseLeave={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButton);
+            }}
+            title="退出登录"
+          >
+            <LogOut size={18} />
           </button>
         </div>
       </div>

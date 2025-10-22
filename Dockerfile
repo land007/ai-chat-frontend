@@ -26,6 +26,9 @@ FROM node:20-alpine AS production
 # 设置工作目录
 WORKDIR /app
 
+# 安装PM2全局
+RUN npm install -g pm2
+
 # 复制package.json和package-lock.json
 COPY package*.json ./
 
@@ -35,6 +38,10 @@ RUN npm ci --only=production --legacy-peer-deps
 # 从构建阶段复制构建产物
 COPY --from=builder /app/build ./build
 COPY --from=builder /app/server.js ./
+COPY ecosystem.config.js ./
+
+# 创建日志目录
+RUN mkdir -p logs
 
 # 暴露端口
 EXPOSE 3000
@@ -43,5 +50,5 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# 启动应用
-CMD ["node", "server.js"]
+# 使用PM2启动应用
+CMD ["pm2-runtime", "start", "ecosystem.config.js"]

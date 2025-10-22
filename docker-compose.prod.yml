@@ -17,6 +17,12 @@ services:
       # 阿里云DashScope API配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-your_api_key_here}
       - DASHSCOPE_API_URL=${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}
+      # 企业微信认证配置
+      - WEWORK_CORP_ID=${WEWORK_CORP_ID}
+      - WEWORK_AGENT_ID=${WEWORK_AGENT_ID}
+      - WEWORK_CORP_SECRET=${WEWORK_CORP_SECRET}
+      - WEWORK_REDIRECT_URI=${WEWORK_REDIRECT_URI}
+      - JWT_SECRET=${JWT_SECRET}
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]

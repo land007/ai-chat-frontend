@@ -5,9 +5,26 @@ import {
   ChatError, 
   StreamChunk
 } from '@/types';
+import { authService } from './auth';
 
 class ChatAPI {
   private readonly apiUrl = '/api/chat';
+
+  /**
+   * 获取认证header
+   */
+  private getAuthHeaders(): HeadersInit {
+    const token = authService.getToken();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+  }
 
   async sendMessage(message: string, contextMessages: ChatMessage[] = []): Promise<string> {
     try {
@@ -16,9 +33,7 @@ class ChatAPI {
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify({
           message: message,
           contextMessages: contextMessages,
@@ -53,9 +68,7 @@ class ChatAPI {
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getAuthHeaders(),
         body: JSON.stringify({
           message: message,
           contextMessages: contextMessages,
