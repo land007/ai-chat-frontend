@@ -557,27 +557,19 @@ function calculate() {
                   </ReactMarkdown>
                 </div>
               ))}
-              {isRunning && (
-                <div style={{ 
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  color: '#3b82f6',
-                  fontSize: '12px',
-                  marginTop: '8px'
+              
+              {/* 缓冲区内容：丝滑显示在segments后面，不突兀 */}
+              {buffer && (
+                <span style={{
+                  display: 'inline',
+                  color: '#9ca3af',
+                  opacity: 0.7,
+                  fontStyle: 'italic',
+                  transition: 'opacity 0.3s ease'
                 }}>
-                  <span style={styles.cursor} />
-                  <span style={{ marginLeft: '8px' }}>正在输入...</span>
-                </div>
+                  {buffer}
+                </span>
               )}
-            </div>
-          )}
-
-          {buffer && (
-            <div style={styles.bufferInfo}>
-              <div style={styles.bufferLabel}>📦 缓冲区（未完成段落）:</div>
-              <div style={styles.bufferContent}>
-                {buffer || '(空)'}
-              </div>
             </div>
           )}
         </div>
