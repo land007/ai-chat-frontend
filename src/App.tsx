@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import ChatInterface from './components/ChatInterface';
 import AudioQueuePlayerTest from './components/AudioQueuePlayerTest';
 import StreamSegmentationTest from './components/StreamSegmentationTest';
+import TTSIntegrationTest from './components/TTSIntegrationTest';
 import './App.css';
 
-type Page = 'chat' | 'audio' | 'stream-segment';
+type Page = 'chat' | 'audio' | 'stream-segment' | 'tts';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('stream-segment');
+  const [currentPage, setCurrentPage] = useState<Page>('tts');
 
   const buttonStyle = (page: Page) => ({
     padding: '8px 16px',
@@ -52,11 +53,18 @@ function App() {
         >
           🎵 音频队列测试
         </button>
+        <button 
+          onClick={() => setCurrentPage('tts')}
+          style={buttonStyle('tts')}
+        >
+          🎙️ TTS集成测试
+        </button>
       </div>
       
       {currentPage === 'chat' && <ChatInterface />}
       {currentPage === 'audio' && <AudioQueuePlayerTest />}
       {currentPage === 'stream-segment' && <StreamSegmentationTest />}
+      {currentPage === 'tts' && <TTSIntegrationTest />}
     </div>
   );
 }
