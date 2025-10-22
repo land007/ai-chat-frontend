@@ -118,6 +118,7 @@ export interface AudioQueuePlayerHandle {
   resume: () => void;
   clear: () => void;
   isPlaying: () => boolean;
+  getQueueRemaining: () => number;
   setAutoPlay: (autoPlay: boolean) => void;
 }
 

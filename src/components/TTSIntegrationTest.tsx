@@ -23,6 +23,10 @@ const TTSIntegrationTest: React.FC = () => {
   const [buffer, setBuffer] = useState('');
   const [streamSpeed, setStreamSpeed] = useState<'fast' | 'medium' | 'slow'>('medium');
   
+  // 队列优化：待处理segments
+  const [pendingSegments, setPendingSegments] = useState<TextSegment[]>([]);
+  const maxQueueSize = 2; // 最大队列长度（当前播放 + 预加载）
+  
   // Refs
   const audioPlayerRef = useRef<AudioQueuePlayerHandle>(null);
   const segmenterRef = useRef<StreamTextSegmenter>(new StreamTextSegmenter());
@@ -79,10 +83,112 @@ function calculate() {
 
 这段演示了TTS播放的理想分段效果。每个句子会被单独高亮。用户体验会更好！`;
 
+  // 将markdown文本转换为适合TTS的纯文本
+  const convertToTTSText = (text: string, type: string): string => {
+    // 处理表格：提取单元格内容，用逗号分隔
+    if (type === 'table') {
+      const lines = text.trim().split('\n');
+      const cleanedLines = lines
+        .filter(line => !line.match(/^\|[-\s:|]+\|$/)) // 移除表格分隔行
+        .map(line => {
+          // 提取单元格内容
+          return line
+            .split('|')
+            .map(cell => cell.trim())
+            .filter(cell => cell.length > 0)
+            .join('，'); // 用中文逗号分隔
+        })
+        .filter(line => line.length > 0);
+      
+      return cleanedLines.join('。'); // 每行用句号分隔
+    }
+    
+    // 处理代码块：返回描述性文本，不朗读代码内容
+    if (type === 'code') {
+      // 检测代码语言
+      const langMatch = text.match(/```(\w+)/);
+      let language = '代码';
+      
+      if (langMatch) {
+        const lang = langMatch[1].toLowerCase();
+        // 常见编程语言的友好名称映射
+        const langMap: { [key: string]: string } = {
+          'javascript': 'JavaScript',
+          'js': 'JavaScript',
+          'typescript': 'TypeScript',
+          'ts': 'TypeScript',
+          'python': 'Python',
+          'py': 'Python',
+          'java': 'Java',
+          'cpp': 'C++',
+          'c': 'C',
+          'csharp': 'C#',
+          'cs': 'C#',
+          'go': 'Go',
+          'rust': 'Rust',
+          'php': 'PHP',
+          'ruby': 'Ruby',
+          'swift': 'Swift',
+          'kotlin': 'Kotlin',
+          'sql': 'SQL',
+          'html': 'HTML',
+          'css': 'CSS',
+          'scss': 'SCSS',
+          'json': 'JSON',
+          'xml': 'XML',
+          'yaml': 'YAML',
+          'yml': 'YAML',
+          'markdown': 'Markdown',
+          'md': 'Markdown',
+          'bash': 'Bash',
+          'sh': 'Shell',
+          'shell': 'Shell',
+          'powershell': 'PowerShell',
+          'r': 'R',
+          'matlab': 'MATLAB',
+          'scala': 'Scala',
+          'lua': 'Lua',
+          'perl': 'Perl',
+          'dart': 'Dart'
+        };
+        
+        language = langMap[lang] || lang;
+      }
+      
+      // 统计代码行数
+      const codeContent = text.replace(/```[\s\S]*?\n/, '').replace(/```$/, '').trim();
+      const lineCount = codeContent.split('\n').length;
+      
+      return `这里是一段${language}代码，共${lineCount}行`;
+    }
+    
+    // 处理标题：移除#号
+    if (type === 'heading') {
+      return text.replace(/^#+\s*/, '');
+    }
+    
+    // 处理列表：移除列表标记
+    if (type === 'list') {
+      return text
+        .split('\n')
+        .map(line => line.replace(/^[-*+]\s*/, '').replace(/^\d+\.\s*/, ''))
+        .join('，');
+    }
+    
+    // 处理引用：移除引用标记
+    if (type === 'quote') {
+      return text.replace(/^>\s*/gm, '');
+    }
+    
+    // 普通段落直接返回
+    return text;
+  };
+  
   // TTS URL生成函数
-  const generateTTSUrl = (text: string): string => {
-    const encodedText = encodeURIComponent(text);
-    return `https://dub.qhkly.com/download?text=${encodedText}&name=zh-CN-XuyuNeural&lang=zh-CN&role=Default&style=Default&rate=%2B0&pitch=%2B0&volume=%2B0&format=riff-24khz-16bit-mono-pcm`;
+  const generateTTSUrl = (text: string, type: string = 'paragraph'): string => {
+    const cleanedText = convertToTTSText(text, type);
+    const encodedText = encodeURIComponent(cleanedText);
+    return `https://dub.qhkly.com/download?text=${encodedText}&name=zh-CN-XuyuNeural&lang=zh-CN&role=Default&style=Default&rate=%2B0&pitch=%2B0&volume=%2B0&format=riff-24khz-16bit-mo-pcm`;
   };
 
   // 速度映射
@@ -109,14 +215,56 @@ function calculate() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isStreamMode]);
 
+  // 自动入队：当队列有空位时，从pendingSegments入队
+  useEffect(() => {
+    if (pendingSegments.length > 0) {
+      // 获取AudioQueuePlayer的实际剩余队列长度
+      const actualRemaining = audioPlayerRef.current?.getQueueRemaining() || 0;
+      
+      if (actualRemaining < maxQueueSize) {
+        const canEnqueue = maxQueueSize - actualRemaining;
+        const toEnqueue = pendingSegments.slice(0, canEnqueue);
+        
+        console.log(`📤 [自动入队] 剩余${actualRemaining}个，入队${toEnqueue.length}个`);
+        
+        toEnqueue.forEach(segment => {
+          audioPlayerRef.current?.enqueue({
+            url: generateTTSUrl(segment.text, segment.type),
+            textRef: segment
+          });
+        });
+        
+        setPendingSegments(prev => prev.slice(canEnqueue));
+        
+        // 更新显示的队列长度
+        const newRemaining = audioPlayerRef.current?.getQueueRemaining() || 0;
+        setQueueLength(newRemaining);
+      }
+    }
+  }, [pendingSegments, maxQueueSize]);
+
   // 播放状态回调
   const handlePlayingChange = (textRef: any) => {
     if (textRef?.id) {
+      // 开始播放新segment
+      console.log('▶️ [播放回调] 开始播放新segment:', textRef.text?.substring(0, 30));
       setCurrentSegmentId(textRef.id);
+      
+      // 同步队列长度（从AudioQueuePlayer获取真实值）
+      const actualRemaining = audioPlayerRef.current?.getQueueRemaining() || 0;
+      setQueueLength(actualRemaining);
+      console.log(`📊 [播放回调] 队列剩余: ${actualRemaining}个`);
+      
+      // 触发自动入队（通过更新pending触发useEffect）
+      setPendingSegments(prev => [...prev]);
+      
     } else {
+      // 队列播放完成或停止
+      console.log('⏹️ [播放回调] 播放完成或停止');
       setCurrentSegmentId(null);
       setIsPlaying(false);
       setIsPaused(false);
+      setQueueLength(0);
     }
   };
 
@@ -125,7 +273,7 @@ function calculate() {
     audioPlayerRef.current?.clear();
     segments.forEach(segment => {
       audioPlayerRef.current?.enqueue({
-        url: generateTTSUrl(segment.text),
+        url: generateTTSUrl(segment.text, segment.type),
         textRef: segment
       });
     });
@@ -141,7 +289,7 @@ function calculate() {
     // 从当前segment开始，依次入队到结尾
     for (let i = index; i < segments.length; i++) {
       audioPlayerRef.current?.enqueue({
-        url: generateTTSUrl(segments[i].text),
+        url: generateTTSUrl(segments[i].text, segments[i].type),
         textRef: segments[i]
       });
     }
@@ -170,6 +318,7 @@ function calculate() {
     setIsPaused(false);
     setCurrentSegmentId(null);
     setQueueLength(0);
+    setPendingSegments([]);
   };
 
   // 流式播放：开始
@@ -182,6 +331,8 @@ function calculate() {
     currentStreamIndexRef.current = 0;
     setIsStreaming(true);
     setIsPlaying(true);
+    setPendingSegments([]);
+    setQueueLength(0);
     
     // 清空队列
     audioPlayerRef.current?.clear();
@@ -200,20 +351,37 @@ function calculate() {
       // 更新缓冲区
       setBuffer(segmenterRef.current.getBuffer());
       
-      // 如果有新的完整segments，入队TTS
+      // 如果有新的完整segments，智能入队
       if (newSegments.length > 0) {
         const allSegments = segmenterRef.current.getSegments();
         setSegments(allSegments);
         
-        // 将新segments入队TTS
-        newSegments.forEach(segment => {
+        // 获取实际队列剩余
+        const actualRemaining = audioPlayerRef.current?.getQueueRemaining() || 0;
+        
+        // 智能入队：只入队到达maxQueueSize，其余暂存
+        const canEnqueue = Math.max(0, maxQueueSize - actualRemaining);
+        const toEnqueue = newSegments.slice(0, canEnqueue);
+        const toPending = newSegments.slice(canEnqueue);
+        
+        console.log(`📝 [流式入队] 识别${newSegments.length}个，队列剩余${actualRemaining}，入队${toEnqueue.length}，暂存${toPending.length}`);
+        
+        // 入队部分
+        toEnqueue.forEach(segment => {
           audioPlayerRef.current?.enqueue({
-            url: generateTTSUrl(segment.text),
+            url: generateTTSUrl(segment.text, segment.type),
             textRef: segment
           });
         });
         
-        setQueueLength(prev => prev + newSegments.length);
+        // 暂存剩余
+        if (toPending.length > 0) {
+          setPendingSegments(prev => [...prev, ...toPending]);
+        }
+        
+        // 更新队列长度显示
+        const newRemaining = audioPlayerRef.current?.getQueueRemaining() || 0;
+        setQueueLength(newRemaining);
       }
       
       // 更新进度
@@ -230,15 +398,30 @@ function calculate() {
       const allSegments = segmenterRef.current.getSegments();
       setSegments(allSegments);
       
-      // 将最后的segments入队TTS
-      finalSegments.forEach(segment => {
+      // 获取实际队列剩余
+      const actualRemaining = audioPlayerRef.current?.getQueueRemaining() || 0;
+      
+      // 智能入队最后的segments
+      const canEnqueue = Math.max(0, maxQueueSize - actualRemaining);
+      const toEnqueue = finalSegments.slice(0, canEnqueue);
+      const toPending = finalSegments.slice(canEnqueue);
+      
+      console.log(`🏁 [流式完成] 最后${finalSegments.length}个，队列剩余${actualRemaining}，入队${toEnqueue.length}，暂存${toPending.length}`);
+      
+      toEnqueue.forEach(segment => {
         audioPlayerRef.current?.enqueue({
-          url: generateTTSUrl(segment.text),
+          url: generateTTSUrl(segment.text, segment.type),
           textRef: segment
         });
       });
       
-      setQueueLength(prev => prev + finalSegments.length);
+      if (toPending.length > 0) {
+        setPendingSegments(prev => [...prev, ...toPending]);
+      }
+      
+      // 更新队列长度显示
+      const newRemaining = audioPlayerRef.current?.getQueueRemaining() || 0;
+      setQueueLength(newRemaining);
     }
     
     setBuffer('');
@@ -273,14 +456,23 @@ function calculate() {
         const allSegments = segmenterRef.current.getSegments();
         setSegments(allSegments);
         
-        newSegments.forEach(segment => {
+        // 智能入队
+        const canEnqueue = Math.max(0, maxQueueSize - queueLength);
+        const toEnqueue = newSegments.slice(0, canEnqueue);
+        const toPending = newSegments.slice(canEnqueue);
+        
+        toEnqueue.forEach(segment => {
           audioPlayerRef.current?.enqueue({
-            url: generateTTSUrl(segment.text),
+            url: generateTTSUrl(segment.text, segment.type),
             textRef: segment
           });
         });
         
-        setQueueLength(prev => prev + newSegments.length);
+        if (toPending.length > 0) {
+          setPendingSegments(prev => [...prev, ...toPending]);
+        }
+        
+        setQueueLength(prev => prev + toEnqueue.length);
       }
       
       setStreamProgress(((i + 1) / testMarkdown.length) * 100);
@@ -294,14 +486,23 @@ function calculate() {
       const allSegments = segmenterRef.current.getSegments();
       setSegments(allSegments);
       
-      finalSegments.forEach(segment => {
+      // 智能入队最后的segments
+      const canEnqueue = Math.max(0, maxQueueSize - queueLength);
+      const toEnqueue = finalSegments.slice(0, canEnqueue);
+      const toPending = finalSegments.slice(canEnqueue);
+      
+      toEnqueue.forEach(segment => {
         audioPlayerRef.current?.enqueue({
-          url: generateTTSUrl(segment.text),
+          url: generateTTSUrl(segment.text, segment.type),
           textRef: segment
         });
       });
       
-      setQueueLength(prev => prev + finalSegments.length);
+      if (toPending.length > 0) {
+        setPendingSegments(prev => [...prev, ...toPending]);
+      }
+      
+      setQueueLength(prev => prev + toEnqueue.length);
     }
     
     setBuffer('');
@@ -320,6 +521,7 @@ function calculate() {
     setStreamProgress(0);
     setBuffer('');
     currentStreamIndexRef.current = 0;
+    setPendingSegments([]);
   };
 
   // 切换模式
@@ -330,6 +532,7 @@ function calculate() {
     setStreamProgress(0);
     setBuffer('');
     currentStreamIndexRef.current = 0;
+    setPendingSegments([]); // 清空待处理队列
     
     // 切换模式
     setIsStreamMode(!isStreamMode);
@@ -549,9 +752,15 @@ function calculate() {
           fontSize: '14px',
           color: '#6b7280',
           display: 'flex',
-          gap: '16px'
+          gap: '16px',
+          alignItems: 'center'
         }}>
-          <span>队列: <strong>{queueLength}</strong> 个segment</span>
+          <span>队列: <strong>{queueLength}</strong> 个</span>
+          {pendingSegments.length > 0 && (
+            <span style={{ color: '#f59e0b', fontSize: '13px' }}>
+              待入队: <strong>{pendingSegments.length}</strong>
+            </span>
+          )}
           {isPlaying && (
             <span style={{ 
               color: isPaused ? '#f59e0b' : '#10b981',

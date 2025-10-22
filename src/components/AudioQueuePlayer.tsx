@@ -287,6 +287,13 @@ const AudioQueuePlayer = forwardRef<AudioQueuePlayerHandle, AudioQueuePlayerProp
       },
       
       /**
+       * 获取队列剩余数量（未播放的segment数）
+       */
+      getQueueRemaining: () => {
+        return Math.max(0, queueRef.current.length - currentIndexRef.current);
+      },
+      
+      /**
        * 设置自动播放
        */
       setAutoPlay: (enabled: boolean) => {
