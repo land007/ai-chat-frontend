@@ -526,109 +526,37 @@ function calculate() {
             </div>
           ) : (
             <div style={styles.markdownContainer} className="markdown-with-segments">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{
-                  // 自定义渲染器，为每个元素添加data属性
-                  p: ({ node, children, ...props }) => {
-                    const text = String(children).substring(0, 100);
-                    const segment = segments.find(s => {
-                      const segText = s.text.substring(0, 100);
-                      return segText.includes(text) || text.includes(segText);
-                    });
-                    return (
-                      <p 
-                        {...props}
-                        data-segment-id={segment?.id}
-                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
-                      >
-                        {children}
-                      </p>
-                    );
-                  },
-                  h1: ({ node, children, ...props }) => {
-                    const text = String(children);
-                    const segment = segments.find(s => s.text.includes(text));
-                    return (
-                      <h1 
-                        {...props}
-                        data-segment-id={segment?.id}
-                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
-                      >
-                        {children}
-                      </h1>
-                    );
-                  },
-                  h2: ({ node, children, ...props }) => {
-                    const text = String(children);
-                    const segment = segments.find(s => s.text.includes(text));
-                    return (
-                      <h2 
-                        {...props}
-                        data-segment-id={segment?.id}
-                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
-                      >
-                        {children}
-                      </h2>
-                    );
-                  },
-                  h3: ({ node, children, ...props }) => {
-                    const text = String(children);
-                    const segment = segments.find(s => s.text.includes(text));
-                    return (
-                      <h3 
-                        {...props}
-                        data-segment-id={segment?.id}
-                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
-                      >
-                        {children}
-                      </h3>
-                    );
-                  },
-                  ul: ({ node, children, ...props }) => {
-                    // 找到对应的列表段落
-                    const segment = segments.find(s => s.type === 'list' && s.text.includes('-'));
-                    return (
-                      <ul 
-                        {...props}
-                        data-segment-id={segment?.id}
-                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
-                      >
-                        {children}
-                      </ul>
-                    );
-                  },
-                  table: ({ node, children, ...props }) => {
-                    // 找到对应的表格段落
-                    const segment = segments.find(s => s.text.includes('|'));
-                    return (
-                      <table 
-                        {...props}
-                        data-segment-id={segment?.id}
-                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
-                      >
-                        {children}
-                      </table>
-                    );
-                  },
-                  pre: ({ node, children, ...props }) => {
-                    // 代码块预处理
-                    const segment = segments.find(s => s.type === 'code');
-                    return (
-                      <pre 
-                        {...props}
-                        data-segment-id={segment?.id}
-                        className={highlightedSegmentId === segment?.id ? 'segment-highlighted' : ''}
-                      >
-                        {children}
-                      </pre>
-                    );
-                  }
-                }}
-              >
-                {inputText}
-              </ReactMarkdown>
+              {/* 按segment逐个渲染，实现句子级精准高亮 */}
+              {segments.map((segment) => (
+                <div
+                  key={segment.id}
+                  data-segment-id={segment.id}
+                  className={`segment-wrapper ${highlightedSegmentId === segment.id ? 'segment-highlighted' : ''}`}
+                  style={{
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => handleSegmentClick(segment.id)}
+                  onMouseEnter={() => setHoveredSegmentId(segment.id)}
+                  onMouseLeave={() => setHoveredSegmentId(null)}
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight]}
+                    components={{
+                      // 对于普通段落（句子），去掉外层<p>标签的margin，作为inline显示
+                      p: ({ node, children, ...props }) => {
+                        if (segment.type === 'paragraph') {
+                          return <span {...props}>{children}</span>;
+                        }
+                        return <p {...props}>{children}</p>;
+                      }
+                    }}
+                  >
+                    {segment.text}
+                  </ReactMarkdown>
+                </div>
+              ))}
               {isRunning && (
                 <div style={{ 
                   display: 'inline-flex',
@@ -725,38 +653,41 @@ function calculate() {
           51%, 100% { opacity: 0; }
         }
 
-        /* Markdown段落高亮样式 */
+        /* Segment包装器基础样式 */
+        .markdown-with-segments .segment-wrapper {
+          display: block;
+          margin-bottom: 12px;
+          border-radius: 6px;
+          transition: all 0.3s ease;
+          position: relative;
+        }
+
+        /* 悬停效果 */
+        .markdown-with-segments .segment-wrapper:hover {
+          background-color: rgba(156, 163, 175, 0.05);
+        }
+
+        /* 句子级segment（paragraph类型）- inline显示 */
+        .markdown-with-segments .segment-wrapper span {
+          display: inline;
+        }
+
+        /* 高亮样式 */
         .markdown-with-segments .segment-highlighted {
           background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%);
           border-left: 4px solid #3b82f6;
-          padding-left: 16px;
-          margin-left: -16px;
-          padding-top: 8px;
-          padding-bottom: 8px;
-          margin-top: 4px;
-          margin-bottom: 4px;
+          padding: 8px 12px 8px 16px;
+          margin-left: -4px;
+          margin-bottom: 8px;
           border-radius: 6px;
           box-shadow: 0 2px 12px rgba(59, 130, 246, 0.2);
           transform: translateX(4px);
-          transition: all 0.3s ease;
+          display: inline-block;
         }
 
-        /* 表格高亮特殊处理 */
-        .markdown-with-segments table.segment-highlighted {
-          padding-left: 8px;
-          margin-left: -8px;
-        }
-
-        /* 代码块高亮特殊处理 */
-        .markdown-with-segments pre.segment-highlighted,
-        .markdown-with-segments pre code.segment-highlighted {
-          border-left-color: #3b82f6;
-        }
-
-        /* 列表高亮 */
-        .markdown-with-segments ul.segment-highlighted,
-        .markdown-with-segments ol.segment-highlighted {
-          padding-left: 32px;
+        /* 块级元素（表格、代码块、列表）的高亮 */
+        .markdown-with-segments .segment-wrapper.segment-highlighted {
+          display: block;
         }
 
         /* Markdown基础样式 */
