@@ -23,6 +23,10 @@ function AppContent() {
         if (response.ok) {
           const config = await response.json();
           setDebugMode(config.enableDebugMode === true);
+          // 如果启用调试模式，默认显示测试页面
+          if (config.enableDebugMode === true) {
+            setCurrentPage('tts');
+          }
         }
       } catch (error) {
         console.log('使用默认调试配置');
