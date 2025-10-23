@@ -19,7 +19,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // 自动检测系统主题偏好
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isStreamingEnabled] = useState(true); // 流式传输始终开启
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null); // 当前流式传输的消息ID
@@ -47,6 +50,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       console.log('[调试] 用户信息:', user, 'loginType:', user.loginType);
     }
   }, [user]);
+
+  // 监听系统主题变化
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    const handleThemeChange = (e: MediaQueryListEvent) => {
+      setIsDarkMode(e.matches);
+    };
+    
+    // 添加监听器
+    mediaQuery.addEventListener('change', handleThemeChange);
+    
+    // 清理函数
+    return () => {
+      mediaQuery.removeEventListener('change', handleThemeChange);
+    };
+  }, []);
 
   // 获取应用配置
   useEffect(() => {
