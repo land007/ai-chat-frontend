@@ -95,3 +95,9 @@ jspm_packages/
 
 # TernJS port file
 .tern-port
+.ssh/id_rsa_82_156_134_25
+.ssh/id_rsa_82_156_134_25.pub
+ssh_config_82_156_134_25
+src/components/ChatInterface.tsx
+.gitignore
+sync_build.sh

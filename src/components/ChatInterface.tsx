@@ -40,6 +40,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     scrollToBottom();
   }, [messages]);
 
+  // 调试用户信息
+  useEffect(() => {
+    if (user) {
+      console.log('[调试] 用户信息:', user, 'loginType:', user.loginType);
+    }
+  }, [user]);
+
   // 获取应用配置
   useEffect(() => {
     const fetchAppConfig = async () => {
@@ -885,19 +892,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           >
             <Trash2 size={18} />
           </button>
-          <button
-            style={getStyles().actionButton}
-            onClick={logout}
-            onMouseEnter={(e) => {
-              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
-            }}
-            onMouseLeave={(e) => {
-              Object.assign(e.currentTarget.style, getStyles().actionButton);
-            }}
-            title="退出登录"
-          >
-            <LogOut size={18} />
-          </button>
+          {/* 只有用户名密码登录的用户才显示注销按钮 */}
+          {user && user.loginType === 'password' && (
+            <button
+              style={getStyles().actionButton}
+              onClick={logout}
+              onMouseEnter={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+              }}
+              onMouseLeave={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().actionButton);
+              }}
+              title="退出登录"
+            >
+              <LogOut size={18} />
+            </button>
+          )}
         </div>
       </div>
 

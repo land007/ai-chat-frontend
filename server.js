@@ -362,7 +362,9 @@ app.get('/api/auth/userinfo', authenticateToken, (req, res) => {
       success: true,
       user: {
         userId: req.user.userId,
-        name: req.user.name
+        name: req.user.name,
+        avatar: req.user.avatar || '',
+        loginType: req.user.loginType || 'password' // 默认为password以保持向后兼容
       }
     });
   } catch (error) {
