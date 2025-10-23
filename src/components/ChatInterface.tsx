@@ -81,10 +81,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           
           // 如果有配置的欢迎语，添加为第一条消息
           if (config.welcomeMessage && config.welcomeMessage.trim()) {
+            // 替换 {{name}} 占位符：有name值就替换为name，没有就替换为空字符串
+            const welcomeText = config.welcomeMessage.replace(
+              /\{\{name\}\}/g, 
+              user?.name || ''
+            );
+            
             const welcomeMessage: ChatMessage = {
               id: generateId(),
               role: 'assistant',
-              content: config.welcomeMessage,
+              content: welcomeText,
               timestamp: Date.now()
             };
             setMessages([welcomeMessage]);
@@ -840,38 +846,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           <p style={getStyles().headerSubtitle}>{appConfig.description}</p>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {user && (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '8px',
-              padding: '6px 12px',
-              backgroundColor: isDarkMode ? '#374151' : '#f3f4f6',
-              borderRadius: '8px'
-            }}>
-              {/* 用户头像 */}
-              {user.avatar ? (
-                <img 
-                  src={user.avatar} 
-                  alt={user.name}
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    flexShrink: 0,
-                    minWidth: '20px',
-                    minHeight: '20px'
-                  }}
-                />
-              ) : (
-                <User size={16} style={{ color: '#6b7280' }} />
-              )}
-              <span style={{ fontSize: '14px', color: isDarkMode ? '#f9fafb' : '#374151' }}>
-                {user.name}
-              </span>
-            </div>
-          )}
         </div>
         <div style={getStyles().headerActions}>
           {appConfig.enableI18nButton && (
