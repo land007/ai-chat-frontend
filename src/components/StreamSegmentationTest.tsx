@@ -14,7 +14,7 @@ const StreamSegmentationTest: React.FC = () => {
   const [buffer, setBuffer] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [speed, setSpeed] = useState<'fast' | 'medium' | 'slow'>('medium');
+  const [speed, setSpeed] = useState<'fast' | 'medium' | 'slow'>('fast');
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
   const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);

@@ -21,7 +21,7 @@ const TTSIntegrationTest: React.FC = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamProgress, setStreamProgress] = useState(0);
   const [buffer, setBuffer] = useState('');
-  const [streamSpeed, setStreamSpeed] = useState<'fast' | 'medium' | 'slow'>('medium');
+  const [streamSpeed, setStreamSpeed] = useState<'fast' | 'medium' | 'slow'>('fast');
   
   // 队列优化：待处理segments
   const [pendingSegments, setPendingSegments] = useState<TextSegment[]>([]);
