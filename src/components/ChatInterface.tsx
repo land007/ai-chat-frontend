@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, Zap, LogOut } from 'lucide-react';
+import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatAPI } from '@/services/api';
@@ -21,7 +21,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [editValue, setEditValue] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [isStreamingEnabled, setIsStreamingEnabled] = useState(true); // 流式传输开关
+  const [isStreamingEnabled] = useState(true); // 流式传输始终开启
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null); // 当前流式传输的消息ID
   const [isStreamingThinking, setIsStreamingThinking] = useState(false); // 流式传输思考状态
   const [appConfig, setAppConfig] = useState({
@@ -365,10 +365,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     i18n.changeLanguage(newLang);
   };
 
-  // 切换流式传输
-  const handleToggleStreaming = () => {
-    setIsStreamingEnabled(!isStreamingEnabled);
-  };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -497,7 +493,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#e5e7eb',
-      color: '#6b7280'
+      color: '#6b7280',
+      flexShrink: 0,
+      minWidth: '32px',
+      minHeight: '32px'
     },
     avatarUser: {
       width: '32px',
@@ -507,7 +506,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: '#3b82f6',
-      color: 'white'
+      color: 'white',
+      flexShrink: 0,
+      minWidth: '32px',
+      minHeight: '32px'
     },
     messageBubble: {
       padding: '12px 16px',
@@ -828,7 +830,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                     width: '20px',
                     height: '20px',
                     borderRadius: '50%',
-                    objectFit: 'cover'
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                    minWidth: '20px',
+                    minHeight: '20px'
                   }}
                 />
               ) : (
@@ -841,25 +846,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           )}
         </div>
         <div style={getStyles().headerActions}>
-          <button
-            style={{
-              ...getStyles().actionButton,
-              ...(isStreamingEnabled ? { color: '#10b981' } : {})
-            }}
-            onClick={handleToggleStreaming}
-            onMouseEnter={(e) => {
-              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
-            }}
-            onMouseLeave={(e) => {
-              Object.assign(e.currentTarget.style, {
-                ...getStyles().actionButton,
-                ...(isStreamingEnabled ? { color: '#10b981' } : {})
-              });
-            }}
-            title={isStreamingEnabled ? '关闭流式传输' : '开启流式传输'}
-          >
-            <Zap size={18} />
-          </button>
           <button
             style={getStyles().actionButton}
             onClick={handleToggleLanguage}
