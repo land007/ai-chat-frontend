@@ -27,11 +27,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [isStreamingEnabled] = useState(true); // 流式传输始终开启
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null); // 当前流式传输的消息ID
   const [isStreamingThinking, setIsStreamingThinking] = useState(false); // 流式传输思考状态
+  const [showExamples, setShowExamples] = useState(true);
   const [appConfig, setAppConfig] = useState({
     name: 'AI智能助手',
     description: '基于阿里云DashScope的智能对话',
     welcomeMessage: '',
-    enableI18nButton: false
+    enableI18nButton: false,
+    exampleQuestions: [] as string[]
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasAddedStreamingMessageRef = useRef(false);
@@ -104,6 +106,101 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     };
     fetchAppConfig();
   }, []);
+
+  const handleExampleClick = async (question: string) => {
+    setShowExamples(false);
+    setIsLoading(true);
+
+    const userMessage: ChatMessage = {
+      id: generateId(),
+      role: 'user',
+      content: question,
+      timestamp: Date.now()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+
+    if (isStreamingEnabled) {
+      // 流式传输模式
+      const assistantMessageId = generateId();
+      const assistantMessage: ChatMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now()
+      };
+
+      setStreamingMessageId(assistantMessageId);
+      setIsStreamingThinking(true);
+      hasAddedStreamingMessageRef.current = false;
+
+      try {
+        await chatAPI.sendMessageStream(
+          question,
+          messages,
+          (content: string, done: boolean) => {
+            if (content && !hasAddedStreamingMessageRef.current) {
+              setIsStreamingThinking(false);
+              setMessages(prev => [...prev, assistantMessage]);
+              hasAddedStreamingMessageRef.current = true;
+            }
+            
+            if (content) {
+              setMessages(prev => prev.map(msg => 
+                msg.id === assistantMessageId 
+                  ? { ...msg, content }
+                  : msg
+              ));
+            }
+            
+            if (done) {
+              setStreamingMessageId(null);
+              setIsStreamingThinking(false);
+              hasAddedStreamingMessageRef.current = false;
+              setIsLoading(false);
+            }
+          },
+          (error: string) => {
+            setIsStreamingThinking(false);
+            setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
+            setStreamingMessageId(null);
+            hasAddedStreamingMessageRef.current = false;
+            setIsLoading(false);
+          }
+        );
+      } catch (error) {
+        setIsStreamingThinking(false);
+        setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
+        setStreamingMessageId(null);
+        hasAddedStreamingMessageRef.current = false;
+        setIsLoading(false);
+      }
+    } else {
+      // 非流式传输模式
+      try {
+        const response = await chatAPI.sendMessage(question, messages);
+        
+        const assistantMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: response,
+          timestamp: Date.now()
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+      } catch (error) {
+        const errorMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: t('messages.errorMessage'),
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -820,6 +917,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     clearConfirmButtonConfirm: {
       backgroundColor: '#ef4444',
       color: 'white'
+    },
+    exampleQuestionsContainer: {
+      marginTop: '16px',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: '8px'
+    },
+    exampleQuestionButton: {
+      padding: '12px 16px',
+      backgroundColor: isDark ? '#374151' : '#f3f4f6',
+      border: `1px solid ${borderColor}`,
+      borderRadius: '8px',
+      cursor: 'pointer',
+      textAlign: 'left' as const,
+      color: textColor,
+      transition: 'all 0.2s ease'
+    },
+    exampleQuestionButtonHover: {
+      backgroundColor: isDark ? '#4b5563' : '#e5e7eb',
+      borderColor: '#3b82f6'
     }
   };
 };
@@ -1083,6 +1200,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               </div>
             </div>
           ))
+        )}
+        
+        {/* 示例问题显示 */}
+        {showExamples && appConfig.exampleQuestions.length > 0 && messages.length === 1 && messages[0].role === 'assistant' && (
+          <div style={getStyles().exampleQuestionsContainer}>
+            {appConfig.exampleQuestions.map((question, index) => (
+              <button
+                key={index}
+                style={getStyles().exampleQuestionButton}
+                onClick={() => handleExampleClick(question)}
+                onMouseEnter={(e) => {
+                  Object.assign(e.currentTarget.style, getStyles().exampleQuestionButtonHover);
+                }}
+                onMouseLeave={(e) => {
+                  Object.assign(e.currentTarget.style, getStyles().exampleQuestionButton);
+                }}
+              >
+                {question}
+              </button>
+            ))}
+          </div>
         )}
         
         {isLoading && !isStreamingEnabled && (

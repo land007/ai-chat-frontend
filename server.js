@@ -399,12 +399,18 @@ app.post('/api/auth/logout', (req, res) => {
 
 // 应用配置端点（公开访问，无需认证）
 app.get('/api/config', (req, res) => {
+  // 解析示例问题（分号分隔）
+  const exampleQuestions = process.env.EXAMPLE_QUESTIONS 
+    ? process.env.EXAMPLE_QUESTIONS.split(';').map(q => q.trim()).filter(q => q)
+    : [];
+  
   res.json({
     name: APP_NAME,
     description: APP_DESCRIPTION,
     welcomeMessage: WELCOME_MESSAGE,
     enableI18nButton: process.env.ENABLE_I18N_BUTTON === 'true',
-    enableDebugMode: process.env.ENABLE_DEBUG_MODE === 'true'
+    enableDebugMode: process.env.ENABLE_DEBUG_MODE === 'true',
+    exampleQuestions: exampleQuestions
   });
 });
 
