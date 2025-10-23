@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ChatInterface from './components/ChatInterface';
 import AudioQueuePlayerTest from './components/AudioQueuePlayerTest';
@@ -13,6 +13,23 @@ type Page = 'chat' | 'audio' | 'stream-segment' | 'tts';
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('chat');
+  const [debugMode, setDebugMode] = useState(false);
+
+  // 获取调试模式配置
+  useEffect(() => {
+    const fetchDebugConfig = async () => {
+      try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+          const config = await response.json();
+          setDebugMode(config.enableDebugMode === true);
+        }
+      } catch (error) {
+        console.log('使用默认调试配置');
+      }
+    };
+    fetchDebugConfig();
+  }, []);
 
   // 显示加载状态
   if (isLoading) {
@@ -61,42 +78,44 @@ function AppContent() {
 
   return (
     <div className="App">
-      <div style={{ 
-        padding: '12px 20px', 
-        backgroundColor: '#f9fafb', 
-        borderBottom: '1px solid #e5e7eb',
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'center'
-      }}>
-        <span style={{ fontSize: '14px', fontWeight: '600', marginRight: '12px' }}>
-          测试导航:
-        </span>
-        <button 
-          onClick={() => setCurrentPage('chat')}
-          style={buttonStyle('chat')}
-        >
-          💬 聊天界面
-        </button>
-        <button 
-          onClick={() => setCurrentPage('stream-segment')}
-          style={buttonStyle('stream-segment')}
-        >
-          🔄 流式分段测试
-        </button>
-        <button 
-          onClick={() => setCurrentPage('audio')}
-          style={buttonStyle('audio')}
-        >
-          🎵 音频队列测试
-        </button>
-        <button 
-          onClick={() => setCurrentPage('tts')}
-          style={buttonStyle('tts')}
-        >
-          🎙️ TTS集成测试
-        </button>
-      </div>
+      {debugMode && (
+        <div style={{ 
+          padding: '12px 20px', 
+          backgroundColor: '#f9fafb', 
+          borderBottom: '1px solid #e5e7eb',
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center'
+        }}>
+          <span style={{ fontSize: '14px', fontWeight: '600', marginRight: '12px' }}>
+            测试导航:
+          </span>
+          <button 
+            onClick={() => setCurrentPage('chat')}
+            style={buttonStyle('chat')}
+          >
+            💬 聊天界面
+          </button>
+          <button 
+            onClick={() => setCurrentPage('stream-segment')}
+            style={buttonStyle('stream-segment')}
+          >
+            🔄 流式分段测试
+          </button>
+          <button 
+            onClick={() => setCurrentPage('audio')}
+            style={buttonStyle('audio')}
+          >
+            🎵 音频队列测试
+          </button>
+          <button 
+            onClick={() => setCurrentPage('tts')}
+            style={buttonStyle('tts')}
+          >
+            🎙️ TTS集成测试
+          </button>
+        </div>
+      )}
       
       {currentPage === 'chat' && <ChatInterface />}
       {currentPage === 'audio' && <AudioQueuePlayerTest />}

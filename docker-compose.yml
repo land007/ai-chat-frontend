@@ -33,6 +33,10 @@ services:
       
       # JWT配置
       - JWT_SECRET=${JWT_SECRET}
+      
+      # UI功能控制
+      - ENABLE_I18N_BUTTON=${ENABLE_I18N_BUTTON:-false}
+      - ENABLE_DEBUG_MODE=${ENABLE_DEBUG_MODE:-false}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]

@@ -402,7 +402,9 @@ app.get('/api/config', (req, res) => {
   res.json({
     name: APP_NAME,
     description: APP_DESCRIPTION,
-    welcomeMessage: WELCOME_MESSAGE
+    welcomeMessage: WELCOME_MESSAGE,
+    enableI18nButton: process.env.ENABLE_I18N_BUTTON === 'true',
+    enableDebugMode: process.env.ENABLE_DEBUG_MODE === 'true'
   });
 });
 

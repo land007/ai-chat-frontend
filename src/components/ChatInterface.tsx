@@ -27,7 +27,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [appConfig, setAppConfig] = useState({
     name: 'AI智能助手',
     description: '基于阿里云DashScope的智能对话',
-    welcomeMessage: ''
+    welcomeMessage: '',
+    enableI18nButton: false
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasAddedStreamingMessageRef = useRef(false);
@@ -853,19 +854,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           )}
         </div>
         <div style={getStyles().headerActions}>
-          <button
-            style={getStyles().actionButton}
-            onClick={handleToggleLanguage}
-            onMouseEnter={(e) => {
-              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
-            }}
-            onMouseLeave={(e) => {
-              Object.assign(e.currentTarget.style, getStyles().actionButton);
-            }}
-            title={t('ui.switchLanguage')}
-          >
-            <Globe size={18} />
-          </button>
+          {appConfig.enableI18nButton && (
+            <button
+              style={getStyles().actionButton}
+              onClick={handleToggleLanguage}
+              onMouseEnter={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+              }}
+              onMouseLeave={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().actionButton);
+              }}
+              title={t('ui.switchLanguage')}
+            >
+              <Globe size={18} />
+            </button>
+          )}
           <button
             style={getStyles().actionButton}
             onClick={handleToggleTheme}
