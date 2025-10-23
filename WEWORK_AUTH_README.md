@@ -50,7 +50,7 @@
 - WEWORK_CORP_ID=${WEWORK_CORP_ID}           # 企业ID，如: ww1234567890abcdef
 - WEWORK_AGENT_ID=${WEWORK_AGENT_ID}         # 应用AgentID，如: 1000002
 - WEWORK_CORP_SECRET=${WEWORK_CORP_SECRET}   # 应用Secret（保密）
-- WEWORK_REDIRECT_URI=${WEWORK_REDIRECT_URI} # 如: https://your-domain.com/
+- WEWORK_REDIRECT_URI=${WEWORK_REDIRECT_URI} # 如: https://your-domain.com/auth/callback
 - JWT_SECRET=${JWT_SECRET}                   # JWT签名密钥（保密）
 ```
 
@@ -200,11 +200,11 @@ docker-compose down
 
 1. **检查服务状态**
    ```bash
-   curl https://xzs.myships.com/api/health
+   curl https://your-domain.com/api/health
    ```
 
 2. **测试认证流程**
-   - 访问 `https://xzs.myships.com`
+   - 访问 `https://your-domain.com`
    - 应该自动跳转到登录页面
    - 点击"使用企业微信登录"
    - 完成授权后应显示主应用
@@ -259,7 +259,7 @@ docker exec ai-chat-app curl https://qyapi.weixin.qq.com
 - 授权时提示"redirect_uri参数错误"
 
 **解决方法：**
-1. 确认企业微信后台已配置 `xzs.myships.com`
+1. 确认企业微信后台已配置 `your-domain.com`
 2. 确认配置时没有添加协议（http/https）
 3. 确认配置时没有添加端口号
 4. 配置修改后需要等待几分钟生效

@@ -6,6 +6,9 @@ services:
     container_name: ai-chat-app
     ports:
       - "3000:3000"
+    volumes:
+      # 映射企业微信域名验证文件
+      - ./public/WW_verify_XXXXXXXXXXXXXXX.txt:/app/public/WW_verify_XXXXXXXXXXXXXXX.txt:ro
     environment:
       - NODE_ENV=production
       - PORT=3000

@@ -50,6 +50,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// 企业微信域名验证文件 - 优先处理
+app.get('/WW_verify_XXXXXXXXXXXXXXX.txt', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'WW_verify_XXXXXXXXXXXXXXX.txt'));
+});
+
+// 静态文件服务 - 用于企业微信域名验证
+app.use(express.static(path.join(__dirname, 'public')));
+
 // ==================== 企业微信API服务 ====================
 
 /**
