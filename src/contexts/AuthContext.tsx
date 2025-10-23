@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authService, User } from '@/services/auth';
+import { authService, User, AuthConfig } from '@/services/auth';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: () => void;
+  authConfig: AuthConfig | null;
+  loginWithPassword: (username: string, password: string) => Promise<void>;
+  loginWithWework: () => void;
   logout: () => void;
   handleAuthCallback: (code: string) => Promise<void>;
 }
@@ -19,11 +21,24 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
 
-  // 初始化时检查是否已登录
+  // 初始化时检查认证配置和登录状态
   useEffect(() => {
     const initAuth = async () => {
       try {
+        // 获取认证配置
+        const config = await authService.getAuthConfig();
+        setAuthConfig(config);
+        
+        // 如果认证关闭，直接跳过登录检查
+        if (!config.authEnabled) {
+          console.log('[认证上下文] 认证已关闭，无需登录');
+          setIsLoading(false);
+          return;
+        }
+
+        // 如果认证开启，检查是否已登录
         if (authService.isAuthenticated()) {
           const userInfo = await authService.getUserInfo();
           setUser(userInfo);
@@ -41,15 +56,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
-  // 发起登录（跳转到企业微信授权页面）
-  const login = async () => {
+  // 用户名密码登录
+  const loginWithPassword = async (username: string, password: string) => {
     try {
-      console.log('[认证上下文] 发起登录');
+      console.log('[认证上下文] 用户名密码登录');
+      setIsLoading(true);
+      const authResponse = await authService.loginWithPassword(username, password);
+      setUser(authResponse.user);
+      console.log('[认证上下文] 用户名密码登录成功:', authResponse.user.name);
+    } catch (error) {
+      console.error('[认证上下文] 用户名密码登录失败:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 企业微信登录
+  const loginWithWework = async () => {
+    try {
+      console.log('[认证上下文] 发起企业微信登录');
       const authUrl = await authService.getAuthUrl();
       window.location.href = authUrl;
     } catch (error) {
-      console.error('[认证上下文] 登录失败:', error);
-      alert('登录失败，请稍后重试');
+      console.error('[认证上下文] 企业微信登录失败:', error);
+      alert('企业微信登录失败，请稍后重试');
     }
   };
 
@@ -84,7 +115,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     isAuthenticated: !!user,
     isLoading,
-    login,
+    authConfig,
+    loginWithPassword,
+    loginWithWework,
     logout,
     handleAuthCallback
   };

@@ -819,7 +819,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               backgroundColor: isDarkMode ? '#374151' : '#f3f4f6',
               borderRadius: '8px'
             }}>
-              <User size={16} style={{ color: '#6b7280' }} />
+              {/* 用户头像 */}
+              {user.avatar ? (
+                <img 
+                  src={user.avatar} 
+                  alt={user.name}
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    objectFit: 'cover'
+                  }}
+                />
+              ) : (
+                <User size={16} style={{ color: '#6b7280' }} />
+              )}
               <span style={{ fontSize: '14px', color: isDarkMode ? '#f9fafb' : '#374151' }}>
                 {user.name}
               </span>

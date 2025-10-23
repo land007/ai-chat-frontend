@@ -2,12 +2,20 @@
 export interface User {
   userId: string;
   name: string;
+  avatar?: string;      // 头像URL
+  loginType: 'wework' | 'password';
 }
 
 export interface AuthResponse {
   success: boolean;
   token: string;
   user: User;
+}
+
+export interface AuthConfig {
+  authEnabled: boolean;
+  weworkEnabled: boolean;
+  availableUsers: string[];
 }
 
 class AuthService {
@@ -29,6 +37,55 @@ class AuthService {
       return data.redirectUrl;
     } catch (error) {
       console.error('[认证服务] 获取授权URL失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 用户名密码登录
+   */
+  async loginWithPassword(username: string, password: string): Promise<AuthResponse> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '登录失败');
+      }
+
+      const data: AuthResponse = await response.json();
+      
+      // 保存token到localStorage
+      this.setToken(data.token);
+      
+      return data;
+    } catch (error) {
+      console.error('[认证服务] 用户名密码登录失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取认证配置
+   */
+  async getAuthConfig(): Promise<AuthConfig> {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/config`);
+      
+      if (!response.ok) {
+        throw new Error('获取认证配置失败');
+      }
+
+      const data: AuthConfig = await response.json();
+      return data;
+    } catch (error) {
+      console.error('[认证服务] 获取认证配置失败:', error);
       throw error;
     }
   }

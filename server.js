@@ -22,6 +22,24 @@ const WEWORK_CORP_SECRET = process.env.WEWORK_CORP_SECRET || '';
 const WEWORK_REDIRECT_URI = process.env.WEWORK_REDIRECT_URI || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-in-production';
 
+// 认证开关和用户配置
+const ENABLE_AUTH = process.env.ENABLE_AUTH === 'true';
+const BASIC_AUTH_USERS = process.env.BASIC_AUTH_USERS || 'admin:admin123';
+
+// 解析用户配置
+const parseUsers = (usersString) => {
+  const users = {};
+  usersString.split(',').forEach(userStr => {
+    const [username, password] = userStr.trim().split(':');
+    if (username && password) {
+      users[username] = password;
+    }
+  });
+  return users;
+};
+
+const authUsers = parseUsers(BASIC_AUTH_USERS);
+
 // 中间件
 app.use(cors());
 app.use(express.json());
@@ -109,9 +127,15 @@ async function getUserInfo(userId) {
 // ==================== JWT认证中间件 ====================
 
 /**
- * JWT验证中间件
+ * JWT验证中间件（支持认证开关）
  */
 function authenticateToken(req, res, next) {
+  // 如果认证开关关闭，直接跳过认证
+  if (!ENABLE_AUTH) {
+    console.log('[认证] 认证开关关闭，跳过认证检查');
+    return next();
+  }
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
@@ -133,7 +157,7 @@ function authenticateToken(req, res, next) {
     }
     
     req.user = user;
-    console.log('[认证] 用户验证成功:', user.userId);
+    console.log('[认证] 用户验证成功:', user.name, '登录方式:', user.loginType);
     next();
   });
 }
@@ -182,6 +206,83 @@ app.get('/api/auth/wework/redirect', (req, res) => {
 });
 
 /**
+ * 用户名密码登录
+ */
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    console.log('[认证] 用户名密码登录尝试:', username);
+    
+    if (!username || !password) {
+      return res.status(400).json({
+        error: '用户名和密码不能为空',
+        code: 'MISSING_CREDENTIALS'
+      });
+    }
+
+    // 验证用户名和密码
+    if (!authUsers[username] || authUsers[username] !== password) {
+      console.log('[认证] 用户名密码验证失败:', username);
+      return res.status(401).json({
+        error: '用户名或密码错误',
+        code: 'INVALID_CREDENTIALS'
+      });
+    }
+
+    // 生成JWT token
+    const token = jwt.sign(
+      {
+        userId: username,
+        name: username,
+        loginType: 'password'
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('[认证] 用户名密码登录成功:', username);
+
+    res.json({
+      success: true,
+      token: token,
+      user: {
+        userId: username,
+        name: username,
+        loginType: 'password'
+      }
+    });
+  } catch (error) {
+    console.error('[认证] 用户名密码登录失败:', error.message);
+    res.status(500).json({
+      error: '登录失败，请重试',
+      code: 'LOGIN_ERROR'
+    });
+  }
+});
+
+/**
+ * 获取认证配置
+ */
+app.get('/api/auth/config', (req, res) => {
+  try {
+    console.log('[认证] 获取认证配置');
+    
+    res.json({
+      authEnabled: ENABLE_AUTH,
+      weworkEnabled: !!(WEWORK_CORP_ID && WEWORK_AGENT_ID && WEWORK_CORP_SECRET),
+      availableUsers: Object.keys(authUsers)
+    });
+  } catch (error) {
+    console.error('[认证] 获取认证配置失败:', error.message);
+    res.status(500).json({
+      error: '获取认证配置失败',
+      code: 'CONFIG_ERROR'
+    });
+  }
+});
+
+/**
  * 企业微信OAuth回调处理
  */
 app.get('/api/auth/wework/callback', async (req, res) => {
@@ -214,7 +315,8 @@ app.get('/api/auth/wework/callback', async (req, res) => {
     const token = jwt.sign(
       {
         userId: userInfo.userId,
-        name: userInfo.name
+        name: userInfo.name,
+        loginType: 'wework'
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -227,7 +329,9 @@ app.get('/api/auth/wework/callback', async (req, res) => {
       token: token,
       user: {
         userId: userInfo.userId,
-        name: userInfo.name
+        name: userInfo.name,
+        avatar: userInfo.avatar || '', // 企业微信头像URL
+        loginType: 'wework'
       }
     });
   } catch (error) {

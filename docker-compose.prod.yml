@@ -17,11 +17,18 @@ services:
       # 阿里云DashScope API配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-your_api_key_here}
       - DASHSCOPE_API_URL=${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}
-      # 企业微信认证配置
+      
+      # 认证开关和用户配置
+      - ENABLE_AUTH=${ENABLE_AUTH:-true}
+      - BASIC_AUTH_USERS=${BASIC_AUTH_USERS:-admin:admin123}
+      
+      # 企业微信认证配置（可选）
       - WEWORK_CORP_ID=${WEWORK_CORP_ID}
       - WEWORK_AGENT_ID=${WEWORK_AGENT_ID}
       - WEWORK_CORP_SECRET=${WEWORK_CORP_SECRET}
       - WEWORK_REDIRECT_URI=${WEWORK_REDIRECT_URI}
+      
+      # JWT配置
       - JWT_SECRET=${JWT_SECRET}
     restart: always
     healthcheck:
