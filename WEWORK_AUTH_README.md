@@ -73,6 +73,17 @@
 3. **可见范围**
    - 设置允许访问该应用的员工范围
 
+4. **IP白名单配置**
+   - 进入应用详情 → "IP白名单" 或 "可信IP"
+   - 添加服务器IP：`YOUR_SERVER_IP_HERE`
+   - 获取服务器IP方法：
+     ```bash
+     curl -s ifconfig.me
+     # 或
+     curl -s ipinfo.io/ip
+     ```
+   - ⚠️ 重要：如果不配置IP白名单，会出现 `not allow to access from your ip` 错误
+
 ## API端点说明
 
 ### 认证相关API（无需认证）
@@ -253,7 +264,32 @@ docker exec ai-chat-app curl https://qyapi.weixin.qq.com
 - 清除浏览器localStorage重新登录
 - 检查服务器JWT_SECRET配置
 
-### 4. 可信域名配置问题
+### 4. IP白名单限制错误
+
+**错误信息：**
+```
+not allow to access from your ip, hint: [xxxxx], from ip: xxx.xxx.xxx.xxx
+```
+
+**可能原因：**
+- 服务器IP未添加到企业微信IP白名单
+- IP地址发生变化
+
+**解决方法：**
+1. 获取当前服务器IP：
+   ```bash
+   curl -s ifconfig.me
+   ```
+
+2. 在企业微信后台添加IP到白名单：
+   - 登录 https://work.weixin.qq.com/
+   - 进入应用管理 → 找到您的应用
+   - 进入应用详情 → "IP白名单" 设置
+   - 添加服务器IP并保存
+
+3. 等待配置生效（通常需要几分钟）
+
+### 5. 可信域名配置问题
 
 **症状：**
 - 授权时提示"redirect_uri参数错误"
