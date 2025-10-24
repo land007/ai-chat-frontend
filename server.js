@@ -8,13 +8,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 从环境变量读取配置
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || 'your_api_key_here';
-const DASHSCOPE_API_URL = process.env.DASHSCOPE_API_URL || 'https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion';
 const APP_NAME = process.env.APP_NAME || 'AI智能助手';
-const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于阿里云DashScope的智能对话';
+const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于AI的智能对话';
 const WELCOME_MESSAGE = process.env.WELCOME_MESSAGE || '';
 const CONTEXT_MESSAGE_COUNT = parseInt(process.env.CONTEXT_MESSAGE_COUNT || '5', 10);
 const API_TIMEOUT = parseInt(process.env.API_TIMEOUT || '60000', 10); // 默认60秒
+
+// 统一AI配置（支持多AI服务）
+const AI_PROVIDER = process.env.AI_PROVIDER || 'dashscope';
+const AI_API_KEY = process.env.AI_API_KEY;
+const AI_API_URL = process.env.AI_API_URL;
+
+// OpenAI特有参数
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4';
+const OPENAI_TEMPERATURE = parseFloat(process.env.OPENAI_TEMPERATURE || '0.7');
 
 // 企业微信认证配置
 const WEWORK_CORP_ID = process.env.WEWORK_CORP_ID || '';
@@ -87,6 +94,108 @@ app.get('/WW_verify_XXXXXXXXXXXXXXX.txt', (req, res) => {
 
 // 静态文件服务 - 用于企业微信域名验证
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ==================== AI服务适配器 ====================
+
+/**
+ * AI服务适配器类
+ * 支持多种AI服务提供商，统一接口
+ */
+class AIAdapter {
+  constructor(provider, apiKey, apiUrl) {
+    this.provider = provider;
+    this.apiKey = apiKey;
+    this.apiUrl = apiUrl;
+  }
+
+  /**
+   * 构建请求体（根据不同provider适配格式）
+   */
+  buildRequestBody(messages, parameters = {}) {
+    if (this.provider === 'openai') {
+      // OpenAI格式（包括转发API）
+      return {
+        model: OPENAI_MODEL,
+        messages: messages,
+        temperature: OPENAI_TEMPERATURE,
+        ...parameters
+      };
+    } else if (this.provider === 'dashscope') {
+      // DashScope格式
+      return {
+        input: {
+          messages: messages
+        },
+        parameters: parameters,
+        debug: {}
+      };
+    }
+    throw new Error(`Unsupported AI provider: ${this.provider}`);
+  }
+
+  /**
+   * 获取请求配置（统一的请求头和超时）
+   */
+  getRequestConfig() {
+    return {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: API_TIMEOUT
+    };
+  }
+
+  /**
+   * 解析响应（统一格式）
+   */
+  parseResponse(response) {
+    if (this.provider === 'openai') {
+      // OpenAI格式: response.choices[0].message.content
+      if (response.data.choices && response.data.choices[0] && response.data.choices[0].message) {
+        return response.data.choices[0].message.content;
+      }
+    } else if (this.provider === 'dashscope') {
+      // DashScope格式: response.output.text
+      if (response.data.output && response.data.output.text) {
+        return response.data.output.text;
+      }
+    }
+    throw new Error('Invalid API response format');
+  }
+
+  /**
+   * 获取API URL
+   */
+  getApiUrl() {
+    return this.apiUrl;
+  }
+
+  /**
+   * 获取provider名称
+   */
+  getProvider() {
+    return this.provider;
+  }
+}
+
+// 初始化AI适配器
+let aiAdapter;
+try {
+  // 验证配置
+  if (!AI_API_KEY || !AI_API_URL) {
+    logger.error('[AI配置] 缺少必要的AI服务配置');
+    logger.error('[AI配置] AI_API_KEY:', AI_API_KEY ? '已配置' : '未配置');
+    logger.error('[AI配置] AI_API_URL:', AI_API_URL ? '已配置' : '未配置');
+  } else {
+    aiAdapter = new AIAdapter(AI_PROVIDER, AI_API_KEY, AI_API_URL);
+    logger.info(`[AI配置] 使用AI服务: ${AI_PROVIDER}`);
+    logger.info(`[AI配置] API地址: ${AI_API_URL}`);
+    logger.info(`[AI配置] 模型: ${AI_PROVIDER === 'openai' ? OPENAI_MODEL : 'DashScope默认'}`);
+  }
+} catch (error) {
+  logger.error('[AI配置] 初始化失败:', error.message);
+}
 
 // ==================== 企业微信API服务 ====================
 
@@ -520,6 +629,15 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     // debug级别：完整消息数组
     logger.debug('[AI] 完整消息数组:', JSON.stringify(messages, null, 2));
 
+    // 检查AI适配器是否可用
+    if (!aiAdapter) {
+      logger.error('[AI] AI适配器未初始化');
+      return res.status(500).json({
+        error: 'AI服务配置错误，请联系管理员',
+        code: 'AI_CONFIG_ERROR'
+      });
+    }
+
     if (stream) {
       // 流式传输模式
       res.writeHead(200, {
@@ -530,27 +648,21 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         'Access-Control-Allow-Headers': 'Cache-Control'
       });
 
-      // 模拟流式传输（因为DashScope可能不支持流式）
+      // 使用适配器构建请求
+      const requestBody = aiAdapter.buildRequestBody(messages, {});
+      const requestConfig = aiAdapter.getRequestConfig();
+      
+      logger.debug('[AI] 流式请求体:', JSON.stringify(requestBody, null, 2));
+
       const response = await axios.post(
-        DASHSCOPE_API_URL,
-        {
-          input: {
-            messages: messages
-          },
-          parameters: {},
-          debug: {}
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: API_TIMEOUT
-        }
+        aiAdapter.getApiUrl(),
+        requestBody,
+        requestConfig
       );
 
-      if (response.data && response.data.output && response.data.output.text) {
-        const fullText = response.data.output.text;
+      if (response.data) {
+        // 使用适配器解析响应
+        const fullText = aiAdapter.parseResponse(response);
         
         // 模拟打字机效果，逐字符发送
         for (let i = 0; i <= fullText.length; i++) {
@@ -576,34 +688,29 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       }
     } else {
       // 非流式传输模式
+      const requestBody = aiAdapter.buildRequestBody(messages, {});
+      const requestConfig = aiAdapter.getRequestConfig();
+      
+      logger.debug('[AI] 非流式请求体:', JSON.stringify(requestBody, null, 2));
+
       const response = await axios.post(
-        DASHSCOPE_API_URL,
-        {
-          input: {
-            messages: messages
-          },
-          parameters: {},
-          debug: {}
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: API_TIMEOUT
-        }
+        aiAdapter.getApiUrl(),
+        requestBody,
+        requestConfig
       );
 
       // info级别：响应状态
-      logger.info('[AI] DashScope响应状态:', response.status);
+      logger.info(`[AI] ${aiAdapter.getProvider()}响应状态:`, response.status);
 
-      if (response.data && response.data.output && response.data.output.text) {
-        const responseText = response.data.output.text;
+      if (response.data) {
+        // 使用适配器解析响应
+        const responseText = aiAdapter.parseResponse(response);
         
         // warn级别：完成摘要
         const duration = Date.now() - startTime;
         logger.warn('[AI] 请求完成', {
           user: req.user?.name || 'anonymous',
+          provider: aiAdapter.getProvider(),
           duration: duration + 'ms',
           responseLen: responseText.length
         });
@@ -626,6 +733,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     // error级别：请求失败
     logger.error('[AI] 请求失败', {
       user: req.user?.name,
+      provider: aiAdapter?.getProvider() || 'unknown',
       error: error.message,
       code: error.code,
       status: error.response?.status

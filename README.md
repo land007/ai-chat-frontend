@@ -67,8 +67,11 @@ chmod +x deploy.sh
 | `WELCOME_MESSAGE` | 欢迎语（支持Markdown） | 空（不显示欢迎语） |
 | `CONTEXT_MESSAGE_COUNT` | 上下文消息条数 | `5` |
 | `API_TIMEOUT` | API请求超时时间（毫秒） | `60000`（60秒） |
-| `DASHSCOPE_API_KEY` | 阿里云API密钥 | `your_api_key_here` |
-| `DASHSCOPE_API_URL` | 阿里云API地址 | `https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion` |
+| `AI_PROVIDER` | AI服务提供商 | `dashscope` |
+| `AI_API_KEY` | AI服务API密钥 | 必填 |
+| `AI_API_URL` | AI服务API地址 | 必填 |
+| `OPENAI_MODEL` | OpenAI模型名称 | `gpt-4` |
+| `OPENAI_TEMPERATURE` | OpenAI温度参数 | `0.7` |
 
 ### 配置方法
 
@@ -80,8 +83,9 @@ echo "APP_DESCRIPTION=专业的AI对话助手" >> .env
 echo "WELCOME_MESSAGE=您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。" >> .env
 echo "CONTEXT_MESSAGE_COUNT=10" >> .env
 echo "API_TIMEOUT=60000" >> .env
-echo "DASHSCOPE_API_KEY=sk-your_actual_api_key_here" >> .env
-echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion" >> .env
+echo "AI_PROVIDER=dashscope" >> .env
+echo "AI_API_KEY=sk-your_actual_api_key_here" >> .env
+echo "AI_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion" >> .env
 ```
 
 #### 方法2：直接设置环境变量
@@ -91,14 +95,76 @@ export APP_DESCRIPTION="专业的AI对话助手"
 export WELCOME_MESSAGE="您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。"
 export CONTEXT_MESSAGE_COUNT="10"
 export API_TIMEOUT="60000"
-export DASHSCOPE_API_KEY="sk-your_actual_api_key_here"
-export DASHSCOPE_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion"
+export AI_PROVIDER="dashscope"
+export AI_API_KEY="sk-your_actual_api_key_here"
+export AI_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion"
 ```
 
 #### 方法3：修改docker-compose.yml
 直接编辑docker-compose.yml文件中的环境变量部分。
 
 **⚠️ 安全提醒**: 请勿将真实的API密钥提交到代码仓库中！
+
+## AI服务切换指南
+
+应用支持多种AI服务提供商，可以通过环境变量快速切换：
+
+### 1. 使用DashScope（默认）
+
+```bash
+export AI_PROVIDER="dashscope"
+export AI_API_KEY="sk-dashscope-xxx"
+export AI_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/xxx/completion"
+```
+
+### 2. 使用OpenAI官方
+
+```bash
+export AI_PROVIDER="openai"
+export AI_API_KEY="sk-openai-xxx"
+export AI_API_URL="https://api.openai.com/v1/chat/completions"
+export OPENAI_MODEL="gpt-4"
+export OPENAI_TEMPERATURE="0.7"
+```
+
+### 3. 使用OpenAI转发/代理
+
+```bash
+export AI_PROVIDER="openai"
+export AI_API_KEY="your-proxy-key"
+export AI_API_URL="https://your-proxy.com/v1/chat/completions"
+export OPENAI_MODEL="gpt-3.5-turbo"
+```
+
+### 4. 使用Azure OpenAI
+
+```bash
+export AI_PROVIDER="openai"
+export AI_API_KEY="your-azure-key"
+export AI_API_URL="https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2023-05-15"
+export OPENAI_MODEL="gpt-4"
+```
+
+### 5. 使用其他OpenAI兼容服务
+
+```bash
+export AI_PROVIDER="openai"
+export AI_API_KEY="your-service-key"
+export AI_API_URL="https://your-service.com/v1/chat/completions"
+export OPENAI_MODEL="gpt-4"
+```
+
+### 快速切换示例
+
+**切换到OpenAI**：
+```bash
+AI_PROVIDER=openai AI_API_KEY=sk-xxx AI_API_URL=https://api.openai.com/v1/chat/completions docker-compose up -d
+```
+
+**切换回DashScope**：
+```bash
+AI_PROVIDER=dashscope AI_API_KEY=sk-xxx AI_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/xxx/completion docker-compose up -d
+```
 
 ### 欢迎语配置
 

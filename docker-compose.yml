@@ -31,9 +31,17 @@ services:
       # API超时配置（毫秒）
       - API_TIMEOUT=${API_TIMEOUT:-60000}
 
-      # 阿里云DashScope API配置
-      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-your_api_key_here}
-      - DASHSCOPE_API_URL=${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}
+      # ========== AI服务配置 ==========
+      # AI服务提供商：dashscope 或 openai
+      - AI_PROVIDER=${AI_PROVIDER:-dashscope}
+      
+      # 统一的API配置（适用于所有provider）
+      - AI_API_KEY=${AI_API_KEY}
+      - AI_API_URL=${AI_API_URL}
+      
+      # OpenAI特有参数（仅当AI_PROVIDER=openai时生效）
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
 
       # 认证开关和用户配置
       - ENABLE_AUTH=${ENABLE_AUTH:-true}
