@@ -144,7 +144,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               id: generateId(),
               role: 'assistant',
               content: welcomeText,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              isWelcome: true // 标记为欢迎语
             };
             setMessages([welcomeMessage]);
           }
@@ -189,17 +190,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         await chatAPI.sendMessageStream(
           question,
           messages,
-          (content: string, done: boolean) => {
-            if (content && !hasAddedStreamingMessageRef.current) {
+          (incrementalContent: string, done: boolean) => {
+            // 只有在收到有实际内容的数据时才添加消息并退出思考状态
+            if (incrementalContent && incrementalContent.length > 0 && !hasAddedStreamingMessageRef.current) {
               setIsStreamingThinking(false);
               setMessages(prev => [...prev, assistantMessage]);
               hasAddedStreamingMessageRef.current = true;
             }
             
-            if (content) {
+            // 更新消息内容（累积模式 - 直接使用后端发送的累积内容）
+            if (incrementalContent) {
               setMessages(prev => prev.map(msg => 
                 msg.id === assistantMessageId 
-                  ? { ...msg, content }
+                  ? { ...msg, content: incrementalContent }
                   : msg
               ));
             }
@@ -288,8 +291,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           currentInput,
           messages,
           (content: string, done: boolean) => {
-            // 当有内容到达时，停止思考状态并添加消息
-            if (content && !hasAddedStreamingMessageRef.current) {
+            // 只有在收到有实际内容的数据时才添加消息并退出思考状态
+            if (content && content.length > 0 && !hasAddedStreamingMessageRef.current) {
               setIsStreamingThinking(false);
               setMessages(prev => [...prev, assistantMessage]);
               hasAddedStreamingMessageRef.current = true;
@@ -455,8 +458,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           userMessage.content,
           newMessages,
           (content: string, done: boolean) => {
-            // 当有内容到达时，停止思考状态并添加消息
-            if (content && !hasAddedStreamingMessageRef.current) {
+            // 只有在收到有实际内容的数据时才添加消息并退出思考状态
+            if (content && content.length > 0 && !hasAddedStreamingMessageRef.current) {
               setIsStreamingThinking(false);
               setMessages(prev => [...prev, assistantMessage]);
               hasAddedStreamingMessageRef.current = true;
@@ -1206,7 +1209,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                     {message.role === 'assistant' ? (
                       <TypewriterEffect
                         text={message.content}
-                        enabled={!isStreamingEnabled}
+                        enabled={!message.isWelcome} // 欢迎语禁用打字机效果
                         isDarkMode={isDarkMode}
                         isStreaming={streamingMessageId === message.id}
                         isThinking={isStreamingThinking && streamingMessageId === message.id}

@@ -8,6 +8,7 @@ export interface ChatMessage {
   timestamp?: number;
   feedback?: 'like' | 'dislike' | null;
   retryCount?: number;
+  isWelcome?: boolean; // 标记是否为欢迎语
 }
 
 // API响应类型

@@ -88,6 +88,8 @@ class ChatAPI {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let accumulatedContent = ''; // 累积内容
+      let chunkCount = 0; // 数据块计数
 
       try {
         while (true) {
@@ -95,6 +97,13 @@ class ChatAPI {
           
           if (done) {
             console.log('[前端API-流式] 流式传输完成');
+            // 输出累积的完整内容
+            console.log(`[前端API-流式] 累积内容总结:`, {
+              totalChunks: chunkCount,
+              totalLength: accumulatedContent.length,
+              contentPreview: accumulatedContent.slice(0, 200) + (accumulatedContent.length > 200 ? '...' : ''),
+              fullContent: accumulatedContent
+            });
             break;
           }
 
@@ -110,16 +119,35 @@ class ChatAPI {
               
               if (data === '[DONE]') {
                 console.log('[前端API-流式] 收到完成信号');
+                // 输出累积的完整内容
+                console.log(`[前端API-流式] 累积内容总结:`, {
+                  totalChunks: chunkCount,
+                  totalLength: accumulatedContent.length,
+                  contentPreview: accumulatedContent.slice(0, 200) + (accumulatedContent.length > 200 ? '...' : ''),
+                  fullContent: accumulatedContent
+                });
                 onChunk('', true);
                 return;
               }
 
               try {
                 const chunk: StreamChunk = JSON.parse(data);
-                console.log(`[前端API-流式] 收到数据块: ${chunk.content.length} 字符`);
+                chunkCount++;
+                console.log(`[前端API-流式] 收到增量数据块 #${chunkCount}: ${chunk.content.length} 字符`);
+                
+                // 累积内容（后端发送的是累积内容）
+                accumulatedContent = chunk.content;
+                
                 onChunk(chunk.content, chunk.done);
                 
                 if (chunk.done) {
+                  // 输出累积的完整内容
+                  console.log(`[前端API-流式] 累积内容总结:`, {
+                    totalChunks: chunkCount,
+                    totalLength: accumulatedContent.length,
+                    contentPreview: accumulatedContent.slice(0, 200) + (accumulatedContent.length > 200 ? '...' : ''),
+                    fullContent: accumulatedContent
+                  });
                   return;
                 }
               } catch (parseError) {

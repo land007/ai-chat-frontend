@@ -147,6 +147,56 @@ class AIAdapter {
   }
 
   /**
+   * 获取流式请求配置（支持SSE）
+   */
+  getStreamRequestConfig() {
+    const headers = {
+      'Authorization': `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    if (this.provider === 'dashscope') {
+      // 阿里云DashScope需要特殊SSE头部
+      headers['X-DashScope-SSE'] = 'enable';
+    }
+
+    return {
+      headers: headers,
+      timeout: API_TIMEOUT,
+      responseType: 'stream'
+    };
+  }
+
+  /**
+   * 构建流式请求体（根据不同provider适配格式）
+   */
+  buildStreamRequestBody(messages, parameters = {}) {
+    if (this.provider === 'openai') {
+      // OpenAI格式（包括转发API）
+      return {
+        model: OPENAI_MODEL,
+        messages: messages,
+        temperature: OPENAI_TEMPERATURE,
+        stream: true,
+        ...parameters
+      };
+    } else if (this.provider === 'dashscope') {
+      // DashScope格式，启用增量输出
+      return {
+        input: {
+          messages: messages
+        },
+        parameters: {
+          incremental_output: true,
+          ...parameters
+        },
+        debug: {}
+      };
+    }
+    throw new Error(`Unsupported AI provider: ${this.provider}`);
+  }
+
+  /**
    * 解析响应（统一格式）
    */
   parseResponse(response) {
@@ -639,7 +689,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 
     if (stream) {
-      // 流式传输模式
+      // 流式传输模式 - 真正的SSE流处理
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -648,64 +698,167 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         'Access-Control-Allow-Headers': 'Cache-Control'
       });
 
-      // 使用适配器构建请求
-      const requestBody = aiAdapter.buildRequestBody(messages, {});
-      const requestConfig = aiAdapter.getRequestConfig();
-      
-      logger.debug('[AI] 流式请求体:', JSON.stringify(requestBody, null, 2));
+      try {
+        // 使用适配器构建流式请求
+        const requestBody = aiAdapter.buildStreamRequestBody(messages, {});
+        const requestConfig = aiAdapter.getStreamRequestConfig();
+        
+        logger.debug('[AI-流式] 请求体:', JSON.stringify(requestBody, null, 2));
+        logger.debug('[AI-流式] 请求配置:', JSON.stringify(requestConfig, null, 2));
 
-      const response = await axios.post(
-        aiAdapter.getApiUrl(),
-        requestBody,
-        requestConfig
-      );
+        const response = await axios.post(
+          aiAdapter.getApiUrl(),
+          requestBody,
+          requestConfig
+        );
 
-      if (response.data) {
-        // 使用适配器解析响应
-        const fullText = aiAdapter.parseResponse(response);
-        
-        // ✨ 新增：info级别记录摘要信息（生产环境可见）
-        const duration = Date.now() - startTime;
-        logger.info('[AI-流式] 响应摘要', {
-          user: req.user?.name || 'anonymous',
-          provider: aiAdapter.getProvider(),
-          contentLength: fullText.length,
-          contentPreview: fullText.slice(0, 200) + (fullText.length > 200 ? '...' : ''),
-          duration: duration + 'ms'
-        });
-        
-        // ✨ 新增：debug级别记录完整原文（详细调试）
-        logger.debug('[AI-流式] 完整响应内容:', fullText);
-        
-        // 模拟打字机效果，逐字符发送
-        for (let i = 0; i <= fullText.length; i++) {
-          const chunk = fullText.slice(0, i);
-          res.write(`data: ${JSON.stringify({ 
-            content: chunk, 
-            done: i === fullText.length,
-            timestamp: new Date().toISOString()
-          })}\n\n`);
+        // 实时处理SSE流 - 完整的消息切分和格式转换
+        let buffer = '';
+        let accumulatedText = '';
+        let chunkCount = 0;
+        let isFirstMessage = true;
+
+        response.data.on('data', (chunk) => {
+          buffer += chunk.toString();
           
-          // 控制发送速度，模拟真实打字效果
-          await new Promise(resolve => setTimeout(resolve, 20));
-        }
-        
-        // ✨ 新增：info级别记录传输完成总结
-        logger.info('[AI-流式] 传输完成', {
-          user: req.user?.name || 'anonymous',
-          totalDuration: (Date.now() - startTime) + 'ms',
-          charCount: fullText.length,
-          chunkCount: fullText.length + 1
+          // 按双换行符分割完整的SSE消息
+          const messages = buffer.split('\n\n');
+          buffer = messages.pop() || ''; // 保留不完整的消息
+          
+          for (const message of messages) {
+            if (message.trim() === '') continue;
+            
+            // 解析SSE消息的各个字段
+            const lines = message.split('\n');
+            const sseMessage = {};
+            
+            for (const line of lines) {
+              if (line.startsWith('id:')) {
+                sseMessage.id = line.slice(3).trim();
+              } else if (line.startsWith('event:')) {
+                sseMessage.event = line.slice(6).trim();
+              } else if (line.startsWith('data:')) {
+                sseMessage.data = line.slice(5).trim();
+              }
+            }
+            
+            // 只处理包含data字段的消息
+            if (!sseMessage.data) continue;
+            
+            chunkCount++;
+            
+            // Debug日志：打印原始SSE消息
+            logger.debug(`[AI-流式-原始] 消息 #${chunkCount}`, {
+              id: sseMessage.id,
+              event: sseMessage.event,
+              dataPreview: sseMessage.data.slice(0, 150)
+            });
+            
+            // 转换阿里云格式到OpenAI标准格式
+            try {
+              if (aiAdapter.getProvider() === 'dashscope') {
+                // 解析阿里云JSON
+                const parsed = JSON.parse(sseMessage.data);
+                const incrementalText = parsed.output?.text || '';
+                const finishReason = parsed.output?.finish_reason;
+                
+                // Debug日志：打印解析结果
+                logger.debug(`[AI-流式-解析] 消息 #${sseMessage.id}`, {
+                  incrementalText: incrementalText,
+                  textLength: incrementalText.length,
+                  finishReason: finishReason,
+                  accumulatedLength: accumulatedText.length
+                });
+                
+                // 第一个消息无论是否有内容都发送
+                if (isFirstMessage || incrementalText) {
+                  accumulatedText += incrementalText;
+                  
+                  // 转换为OpenAI标准格式 - 发送累积文本
+                  const standardChunk = {
+                    content: accumulatedText, // 发送累积文本
+                    done: finishReason === 'stop',
+                    timestamp: new Date().toISOString()
+                  };
+                  
+                  const sseData = `data: ${JSON.stringify(standardChunk)}\n\n`;
+                  res.write(sseData);
+                  
+                  // Debug日志：打印发送给前端的实际SSE数据
+                  logger.debug(`[AI-流式-发送] 消息 #${sseMessage.id}`, {
+                    contentLength: accumulatedText.length,
+                    contentPreview: accumulatedText.slice(0, 100),
+                    done: standardChunk.done,
+                    sseData: sseData.trim()
+                  });
+                  
+                  // 强制输出到控制台（用于调试）
+                  console.log(`[SSE发送] #${sseMessage.id}: ${sseData.trim()}`);
+                  
+                  isFirstMessage = false;
+                } else {
+                  logger.debug(`[AI-流式-跳过] 空内容消息 #${sseMessage.id}`);
+                }
+                
+                // 处理完成信号
+                if (finishReason === 'stop') {
+                  logger.info('[AI-流式] 流式传输完成', {
+                    totalMessages: chunkCount,
+                    totalLength: accumulatedText.length
+                  });
+                  res.write('data: [DONE]\n\n');
+                  res.end();
+                  return;
+                }
+              } else {
+                // OpenAI格式直接透传
+                res.write(`data: ${sseMessage.data}\n\n`);
+                logger.debug(`[AI-流式-透传] 消息 #${sseMessage.id}`);
+              }
+            } catch (parseError) {
+              logger.error('[AI-流式] 消息解析错误:', parseError);
+              logger.error('[AI-流式] 原始数据:', sseMessage.data);
+              
+              // 发送错误信息给前端
+              res.write(`data: ${JSON.stringify({
+                error: '数据解析错误',
+                code: 'PARSE_ERROR',
+                details: parseError.message
+              })}\n\n`);
+            }
+          }
         });
-        
-        res.write('data: [DONE]\n\n');
-        res.end();
-      } else {
-        res.write(`data: ${JSON.stringify({ 
-          error: 'AI服务响应格式异常',
-          code: 'INVALID_RESPONSE'
-        })}\n\n`);
-        res.end();
+
+        response.data.on('end', () => {
+          if (!res.writableEnded) {
+            logger.info('[AI-流式] 流结束');
+            res.write('data: [DONE]\n\n');
+            res.end();
+          }
+        });
+
+        response.data.on('error', (error) => {
+          logger.error('[AI-流式] 流错误:', error);
+          if (!res.writableEnded) {
+            res.write(`data: ${JSON.stringify({
+              error: '流式传输错误',
+              code: 'STREAM_ERROR',
+              details: error.message
+            })}\n\n`);
+            res.end();
+          }
+        });
+
+      } catch (error) {
+        logger.error('[AI-流式] 请求失败:', error);
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({
+            error: 'AI服务调用失败',
+            code: 'API_ERROR',
+            details: error.message
+          })}\n\n`);
+          res.end();
+        }
       }
     } else {
       // 非流式传输模式

@@ -20,11 +20,12 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTyping, setIsTyping] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasStreamedRef = useRef(false); // 跟踪是否已经进行过流式传输
 
   // 重置状态当文本改变时
   useEffect(() => {
-    if (!enabled || isStreaming) {
-      // 如果禁用打字机效果或正在流式传输，直接显示完整文本
+    if (!enabled) {
+      // 如果禁用打字机效果，直接显示完整文本
       setDisplayedText(text);
       setCurrentIndex(text.length);
       setIsTyping(false);
@@ -34,6 +35,25 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
       return;
     }
 
+    if (isStreaming) {
+      // 流式传输时：启用增量打字机效果
+      setDisplayedText(text);
+      setCurrentIndex(text.length);
+      setIsTyping(true);
+      hasStreamedRef.current = true; // 标记已经进行过流式传输
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      return;
+    }
+
+    // 非流式传输时：如果已经进行过流式传输，则不重新开始打字机
+    if (hasStreamedRef.current) {
+      // 保持当前显示的内容，不重新开始打字机
+      return;
+    }
+
+    // 只有从未进行过流式传输的新消息才使用打字机效果
     setDisplayedText('');
     setCurrentIndex(0);
     setIsTyping(true);
@@ -67,8 +87,14 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
 
   // 更新显示的文本
   useEffect(() => {
-    if (enabled && !isStreaming) {
-      setDisplayedText(text.slice(0, currentIndex));
+    if (enabled) {
+      if (isStreaming) {
+        // 流式传输时：直接显示完整文本（增量累积）
+        setDisplayedText(text);
+      } else {
+        // 非流式传输时：逐字符显示
+        setDisplayedText(text.slice(0, currentIndex));
+      }
     }
   }, [currentIndex, text, enabled, isStreaming]);
 
