@@ -120,9 +120,9 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         li: ({ children }) => <li style={{ margin: '2px 0', lineHeight: '1.4' }}>{children}</li>,
         strong: ({ children }) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
         em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
-        h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '8px 0 4px 0', fontWeight: 'bold' }}>{children}</h1>,
-        h2: ({ children }) => <h2 style={{ fontSize: '1.3em', margin: '6px 0 3px 0', fontWeight: 'bold' }}>{children}</h2>,
-        h3: ({ children }) => <h3 style={{ fontSize: '1.1em', margin: '4px 0 2px 0', fontWeight: 'bold' }}>{children}</h3>,
+        h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '8px 0 2px 0', fontWeight: 'bold' }}>{children}</h1>,
+        h2: ({ children }) => <h2 style={{ fontSize: '1.3em', margin: '6px 0 1px 0', fontWeight: 'bold' }}>{children}</h2>,
+        h3: ({ children }) => <h3 style={{ fontSize: '1.1em', margin: '4px 0 0px 0', fontWeight: 'bold' }}>{children}</h3>,
         blockquote: ({ children }) => (
           <blockquote style={{ 
             borderLeft: `4px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
