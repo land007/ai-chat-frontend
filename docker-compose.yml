@@ -28,6 +28,9 @@ services:
       # 上下文消息条数
       - CONTEXT_MESSAGE_COUNT=${CONTEXT_MESSAGE_COUNT:-5}
 
+      # API超时配置（毫秒）
+      - API_TIMEOUT=${API_TIMEOUT:-60000}
+
       # 阿里云DashScope API配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-your_api_key_here}
       - DASHSCOPE_API_URL=${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}

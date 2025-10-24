@@ -14,6 +14,7 @@ const APP_NAME = process.env.APP_NAME || 'AI智能助手';
 const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于阿里云DashScope的智能对话';
 const WELCOME_MESSAGE = process.env.WELCOME_MESSAGE || '';
 const CONTEXT_MESSAGE_COUNT = parseInt(process.env.CONTEXT_MESSAGE_COUNT || '5', 10);
+const API_TIMEOUT = parseInt(process.env.API_TIMEOUT || '60000', 10); // 默认60秒
 
 // 企业微信认证配置
 const WEWORK_CORP_ID = process.env.WEWORK_CORP_ID || '';
@@ -471,44 +472,53 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     logger.info('[AI] 上下文消息:', contextMessages.length, '条');
     logger.info('[AI] 流式传输:', stream);
 
-    // 构建包含系统提示词与上下文的提示词
+    // 构建messages数组格式的对话数据
     // 1) 渲染系统提示词（从环境变量读取并用企业微信登录人姓名替换 {{name}}）
     const rawSystemPrompt = process.env.SYSTEM_PROMPT || '';
     const currentUserName = (req.user && (req.user.name || req.user.userId)) || '当前用户';
     const renderedSystemPrompt = rawSystemPrompt.replace(/\{\{name\}\}/g, currentUserName);
 
-    // 2) 组装最终提示词（系统提示词 + 上下文 + 当前问题）
-    let fullPrompt = renderedSystemPrompt
-      ? `系统: ${renderedSystemPrompt}\n\n用户: ${message}`
-      : message;
+    // 2) 构建messages数组
+    const messages = [];
     
+    // 添加系统消息（如果存在）
+    if (renderedSystemPrompt) {
+      messages.push({
+        role: 'system',
+        content: renderedSystemPrompt
+      });
+    }
+    
+    // 添加上下文消息
     if (contextMessages && contextMessages.length > 0) {
       // 限制上下文消息数量
       const limitedContext = contextMessages.slice(-CONTEXT_MESSAGE_COUNT);
       
-      // 构建上下文
-      const contextText = limitedContext.map(msg => {
-        const role = msg.role === 'user' ? '用户' : '助手';
-        return `${role}: ${msg.content}`;
-      }).join('\n');
-
-      // 如果已包含系统提示词，则在其后附加上下文；否则保持原有逻辑
-      if (renderedSystemPrompt) {
-        fullPrompt = `系统: ${renderedSystemPrompt}\n\n以下是之前的对话内容，请根据上下文回答用户的问题：\n\n${contextText}\n\n用户: ${message}`;
-      } else {
-        fullPrompt = `以下是之前的对话内容，请根据上下文回答用户的问题：\n\n${contextText}\n\n用户: ${message}`;
-      }
+      // 将上下文消息转换为标准格式
+      limitedContext.forEach(msg => {
+        messages.push({
+          role: msg.role,
+          content: msg.content
+        });
+      });
     }
+    
+    // 添加当前用户消息
+    messages.push({
+      role: 'user',
+      content: message
+    });
 
-    // info级别：提示词信息
-    logger.info('[AI] 提示词长度:', fullPrompt.length, '字符');
+    // info级别：消息数组信息
+    logger.info('[AI] 消息数组长度:', messages.length, '条');
+    logger.info('[AI] 消息总字符数:', messages.reduce((sum, msg) => sum + msg.content.length, 0), '字符');
     
     if (renderedSystemPrompt) {
-      logger.info('[AI] 系统提示词:', renderedSystemPrompt.slice(0, 150) + '...');
+      logger.info('[AI] 系统消息:', renderedSystemPrompt.slice(0, 150) + '...');
     }
     
-    // debug级别：完整提示词
-    logger.debug('[AI] 完整提示词:', fullPrompt);
+    // debug级别：完整消息数组
+    logger.debug('[AI] 完整消息数组:', JSON.stringify(messages, null, 2));
 
     if (stream) {
       // 流式传输模式
@@ -525,7 +535,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         DASHSCOPE_API_URL,
         {
           input: {
-            prompt: fullPrompt
+            messages: messages
           },
           parameters: {},
           debug: {}
@@ -535,7 +545,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000
+          timeout: API_TIMEOUT
         }
       );
 
@@ -565,12 +575,12 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         res.end();
       }
     } else {
-      // 非流式传输模式（保持原有逻辑）
+      // 非流式传输模式
       const response = await axios.post(
         DASHSCOPE_API_URL,
         {
           input: {
-            prompt: fullPrompt
+            messages: messages
           },
           parameters: {},
           debug: {}
@@ -580,7 +590,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             'Authorization': `Bearer ${DASHSCOPE_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          timeout: 30000
+          timeout: API_TIMEOUT
         }
       );
 

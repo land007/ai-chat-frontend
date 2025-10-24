@@ -66,6 +66,7 @@ chmod +x deploy.sh
 | `APP_DESCRIPTION` | 应用描述 | `基于阿里云DashScope的智能对话` |
 | `WELCOME_MESSAGE` | 欢迎语（支持Markdown） | 空（不显示欢迎语） |
 | `CONTEXT_MESSAGE_COUNT` | 上下文消息条数 | `5` |
+| `API_TIMEOUT` | API请求超时时间（毫秒） | `60000`（60秒） |
 | `DASHSCOPE_API_KEY` | 阿里云API密钥 | `your_api_key_here` |
 | `DASHSCOPE_API_URL` | 阿里云API地址 | `https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion` |
 
@@ -78,6 +79,7 @@ echo "APP_NAME=我的AI助手" > .env
 echo "APP_DESCRIPTION=专业的AI对话助手" >> .env
 echo "WELCOME_MESSAGE=您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。" >> .env
 echo "CONTEXT_MESSAGE_COUNT=10" >> .env
+echo "API_TIMEOUT=60000" >> .env
 echo "DASHSCOPE_API_KEY=sk-your_actual_api_key_here" >> .env
 echo "DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion" >> .env
 ```
@@ -88,6 +90,7 @@ export APP_NAME="我的AI助手"
 export APP_DESCRIPTION="专业的AI对话助手"
 export WELCOME_MESSAGE="您好！我是国交小助手，专门为国交信通员工提供办公支持的AI助手。"
 export CONTEXT_MESSAGE_COUNT="10"
+export API_TIMEOUT="60000"
 export DASHSCOPE_API_KEY="sk-your_actual_api_key_here"
 export DASHSCOPE_API_URL="https://dashscope.aliyuncs.com/api/v1/apps/your_actual_app_id/completion"
 ```
