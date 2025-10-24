@@ -39,6 +39,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const messagesAreaRef = useRef<HTMLDivElement>(null);
   const hasAddedStreamingMessageRef = useRef(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const touchStartY = useRef<number>(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -53,6 +54,40 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     
     // 如果距离底部超过100px，认为用户在查看历史消息
     setIsUserScrolling(distanceFromBottom > 100);
+  };
+
+  // 处理触摸开始事件
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  // 处理触摸移动事件，防止橡皮筋效果
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!messagesAreaRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesAreaRef.current;
+    const touchY = e.touches[0].clientY;
+    const deltaY = touchY - touchStartY.current;
+    
+    // 检测是否在边界处进行过度滚动
+    const isAtTop = scrollTop <= 0;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+    
+    // 在顶部向下拉动或在底部向上推动时阻止默认行为
+    if ((isAtTop && deltaY > 0) || (isAtBottom && deltaY < 0)) {
+      e.preventDefault();
+    }
+  };
+
+  // 处理整个容器的触摸移动事件，防止页面级橡皮筋
+  const handleContainerTouchMove = (e: React.TouchEvent) => {
+    // 如果触摸事件发生在消息区域，让消息区域自己处理
+    if (messagesAreaRef.current && messagesAreaRef.current.contains(e.target as Node)) {
+      return;
+    }
+    
+    // 对于其他区域，阻止所有可能导致橡皮筋的触摸移动
+    e.preventDefault();
   };
 
   useEffect(() => {
@@ -545,8 +580,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       display: 'flex',
       flexDirection: 'column' as const,
       height: '100vh',
+      width: '100vw',
       backgroundColor: bgColor,
       color: textColor,
+      overflow: 'hidden' as const,
+      position: 'relative' as const,
       ...(className && {})
     },
     header: {
@@ -584,7 +622,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       padding: '16px 24px',
       display: 'flex',
       flexDirection: 'column' as const,
-      gap: '16px'
+      gap: '16px',
+      overscrollBehavior: 'contain',
+      WebkitOverflowScrolling: 'touch' as any,
+      touchAction: 'pan-y'
     },
     emptyState: {
       display: 'flex',
@@ -961,7 +1002,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 };
 
   return (
-    <div style={getStyles().container}>
+    <div 
+      style={getStyles().container}
+      onTouchMove={handleContainerTouchMove}
+    >
       {/* 添加旋转动画样式 */}
       <style>
         {`
@@ -1068,6 +1112,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       <div 
         ref={messagesAreaRef}
         onScroll={handleScroll}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         style={getStyles().messagesArea}
       >
         {messages.length === 0 && !appConfig.welcomeMessage ? (
