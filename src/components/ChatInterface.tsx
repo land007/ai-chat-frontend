@@ -831,6 +831,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     },
     actionButton: {
       background: 'none',
+      backgroundColor: 'transparent',
       border: 'none',
       padding: '8px',
       borderRadius: '6px',
@@ -840,8 +841,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       alignItems: 'center',
       justifyContent: 'center',
       transition: 'all 0.2s ease',
-      opacity: 0.7
-    },
+      opacity: 0.7,
+      outline: 'none'
+    } as React.CSSProperties,
     actionButtonHover: {
       backgroundColor: isDark ? '#4b5563' : '#f3f4f6',
       color: textColor,
@@ -965,6 +967,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+          }
+          
+          /* 移动端按钮样式修复 */
+          @media (max-width: 768px) {
+            button {
+              -webkit-tap-highlight-color: transparent;
+              -webkit-touch-callout: none;
+              -webkit-user-select: none;
+              user-select: none;
+              background-color: transparent !important;
+            }
+            
+            button:active {
+              background-color: transparent !important;
+            }
+            
+            button:focus {
+              outline: none !important;
+            }
           }
         `}
       </style>
