@@ -664,6 +664,19 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         // 使用适配器解析响应
         const fullText = aiAdapter.parseResponse(response);
         
+        // ✨ 新增：info级别记录摘要信息（生产环境可见）
+        const duration = Date.now() - startTime;
+        logger.info('[AI-流式] 响应摘要', {
+          user: req.user?.name || 'anonymous',
+          provider: aiAdapter.getProvider(),
+          contentLength: fullText.length,
+          contentPreview: fullText.slice(0, 200) + (fullText.length > 200 ? '...' : ''),
+          duration: duration + 'ms'
+        });
+        
+        // ✨ 新增：debug级别记录完整原文（详细调试）
+        logger.debug('[AI-流式] 完整响应内容:', fullText);
+        
         // 模拟打字机效果，逐字符发送
         for (let i = 0; i <= fullText.length; i++) {
           const chunk = fullText.slice(0, i);
@@ -676,6 +689,14 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
           // 控制发送速度，模拟真实打字效果
           await new Promise(resolve => setTimeout(resolve, 20));
         }
+        
+        // ✨ 新增：info级别记录传输完成总结
+        logger.info('[AI-流式] 传输完成', {
+          user: req.user?.name || 'anonymous',
+          totalDuration: (Date.now() - startTime) + 'ms',
+          charCount: fullText.length,
+          chunkCount: fullText.length + 1
+        });
         
         res.write('data: [DONE]\n\n');
         res.end();
