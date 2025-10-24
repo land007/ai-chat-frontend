@@ -32,7 +32,10 @@ services:
       - API_TIMEOUT=${API_TIMEOUT:-60000}
 
       # ========== AI服务配置 ==========
-      # AI服务提供商：dashscope 或 openai
+      # AI服务提供商：dashscope(阿里云DashScope) 或 openai(兼容Openai)
+      # 支持的服务类型：
+      # - dashscope: 阿里云通义千问API
+      # - openai: OpenAI官方API、转发/代理服务、Azure OpenAI等
       - AI_PROVIDER=${AI_PROVIDER:-dashscope}
       
       # 统一的API配置（适用于所有provider）
