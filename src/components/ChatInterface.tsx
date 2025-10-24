@@ -950,6 +950,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       cursor: 'pointer',
       textAlign: 'left' as const,
       color: textColor,
+      fontSize: '16px',
       transition: 'all 0.2s ease'
     },
     exampleQuestionButtonHover: {
