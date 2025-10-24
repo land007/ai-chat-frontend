@@ -36,8 +36,8 @@ services:
       - AI_PROVIDER=${AI_PROVIDER:-dashscope}
       
       # 统一的API配置（适用于所有provider）
-      - AI_API_KEY=${AI_API_KEY}
-      - AI_API_URL=${AI_API_URL}
+      - AI_API_KEY=${AI_API_KEY:-your_api_key_here}
+      - AI_API_URL=${AI_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}
       
       # OpenAI特有参数（仅当AI_PROVIDER=openai时生效）
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4}
