@@ -114,10 +114,10 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             </code>
           );
         },
-        p: ({ children }) => <p style={{ margin: '4px 0', lineHeight: '1.5' }}>{children}</p>,
-        ul: ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ul>,
-        ol: ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ol>,
-        li: ({ children }) => <li style={{ margin: '2px 0', lineHeight: '1.4' }}>{children}</li>,
+        p: ({ children }) => <p style={{ margin: '0', lineHeight: '1.5' }}>{children}</p>,
+        ul: ({ children }) => <ul style={{ margin: '0', paddingLeft: '20px' }}>{children}</ul>,
+        ol: ({ children }) => <ol style={{ margin: '0', paddingLeft: '20px' }}>{children}</ol>,
+        li: ({ children }) => <li style={{ margin: '0', lineHeight: '1.4' }}>{children}</li>,
         strong: ({ children }) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
         em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
         h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '8px 0 2px 0', fontWeight: 'bold' }}>{children}</h1>,
@@ -127,7 +127,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           <blockquote style={{ 
             borderLeft: `4px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
             paddingLeft: '16px', 
-            margin: '4px 0',
+            margin: '0',
             fontStyle: 'italic',
             color: isDarkMode ? '#9ca3af' : '#6b7280'
           }}>
@@ -138,7 +138,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           <table style={{ 
             borderCollapse: 'collapse', 
             width: '100%', 
-            margin: '4px 0',
+            margin: '0',
             border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
           }}>
             {children}
@@ -179,7 +179,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           <hr style={{ 
             border: 'none', 
             borderTop: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
-            margin: '8px 0' 
+            margin: '0' 
           }} />
         )
       }}
@@ -190,7 +190,20 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
 
   return (
     <div className={className} style={style}>
-      {renderMarkdown(displayedText)}
+      <style>
+        {`
+          .markdown-content li p {
+            margin: 0 !important;
+          }
+          .markdown-content li ul,
+          .markdown-content li ol {
+            margin: 0 !important;
+          }
+        `}
+      </style>
+      <div className="markdown-content">
+        {renderMarkdown(displayedText)}
+      </div>
     </div>
   );
 };
