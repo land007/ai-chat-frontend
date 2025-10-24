@@ -969,9 +969,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             to { transform: rotate(360deg); }
           }
           
-          /* 移动端按钮样式修复 */
+          /* 移动端主题切换按钮样式修复 */
           @media (max-width: 768px) {
-            button {
+            .theme-toggle-button {
               -webkit-tap-highlight-color: transparent;
               -webkit-touch-callout: none;
               -webkit-user-select: none;
@@ -979,11 +979,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               background-color: transparent !important;
             }
             
-            button:active {
+            .theme-toggle-button:active {
               background-color: transparent !important;
             }
             
-            button:focus {
+            .theme-toggle-button:focus {
               outline: none !important;
             }
           }
@@ -1018,6 +1018,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             </button>
           )}
           <button
+            className="theme-toggle-button"
             style={getStyles().actionButton}
             onClick={handleToggleTheme}
             onMouseEnter={(e) => {
