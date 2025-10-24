@@ -570,12 +570,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     headerTitle: {
       fontSize: '20px',
       fontWeight: '600',
-      color: '#111827',
+      color: textColor,
       margin: 0
     },
     headerSubtitle: {
       fontSize: '14px',
-      color: '#6b7280',
+      color: mutedColor,
       margin: 0
     },
     messagesArea: {
