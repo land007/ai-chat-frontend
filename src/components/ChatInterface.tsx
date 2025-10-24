@@ -36,15 +36,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     exampleQuestions: [] as string[]
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesAreaRef = useRef<HTMLDivElement>(null);
   const hasAddedStreamingMessageRef = useRef(false);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // 处理滚动事件，检测用户是否在查看历史消息
+  const handleScroll = () => {
+    if (!messagesAreaRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesAreaRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    
+    // 如果距离底部超过100px，认为用户在查看历史消息
+    setIsUserScrolling(distanceFromBottom > 100);
+  };
+
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // 仅在用户没有手动滚动时自动滚动到底部
+    if (!isUserScrolling) {
+      scrollToBottom();
+    }
+  }, [messages, isUserScrolling]);
 
   // 调试用户信息
   useEffect(() => {
@@ -1026,7 +1042,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       </div>
 
       {/* 消息区域 */}
-      <div style={getStyles().messagesArea}>
+      <div 
+        ref={messagesAreaRef}
+        onScroll={handleScroll}
+        style={getStyles().messagesArea}
+      >
         {messages.length === 0 && !appConfig.welcomeMessage ? (
           <div style={getStyles().emptyState}>
             <Bot style={getStyles().emptyIcon} />
