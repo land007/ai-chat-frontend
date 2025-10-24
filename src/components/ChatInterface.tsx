@@ -784,7 +784,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     },
     inputContainer: {
       display: 'flex',
-      alignItems: 'flex-end',
+      alignItems: 'center',
       gap: '16px'
     },
     textarea: {
