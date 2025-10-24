@@ -12,35 +12,51 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      # 应用配置
+      # 应用名称和描述
       - APP_NAME=${APP_NAME:-AI智能助手}
       - APP_DESCRIPTION=${APP_DESCRIPTION:-基于阿里云DashScope的智能对话}
+
+      # 欢迎语配置（支持Markdown格式）
       - WELCOME_MESSAGE=${WELCOME_MESSAGE:-}
+
+      # 系统提示词
+      - SYSTEM_PROMPT=${SYSTEM_PROMPT:-你是企业OA/人事助手。所有涉及个人数据（如年假、假期余额、出勤、薪资等）的查询，默认主体为当前登录用户：{{name}}。只对该主体执行查询，不得返回其他人员或敏感信息；如用户请求他人信息，需明确授权或提示无法提供。无法识别登录用户时，请先提示完成登录或账号绑定。回答请先给结论，再给依据或下一步操作。若内部接口不可用或数据缺失，请提示“暂时无法获取该信息”，并给出可行的人工处理路径。}
+
+      # 示例问题（可选）
       - EXAMPLE_QUESTIONS=${EXAMPLE_QUESTIONS:-}
+
+      # 上下文消息条数
       - CONTEXT_MESSAGE_COUNT=${CONTEXT_MESSAGE_COUNT:-5}
+
       # 阿里云DashScope API配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-your_api_key_here}
       - DASHSCOPE_API_URL=${DASHSCOPE_API_URL:-https://dashscope.aliyuncs.com/api/v1/apps/your_app_id/completion}
-      
+
       # 认证开关和用户配置
       - ENABLE_AUTH=${ENABLE_AUTH:-true}
       - BASIC_AUTH_USERS=${BASIC_AUTH_USERS:-admin:admin123}
-      
+
       # 企业微信认证配置（可选）
       - WEWORK_CORP_ID=${WEWORK_CORP_ID}
       - WEWORK_AGENT_ID=${WEWORK_AGENT_ID}
       - WEWORK_CORP_SECRET=${WEWORK_CORP_SECRET}
       - WEWORK_REDIRECT_URI=${WEWORK_REDIRECT_URI}
-      
+
       # JWT配置
       - JWT_SECRET=${JWT_SECRET}
-      
+
       # UI功能控制
       - ENABLE_I18N_BUTTON=${ENABLE_I18N_BUTTON:-false}
       - ENABLE_DEBUG_MODE=${ENABLE_DEBUG_MODE:-false}
+
+      # 日志级别控制 (error/warn/info/debug)
+      # LOG_LEVEL=warn（默认）：生产环境，只看关键业务流程
+      # LOG_LEVEL=info：开发调试，看到详细请求响应
+      # LOG_LEVEL=debug：完整调试，看到所有数据
+      - LOG_LEVEL=${LOG_LEVEL:-warn}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

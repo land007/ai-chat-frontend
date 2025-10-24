@@ -52,3 +52,5 @@ ENV PORT=3000
 
 # 使用PM2启动应用
 CMD ["pm2-runtime", "start", "ecosystem.config.js"]
+
+# docker build -t land007/ai-chat-app:latest .

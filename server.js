@@ -26,6 +26,35 @@ const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-in-productio
 const ENABLE_AUTH = process.env.ENABLE_AUTH === 'true';
 const BASIC_AUTH_USERS = process.env.BASIC_AUTH_USERS || 'admin:admin123';
 
+// 日志级别配置
+const LOG_LEVEL = process.env.LOG_LEVEL || 'warn';
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const currentLevel = LOG_LEVELS[LOG_LEVEL] || LOG_LEVELS.warn;
+
+// 统一日志工具
+const logger = {
+  error: (...args) => {
+    if (currentLevel >= LOG_LEVELS.error) {
+      console.error(`[${new Date().toISOString()}]`, ...args);
+    }
+  },
+  warn: (...args) => {
+    if (currentLevel >= LOG_LEVELS.warn) {
+      console.log(`[${new Date().toISOString()}]`, ...args);
+    }
+  },
+  info: (...args) => {
+    if (currentLevel >= LOG_LEVELS.info) {
+      console.log(`[${new Date().toISOString()}]`, ...args);
+    }
+  },
+  debug: (...args) => {
+    if (currentLevel >= LOG_LEVELS.debug) {
+      console.log(`[${new Date().toISOString()}]`, ...args);
+    }
+  }
+};
+
 // 解析用户配置
 const parseUsers = (usersString) => {
   const users = {};
@@ -46,7 +75,7 @@ app.use(express.json());
 
 // 请求日志中间件
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  logger.debug('[HTTP]', req.method, req.path);
   next();
 });
 
@@ -69,14 +98,14 @@ async function getWeworkAccessToken() {
     const response = await axios.get(url);
     
     if (response.data.errcode === 0) {
-      console.log('[企业微信] access_token获取成功');
+      logger.debug('[企业微信] access_token获取成功');
       return response.data.access_token;
     } else {
-      console.error('[企业微信] 获取access_token失败:', response.data);
+      logger.error('[企业微信] access_token获取失败, errcode:', response.data.errcode, 'errmsg:', response.data.errmsg);
       throw new Error(`获取access_token失败: ${response.data.errmsg}`);
     }
   } catch (error) {
-    console.error('[企业微信] 获取access_token异常:', error.message);
+    logger.error('[企业微信] access_token请求异常:', error.message);
     throw error;
   }
 }
@@ -91,14 +120,15 @@ async function getUserIdByCode(code) {
     const response = await axios.get(url);
     
     if (response.data.errcode === 0) {
-      console.log('[企业微信] 获取UserId成功:', response.data.userid || response.data.UserId);
-      return response.data.userid || response.data.UserId;
+      const userId = response.data.userid || response.data.UserId;
+      logger.info('[企业微信] 获取UserId成功:', userId);
+      return userId;
     } else {
-      console.error('[企业微信] 获取UserId失败:', response.data);
+      logger.error('[企业微信] 获取UserId失败, code:', code, 'errcode:', response.data.errcode);
       throw new Error(`获取用户信息失败: ${response.data.errmsg}`);
     }
   } catch (error) {
-    console.error('[企业微信] 获取UserId异常:', error.message);
+    logger.error('[企业微信] 获取UserId异常:', error.message);
     throw error;
   }
 }
@@ -113,7 +143,7 @@ async function getUserInfo(userId) {
     const response = await axios.get(url);
     
     if (response.data.errcode === 0) {
-      console.log('[企业微信] 获取用户信息成功:', response.data.name);
+      logger.info('[企业微信] 获取用户信息成功, userId:', response.data.userid, 'name:', response.data.name);
       return {
         userId: response.data.userid,
         name: response.data.name,
@@ -123,11 +153,11 @@ async function getUserInfo(userId) {
         email: response.data.email
       };
     } else {
-      console.error('[企业微信] 获取用户详细信息失败:', response.data);
+      logger.error('[企业微信] 获取用户信息失败, userId:', userId, 'errcode:', response.data.errcode);
       throw new Error(`获取用户详细信息失败: ${response.data.errmsg}`);
     }
   } catch (error) {
-    console.error('[企业微信] 获取用户详细信息异常:', error.message);
+    logger.error('[企业微信] 获取用户信息异常:', error.message);
     throw error;
   }
 }
@@ -140,7 +170,7 @@ async function getUserInfo(userId) {
 function authenticateToken(req, res, next) {
   // 如果认证开关关闭，直接跳过认证
   if (!ENABLE_AUTH) {
-    console.log('[认证] 认证开关关闭，跳过认证检查');
+    logger.warn('[认证] 认证开关关闭，跳过检查');
     return next();
   }
 
@@ -148,7 +178,7 @@ function authenticateToken(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
-    console.log('[认证] 缺少token');
+    logger.warn('[认证] 请求缺少token, path:', req.path);
     return res.status(401).json({ 
       error: '未授权访问',
       code: 'NO_TOKEN'
@@ -157,7 +187,7 @@ function authenticateToken(req, res, next) {
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      console.log('[认证] token验证失败:', err.message);
+      logger.error('[认证] token验证失败:', err.message);
       return res.status(403).json({ 
         error: 'token无效或已过期',
         code: 'INVALID_TOKEN'
@@ -165,7 +195,7 @@ function authenticateToken(req, res, next) {
     }
     
     req.user = user;
-    console.log('[认证] 用户验证成功:', user.name, '登录方式:', user.loginType);
+    logger.warn('[认证] 用户通过验证, user:', user.name, 'type:', user.loginType);
     next();
   });
 }
@@ -187,7 +217,7 @@ app.get('/api/health', (req, res) => {
  */
 app.get('/api/auth/wework/redirect', (req, res) => {
   try {
-    console.log('[认证] 发起企业微信授权');
+    logger.info('[认证] 发起企业微信授权');
     
     if (!WEWORK_CORP_ID || !WEWORK_AGENT_ID || !WEWORK_REDIRECT_URI) {
       return res.status(500).json({
@@ -199,13 +229,13 @@ app.get('/api/auth/wework/redirect', (req, res) => {
     // 构建企业微信授权URL
     const redirectUrl = `https://open.weixin.qq.com/connect/oauth2/authorize?appid=${WEWORK_CORP_ID}&redirect_uri=${encodeURIComponent(WEWORK_REDIRECT_URI)}&response_type=code&scope=snsapi_base&state=STATE#wechat_redirect`;
     
-    console.log('[认证] 授权URL:', redirectUrl);
+    logger.debug('[认证] 授权URL:', redirectUrl);
     
     res.json({
       redirectUrl: redirectUrl
     });
   } catch (error) {
-    console.error('[认证] 生成授权URL失败:', error.message);
+    logger.error('[认证] 生成授权URL失败:', error.message);
     res.status(500).json({
       error: '生成授权URL失败',
       code: 'REDIRECT_ERROR'
@@ -220,7 +250,7 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
-    console.log('[认证] 用户名密码登录尝试:', username);
+    logger.warn('[认证] 登录尝试, username:', username);
     
     if (!username || !password) {
       return res.status(400).json({
@@ -231,7 +261,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     // 验证用户名和密码
     if (!authUsers[username] || authUsers[username] !== password) {
-      console.log('[认证] 用户名密码验证失败:', username);
+      logger.warn('[认证] 登录失败, username:', username, 'reason: 密码错误');
       return res.status(401).json({
         error: '用户名或密码错误',
         code: 'INVALID_CREDENTIALS'
@@ -249,7 +279,7 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    console.log('[认证] 用户名密码登录成功:', username);
+    logger.warn('[认证] 登录成功, username:', username);
 
     res.json({
       success: true,
@@ -261,7 +291,7 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[认证] 用户名密码登录失败:', error.message);
+    logger.error('[认证] 登录异常:', error.message);
     res.status(500).json({
       error: '登录失败，请重试',
       code: 'LOGIN_ERROR'
@@ -274,7 +304,7 @@ app.post('/api/auth/login', async (req, res) => {
  */
 app.get('/api/auth/config', (req, res) => {
   try {
-    console.log('[认证] 获取认证配置');
+    logger.debug('[认证] 获取认证配置');
     
     res.json({
       authEnabled: ENABLE_AUTH,
@@ -282,7 +312,7 @@ app.get('/api/auth/config', (req, res) => {
       availableUsers: Object.keys(authUsers)
     });
   } catch (error) {
-    console.error('[认证] 获取认证配置失败:', error.message);
+    logger.error('[认证] 获取认证配置失败:', error.message);
     res.status(500).json({
       error: '获取认证配置失败',
       code: 'CONFIG_ERROR'
@@ -297,7 +327,7 @@ app.get('/api/auth/wework/callback', async (req, res) => {
   try {
     const { code } = req.query;
     
-    console.log('[认证] 收到授权回调, code:', code);
+    logger.warn('[认证] 企业微信回调, code存在:', !!code);
     
     if (!code) {
       return res.status(400).json({
@@ -330,7 +360,7 @@ app.get('/api/auth/wework/callback', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    console.log('[认证] JWT token生成成功, 用户:', userInfo.name);
+    logger.warn('[认证] 企业微信登录成功, user:', userInfo.name, 'userId:', userInfo.userId);
 
     res.json({
       success: true,
@@ -343,7 +373,7 @@ app.get('/api/auth/wework/callback', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[认证] 授权回调处理失败:', error.message);
+    logger.error('[认证] 企业微信回调失败:', error.message);
     res.status(500).json({
       error: '授权失败，请重试',
       code: 'AUTH_CALLBACK_ERROR',
@@ -357,7 +387,7 @@ app.get('/api/auth/wework/callback', async (req, res) => {
  */
 app.get('/api/auth/userinfo', authenticateToken, (req, res) => {
   try {
-    console.log('[认证] 获取用户信息');
+    logger.debug('[认证] 获取用户信息请求');
     res.json({
       success: true,
       user: {
@@ -368,7 +398,7 @@ app.get('/api/auth/userinfo', authenticateToken, (req, res) => {
       }
     });
   } catch (error) {
-    console.error('[认证] 获取用户信息失败:', error.message);
+    logger.error('[认证] 获取用户信息失败:', error.message);
     res.status(500).json({
       error: '获取用户信息失败',
       code: 'USERINFO_ERROR'
@@ -381,13 +411,13 @@ app.get('/api/auth/userinfo', authenticateToken, (req, res) => {
  */
 app.post('/api/auth/logout', (req, res) => {
   try {
-    console.log('[认证] 用户退出登录');
+    logger.info('[认证] 用户退出, user:', req.user?.name);
     res.json({
       success: true,
       message: '退出成功'
     });
   } catch (error) {
-    console.error('[认证] 退出登录失败:', error.message);
+    logger.error('[认证] 退出失败:', error.message);
     res.status(500).json({
       error: '退出登录失败',
       code: 'LOGOUT_ERROR'
@@ -416,6 +446,8 @@ app.get('/api/config', (req, res) => {
 
 // AI聊天API端点 - 流式传输版本（需要认证）
 app.post('/api/chat', authenticateToken, async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { message, contextMessages = [], stream = false } = req.body;
     
@@ -426,12 +458,29 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`[AI-REQUEST] 用户消息: ${message}`);
-    console.log(`[AI-REQUEST] 上下文消息数量: ${contextMessages.length}`);
-    console.log(`[AI-REQUEST] 流式传输: ${stream}`);
+    // warn级别：关键业务摘要
+    logger.warn('[AI] 请求开始', {
+      user: req.user?.name || 'anonymous',
+      messageLen: message.length,
+      contextCount: contextMessages.length,
+      stream: stream
+    });
 
-    // 构建包含上下文的提示词
-    let fullPrompt = message;
+    // info级别：详细内容
+    logger.info('[AI] 用户消息:', message.slice(0, 100) + (message.length > 100 ? '...' : ''));
+    logger.info('[AI] 上下文消息:', contextMessages.length, '条');
+    logger.info('[AI] 流式传输:', stream);
+
+    // 构建包含系统提示词与上下文的提示词
+    // 1) 渲染系统提示词（从环境变量读取并用企业微信登录人姓名替换 {{name}}）
+    const rawSystemPrompt = process.env.SYSTEM_PROMPT || '';
+    const currentUserName = (req.user && (req.user.name || req.user.userId)) || '当前用户';
+    const renderedSystemPrompt = rawSystemPrompt.replace(/\{\{name\}\}/g, currentUserName);
+
+    // 2) 组装最终提示词（系统提示词 + 上下文 + 当前问题）
+    let fullPrompt = renderedSystemPrompt
+      ? `系统: ${renderedSystemPrompt}\n\n用户: ${message}`
+      : message;
     
     if (contextMessages && contextMessages.length > 0) {
       // 限制上下文消息数量
@@ -442,11 +491,24 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         const role = msg.role === 'user' ? '用户' : '助手';
         return `${role}: ${msg.content}`;
       }).join('\n');
-      
-      fullPrompt = `以下是之前的对话内容，请根据上下文回答用户的问题：\n\n${contextText}\n\n用户: ${message}`;
+
+      // 如果已包含系统提示词，则在其后附加上下文；否则保持原有逻辑
+      if (renderedSystemPrompt) {
+        fullPrompt = `系统: ${renderedSystemPrompt}\n\n以下是之前的对话内容，请根据上下文回答用户的问题：\n\n${contextText}\n\n用户: ${message}`;
+      } else {
+        fullPrompt = `以下是之前的对话内容，请根据上下文回答用户的问题：\n\n${contextText}\n\n用户: ${message}`;
+      }
     }
 
-    console.log(`[AI-REQUEST] 完整提示词长度: ${fullPrompt.length}`);
+    // info级别：提示词信息
+    logger.info('[AI] 提示词长度:', fullPrompt.length, '字符');
+    
+    if (renderedSystemPrompt) {
+      logger.info('[AI] 系统提示词:', renderedSystemPrompt.slice(0, 150) + '...');
+    }
+    
+    // debug级别：完整提示词
+    logger.debug('[AI] 完整提示词:', fullPrompt);
 
     if (stream) {
       // 流式传输模式
@@ -522,16 +584,27 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         }
       );
 
-      console.log(`[AI-RESPONSE] 状态: ${response.status}`);
+      // info级别：响应状态
+      logger.info('[AI] DashScope响应状态:', response.status);
 
       if (response.data && response.data.output && response.data.output.text) {
+        const responseText = response.data.output.text;
+        
+        // warn级别：完成摘要
+        const duration = Date.now() - startTime;
+        logger.warn('[AI] 请求完成', {
+          user: req.user?.name || 'anonymous',
+          duration: duration + 'ms',
+          responseLen: responseText.length
+        });
+        
         res.json({
           success: true,
-          message: response.data.output.text,
+          message: responseText,
           timestamp: new Date().toISOString()
         });
       } else {
-        console.error('[AI-ERROR] 响应格式异常:', response.data);
+        logger.error('[AI] 响应格式异常:', response.data);
         res.status(500).json({
           error: 'AI服务响应格式异常',
           code: 'INVALID_RESPONSE'
@@ -540,7 +613,13 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 
   } catch (error) {
-    console.error('[AI-ERROR] API调用失败:', error.message);
+    // error级别：请求失败
+    logger.error('[AI] 请求失败', {
+      user: req.user?.name,
+      error: error.message,
+      code: error.code,
+      status: error.response?.status
+    });
     
     if (req.body.stream) {
       // 流式传输错误处理
@@ -553,7 +632,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     } else {
       // 非流式传输错误处理
       if (error.response) {
-        console.error('[AI-ERROR] API错误响应:', error.response.status, error.response.data);
+        logger.error('[AI] API错误响应:', error.response.status, error.response.data);
         res.status(error.response.status).json({
           error: 'AI服务暂时不可用',
           code: 'API_ERROR',
@@ -584,7 +663,8 @@ app.get('*', (req, res) => {
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
-  console.error('[SERVER-ERROR]', err);
+  logger.error('[服务器] 未捕获错误:', err.message);
+  logger.debug('[服务器] 错误堆栈:', err.stack);
   res.status(500).json({
     error: '服务器内部错误',
     code: 'INTERNAL_ERROR'
@@ -597,6 +677,7 @@ app.listen(PORT, () => {
   console.log(`📡 服务地址: http://localhost:${PORT}`);
   console.log(`🔗 API端点: http://localhost:${PORT}/api/chat`);
   console.log(`❤️  健康检查: http://localhost:${PORT}/api/health`);
+  console.log(`📊 日志级别: ${LOG_LEVEL}`);
 });
 
 module.exports = app;
