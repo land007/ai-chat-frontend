@@ -12,7 +12,11 @@ const APP_NAME = process.env.APP_NAME || 'AI智能助手';
 const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于AI的智能对话';
 const WELCOME_MESSAGE = process.env.WELCOME_MESSAGE || '';
 const CONTEXT_MESSAGE_COUNT = parseInt(process.env.CONTEXT_MESSAGE_COUNT || '5', 10);
-const API_TIMEOUT = parseInt(process.env.API_TIMEOUT || '60000', 10); // 默认60秒
+
+// API超时配置
+const NON_STREAM_API_TIMEOUT = parseInt(process.env.NON_STREAM_API_TIMEOUT || '60000', 10); // 默认60秒（非流式请求超时）
+const STREAM_INITIAL_TIMEOUT = parseInt(process.env.STREAM_INITIAL_TIMEOUT || '30000', 10); // 默认30秒（流式初始连接超时）
+const STREAM_DATA_TIMEOUT = parseInt(process.env.STREAM_DATA_TIMEOUT || '60000', 10); // 默认60秒（流式数据接收超时）
 
 // 统一AI配置（支持多AI服务）
 const AI_PROVIDER = process.env.AI_PROVIDER || 'dashscope';
@@ -135,6 +139,7 @@ class AIAdapter {
 
   /**
    * 获取请求配置（统一的请求头和超时）
+   * 用于非流式请求
    */
   getRequestConfig() {
     return {
@@ -142,12 +147,13 @@ class AIAdapter {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
       },
-      timeout: API_TIMEOUT
+      timeout: NON_STREAM_API_TIMEOUT
     };
   }
 
   /**
    * 获取流式请求配置（支持SSE）
+   * 使用初始连接超时，用于检测能否建立连接并收到第一个数据块
    */
   getStreamRequestConfig() {
     const headers = {
@@ -162,7 +168,7 @@ class AIAdapter {
 
     return {
       headers: headers,
-      timeout: API_TIMEOUT,
+      timeout: STREAM_INITIAL_TIMEOUT, // 初始连接超时，用于检测连接是否建立
       responseType: 'stream'
     };
   }
@@ -698,6 +704,18 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         'Access-Control-Allow-Headers': 'Cache-Control'
       });
 
+      // 流式传输相关变量（需要在try-catch外部定义，以便catch块可以访问）
+      const connectionStartTime = Date.now();
+      let firstDataReceivedTime = null; // 第一次数据接收时间（包括任何底层数据，不仅是SSE消息）
+      let lastDataReceivedTime = null; // 最后一次接收到任何数据的时间（包括心跳、空白行等底层stream数据）
+      let dataTimeoutTimer = null; // 数据接收超时定时器（检测是否有任何数据返回，包括心跳）
+      let isConnectionEstablished = false; // 连接是否已建立（收到第一个数据块）
+      
+      logger.info('[AI-流式] 开始建立连接', {
+        initialTimeout: STREAM_INITIAL_TIMEOUT,
+        dataTimeout: STREAM_DATA_TIMEOUT
+      });
+
       try {
         // 使用适配器构建流式请求
         const requestBody = aiAdapter.buildStreamRequestBody(messages, {});
@@ -718,7 +736,86 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         let chunkCount = 0;
         let isFirstMessage = true;
 
+        // 心跳检测函数：检查是否超过数据接收超时时间
+        // 超时判断：从最后一次收到任何数据（包括心跳、SSE消息、底层stream数据）开始计算
+        // 如果没有收到任何数据返回（包括心跳），则认为连接中断
+        const checkDataTimeout = () => {
+          if (isConnectionEstablished && lastDataReceivedTime) {
+            const timeSinceLastData = Date.now() - lastDataReceivedTime;
+            if (timeSinceLastData > STREAM_DATA_TIMEOUT) {
+              logger.error('[AI-流式] 数据接收超时（无任何数据返回，包括心跳）', {
+                timeSinceLastData: timeSinceLastData + 'ms',
+                dataTimeout: STREAM_DATA_TIMEOUT + 'ms',
+                chunkCount: chunkCount,
+                accumulatedLength: accumulatedText.length
+              });
+              
+              if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({
+                  error: '数据接收超时，连接可能已中断',
+                  code: 'DATA_TIMEOUT',
+                  details: `超过${STREAM_DATA_TIMEOUT / 1000}秒未收到新数据`
+                })}\n\n`);
+                res.end();
+              }
+              
+              // 清理定时器
+              if (dataTimeoutTimer) {
+                clearInterval(dataTimeoutTimer);
+                dataTimeoutTimer = null;
+              }
+              
+              // 销毁响应流
+              try {
+                response.data.destroy();
+              } catch (e) {
+                // 忽略销毁错误
+              }
+              
+              return true;
+            }
+          }
+          return false;
+        };
+
+        // 启动心跳检测定时器（每10秒检查一次）
+        dataTimeoutTimer = setInterval(() => {
+          if (checkDataTimeout()) {
+            // 超时已处理，定时器会在checkDataTimeout中清理
+            return;
+          }
+        }, 10000);
+
         response.data.on('data', (chunk) => {
+          const currentTime = Date.now();
+          
+          // 记录第一次数据接收时间（包括任何底层stream数据，不仅是SSE消息）
+          if (!isConnectionEstablished) {
+            firstDataReceivedTime = currentTime;
+            isConnectionEstablished = true;
+            const connectionEstablishTime = currentTime - connectionStartTime;
+            logger.info('[AI-流式] 连接已建立，收到第一个数据块', {
+              connectionTime: connectionEstablishTime + 'ms',
+              chunkSize: chunk.length,
+              initialTimeout: STREAM_INITIAL_TIMEOUT + 'ms'
+            });
+          }
+          
+          // 更新最后数据接收时间（收到任何底层数据都会重置超时，包括心跳、空白行等）
+          // 这样确保：只要有数据返回（即使是心跳），就不会超时
+          const previousLastDataTime = lastDataReceivedTime;
+          lastDataReceivedTime = currentTime;
+          
+          // 记录数据间隔（如果不是第一次）
+          if (previousLastDataTime) {
+            const dataInterval = currentTime - previousLastDataTime;
+            if (dataInterval > 5000) { // 超过5秒的数据间隔，记录日志
+              logger.warn('[AI-流式] 数据间隔较长', {
+                interval: dataInterval + 'ms',
+                chunkCount: chunkCount + 1
+              });
+            }
+          }
           buffer += chunk.toString();
           
           // 按双换行符分割完整的SSE消息
@@ -802,10 +899,27 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                 
                 // 处理完成信号
                 if (finishReason === 'stop') {
+                  const totalDuration = Date.now() - connectionStartTime;
+                  const dataDuration = firstDataReceivedTime 
+                    ? Date.now() - firstDataReceivedTime 
+                    : 0;
+                  
                   logger.info('[AI-流式] 流式传输完成', {
                     totalMessages: chunkCount,
-                    totalLength: accumulatedText.length
+                    totalLength: accumulatedText.length,
+                    totalDuration: totalDuration + 'ms',
+                    dataDuration: dataDuration + 'ms',
+                    connectionTime: firstDataReceivedTime 
+                      ? firstDataReceivedTime - connectionStartTime + 'ms'
+                      : 'N/A'
                   });
+                  
+                  // 清理心跳检测定时器
+                  if (dataTimeoutTimer) {
+                    clearInterval(dataTimeoutTimer);
+                    dataTimeoutTimer = null;
+                  }
+                  
                   res.write('data: [DONE]\n\n');
                   res.end();
                   return;
@@ -830,15 +944,47 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         });
 
         response.data.on('end', () => {
+          const totalDuration = Date.now() - connectionStartTime;
+          const dataDuration = firstDataReceivedTime 
+            ? Date.now() - firstDataReceivedTime 
+            : 0;
+          
+          logger.info('[AI-流式] 流结束', {
+            totalDuration: totalDuration + 'ms',
+            dataDuration: dataDuration + 'ms',
+            chunkCount: chunkCount,
+            totalLength: accumulatedText.length
+          });
+          
+          // 清理心跳检测定时器
+          if (dataTimeoutTimer) {
+            clearInterval(dataTimeoutTimer);
+            dataTimeoutTimer = null;
+          }
+          
           if (!res.writableEnded) {
-            logger.info('[AI-流式] 流结束');
             res.write('data: [DONE]\n\n');
             res.end();
           }
         });
 
         response.data.on('error', (error) => {
-          logger.error('[AI-流式] 流错误:', error);
+          const totalDuration = Date.now() - connectionStartTime;
+          
+          logger.error('[AI-流式] 流错误', {
+            error: error.message,
+            code: error.code,
+            totalDuration: totalDuration + 'ms',
+            chunkCount: chunkCount,
+            isConnectionEstablished: isConnectionEstablished
+          });
+          
+          // 清理心跳检测定时器
+          if (dataTimeoutTimer) {
+            clearInterval(dataTimeoutTimer);
+            dataTimeoutTimer = null;
+          }
+          
           if (!res.writableEnded) {
             res.write(`data: ${JSON.stringify({
               error: '流式传输错误',
@@ -850,11 +996,40 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         });
 
       } catch (error) {
-        logger.error('[AI-流式] 请求失败:', error);
+        const totalDuration = Date.now() - connectionStartTime;
+        const isTimeoutError = error.code === 'ECONNABORTED' || error.message.includes('timeout');
+        
+        logger.error('[AI-流式] 请求失败', {
+          error: error.message,
+          code: error.code,
+          totalDuration: totalDuration + 'ms',
+          isTimeoutError: isTimeoutError,
+          isConnectionEstablished: isConnectionEstablished || false
+        });
+        
+        // 清理心跳检测定时器
+        if (dataTimeoutTimer) {
+          clearInterval(dataTimeoutTimer);
+          dataTimeoutTimer = null;
+        }
+        
         if (!res.writableEnded) {
+          let errorCode = 'API_ERROR';
+          let errorMessage = 'AI服务调用失败';
+          
+          if (isTimeoutError) {
+            if (isConnectionEstablished) {
+              errorCode = 'DATA_TIMEOUT';
+              errorMessage = '数据接收超时，连接可能已中断';
+            } else {
+              errorCode = 'CONNECTION_TIMEOUT';
+              errorMessage = `连接超时，超过${STREAM_INITIAL_TIMEOUT / 1000}秒未能建立连接`;
+            }
+          }
+          
           res.write(`data: ${JSON.stringify({
-            error: 'AI服务调用失败',
-            code: 'API_ERROR',
+            error: errorMessage,
+            code: errorCode,
             details: error.message
           })}\n\n`);
           res.end();

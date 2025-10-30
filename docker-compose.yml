@@ -28,8 +28,15 @@ services:
       # 上下文消息条数
       - CONTEXT_MESSAGE_COUNT=${CONTEXT_MESSAGE_COUNT:-5}
 
-      # API超时配置（毫秒）
-      - API_TIMEOUT=${API_TIMEOUT:-60000}
+     # ========== API超时配置（毫秒） ==========
+      # 非流式请求超时：等待完整响应的时间
+      - NON_STREAM_API_TIMEOUT=${NON_STREAM_API_TIMEOUT:-60000}
+      
+      # 流式请求初始连接超时：检测能否建立连接并收到第一个数据块
+      - STREAM_INITIAL_TIMEOUT=${STREAM_INITIAL_TIMEOUT:-30000}
+      
+      # 流式请求数据接收超时：从最后一次收到数据开始计算，超过此时间无新数据则超时
+      - STREAM_DATA_TIMEOUT=${STREAM_DATA_TIMEOUT:-60000}
 
       # ========== AI服务配置 ==========
       # AI服务提供商：dashscope(阿里云DashScope) 或 openai(兼容Openai)
