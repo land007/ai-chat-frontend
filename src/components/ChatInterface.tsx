@@ -432,29 +432,96 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     setIsLoading(true);
     setEditingMessageId(null);
 
-    try {
-      const response = await chatAPI.sendMessage(editValue.trim(), newMessages);
-      
+    if (isStreamingEnabled) {
+      // 流式传输编辑后的问题
+      const assistantMessageId = generateId();
       const assistantMessage: ChatMessage = {
-        id: generateId(),
+        id: assistantMessageId,
         role: 'assistant',
-        content: response,
+        content: '',
         timestamp: Date.now()
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
-      attachFastSuggestions(assistantMessage.id, response);
-    } catch (error) {
-      const errorMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: t('messages.errorMessage'),
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-      setEditValue('');
+      // 先设置思考状态，不立即添加空消息
+      setStreamingMessageId(assistantMessageId);
+      setIsStreamingThinking(true);
+      hasAddedStreamingMessageRef.current = false;
+
+      try {
+        await chatAPI.sendMessageStream(
+          editValue.trim(),
+          newMessages,
+          (content: string, done: boolean) => {
+            // 只有在收到有实际内容的数据时才添加消息并退出思考状态
+            if (content && content.length > 0 && !hasAddedStreamingMessageRef.current) {
+              setIsStreamingThinking(false);
+              setMessages(prev => [...prev, assistantMessage]);
+              hasAddedStreamingMessageRef.current = true;
+            }
+
+            // 更新消息内容
+            if (content) {
+              setMessages(prev => prev.map(msg => 
+                msg.id === assistantMessageId 
+                  ? { ...msg, content }
+                  : msg
+              ));
+            }
+
+            if (done) {
+              setStreamingMessageId(null);
+              setIsStreamingThinking(false);
+              hasAddedStreamingMessageRef.current = false;
+              setIsLoading(false);
+              attachFastSuggestions(assistantMessageId, content || '');
+              setEditValue('');
+            }
+          },
+          (error: string) => {
+            // 错误处理：停止思考状态并添加错误消息
+            setIsStreamingThinking(false);
+            setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
+            setStreamingMessageId(null);
+            hasAddedStreamingMessageRef.current = false;
+            setIsLoading(false);
+            setEditValue('');
+          }
+        );
+      } catch (error) {
+        // 异常处理：停止思考状态并添加错误消息
+        setIsStreamingThinking(false);
+        setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
+        setStreamingMessageId(null);
+        hasAddedStreamingMessageRef.current = false;
+        setIsLoading(false);
+        setEditValue('');
+      }
+    } else {
+      // 非流式传输模式
+      try {
+        const response = await chatAPI.sendMessage(editValue.trim(), newMessages);
+        
+        const assistantMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: response,
+          timestamp: Date.now()
+        };
+
+        setMessages(prev => [...prev, assistantMessage]);
+        attachFastSuggestions(assistantMessage.id, response);
+      } catch (error) {
+        const errorMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: t('messages.errorMessage'),
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+      } finally {
+        setIsLoading(false);
+        setEditValue('');
+      }
     }
   };
 
