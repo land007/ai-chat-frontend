@@ -164,7 +164,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   }, []);
 
   // 在回答完成后请求fast建议并写回对应AI消息
-  const attachFastSuggestions = async (assistantMessageId: string, answerContent: string) => {
+  const attachFastSuggestions = async (assistantMessageId: string, answerContent: string, userQuestionOverride?: string) => {
     try {
       if (!appConfig.enableFastSuggest) return;
       // 当回调传入的answerContent为空时，从当前消息列表获取该AI消息的最终内容
@@ -172,8 +172,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       const finalAnswer = (answerContent && answerContent.trim()) ? answerContent : (currentAssistant?.content || '');
       if (!finalAnswer) return; // 仍为空则放弃本次建议，避免后端校验错误
 
+      // 优先使用调用方显式提供的最新问题，避免闭包导致读取到旧的messages
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
-      const userQuestion = lastUser?.content || '';
+      const userQuestion = (userQuestionOverride && userQuestionOverride.trim()) || lastUser?.content || '';
       const suggestions = await chatAPI.getFastSuggestions(
         finalAnswer,
         userQuestion,
@@ -240,8 +241,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
-              // 回答完成后触发fast建议
-              attachFastSuggestions(assistantMessageId, incrementalContent || '');
+              // 回答完成后触发fast建议（显式传入本次问题以避免读取到旧问题）
+              attachFastSuggestions(assistantMessageId, incrementalContent || '', question);
             }
           },
           (error: string) => {
@@ -272,8 +273,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
-        // 非流式也触发fast建议
-        attachFastSuggestions(assistantMessage.id, response);
+        // 非流式也触发fast建议（显式传入本次问题）
+        attachFastSuggestions(assistantMessage.id, response, question);
       } catch (error) {
         const errorMessage: ChatMessage = {
           id: generateId(),
@@ -344,8 +345,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
-              // 回答完成后触发fast建议
-              attachFastSuggestions(assistantMessageId, content || '');
+              // 回答完成后触发fast建议（显式传入本次问题）
+              attachFastSuggestions(assistantMessageId, content || '', currentInput);
             }
           },
           (error: string) => {
@@ -378,8 +379,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
-        // 非流式也触发fast建议
-        attachFastSuggestions(assistantMessage.id, response);
+        // 非流式也触发fast建议（显式传入本次问题）
+        attachFastSuggestions(assistantMessage.id, response, currentInput);
       } catch (error) {
         const errorMessage: ChatMessage = {
           id: generateId(),
@@ -475,7 +476,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
-              attachFastSuggestions(assistantMessageId, content || '');
+              attachFastSuggestions(assistantMessageId, content || '', editValue.trim());
               setEditValue('');
             }
           },
@@ -511,7 +512,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
-        attachFastSuggestions(assistantMessage.id, response);
+        attachFastSuggestions(assistantMessage.id, response, editValue.trim());
       } catch (error) {
         const errorMessage: ChatMessage = {
           id: generateId(),
@@ -583,7 +584,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
-              attachFastSuggestions(assistantMessageId, content || '');
+              attachFastSuggestions(assistantMessageId, content || '', userMessage.content);
             }
           },
           (error: string) => {
@@ -616,7 +617,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
-        attachFastSuggestions(assistantMessage.id, response);
+        attachFastSuggestions(assistantMessage.id, response, userMessage.content);
       } catch (error) {
         const errorMessage: ChatMessage = {
           id: generateId(),
