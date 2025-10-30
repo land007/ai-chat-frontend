@@ -726,6 +726,26 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     const currentUserName = (req.user && (req.user.name || req.user.userId)) || '当前用户';
     const renderedSystemPrompt = rawSystemPrompt.replace(/\{\{name\}\}/g, currentUserName);
 
+    // 1.5) 规范化用户输入：仅在存在用户姓名/ID时，将“我的”替换为“{{name}}的”，以提升知识库检索精度
+    const hasUserName = !!(req.user && (req.user.name || req.user.userId));
+    const normalizeForRetrieval = (text) => {
+      if (!hasUserName) return text;
+      return typeof text === 'string' ? text.replace(/我的/g, `${currentUserName}的`) : text;
+    };
+
+    const normalizedMessage = normalizeForRetrieval(message);
+    const normalizedContextMessages = Array.isArray(contextMessages)
+      ? contextMessages.map(m => ({
+          ...m,
+          content: m.role === 'user' ? normalizeForRetrieval(m.content) : m.content
+        }))
+      : [];
+
+    logger.info('[NLP-Preprocess] 规范化完成', {
+      replacedInCurrent: message === normalizedMessage ? 0 : 1,
+      contextCount: normalizedContextMessages.length
+    });
+
     // 2) 构建messages数组
     const messages = [];
     
@@ -738,9 +758,9 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
     
     // 添加上下文消息
-    if (contextMessages && contextMessages.length > 0) {
+    if (normalizedContextMessages && normalizedContextMessages.length > 0) {
       // 限制上下文消息数量
-      const limitedContext = contextMessages.slice(-CONTEXT_MESSAGE_COUNT);
+      const limitedContext = normalizedContextMessages.slice(-CONTEXT_MESSAGE_COUNT);
       
       // 将上下文消息转换为标准格式
       limitedContext.forEach(msg => {
@@ -754,7 +774,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     // 添加当前用户消息
     messages.push({
       role: 'user',
-      content: message
+      content: normalizedMessage
     });
 
     // info级别：消息数组信息
