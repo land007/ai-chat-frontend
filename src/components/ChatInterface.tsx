@@ -147,7 +147,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               role: 'assistant',
               content: welcomeText,
               timestamp: Date.now(),
-              isWelcome: true // 标记为欢迎语
+              isWelcome: true, // 标记为欢迎语
+              // 将欢迎建议作为“回复建议”直接挂在欢迎消息下
+              suggestedQuestions: Array.isArray(config.exampleQuestions) ? config.exampleQuestions : []
             };
             setMessages([welcomeMessage]);
           }
@@ -875,7 +877,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       backgroundColor: surfaceColor,
       color: textColor,
       border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
-      whiteSpace: 'pre-wrap' as const
+      whiteSpace: 'pre-wrap' as const,
+      display: 'inline-block',
+      maxWidth: '80%'
     },
     messageBubbleUser: {
       padding: '12px 16px',
@@ -1479,26 +1483,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           ))
         )}
         
-        {/* 示例问题显示（欢迎语下的固定建议问题，点击后不消失） */}
-        {showExamples && appConfig.exampleQuestions.length > 0 && messages.length >= 1 && messages[0].role === 'assistant' && (messages[0] as any).isWelcome && (
-          <div style={getStyles().exampleQuestionsContainer}>
-            {appConfig.exampleQuestions.map((question, index) => (
-              <button
-                key={index}
-                style={getStyles().exampleQuestionButton}
-                onClick={() => handleExampleClick(question)}
-                onMouseEnter={(e) => {
-                  Object.assign(e.currentTarget.style, getStyles().exampleQuestionButtonHover);
-                }}
-                onMouseLeave={(e) => {
-                  Object.assign(e.currentTarget.style, getStyles().exampleQuestionButton);
-                }}
-              >
-                {question}
-              </button>
-            ))}
-          </div>
-        )}
+        
         
         {isLoading && !isStreamingEnabled && (
           <div style={getStyles().loadingContainer}>
