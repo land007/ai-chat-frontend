@@ -88,7 +88,7 @@ class ChatAPI {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let accumulatedContent = ''; // 累积内容
+      let accumulatedContent = ''; // 前端累积完整内容
       let chunkCount = 0; // 数据块计数
 
       try {
@@ -133,12 +133,14 @@ class ChatAPI {
               try {
                 const chunk: StreamChunk = JSON.parse(data);
                 chunkCount++;
-                console.log(`[前端API-流式] 收到增量数据块 #${chunkCount}: ${chunk.content.length} 字符`);
                 
-                // 累积内容（后端发送的是累积内容）
-                accumulatedContent = chunk.content;
+                // 后端现在发送的是增量内容，需要在前端累积
+                accumulatedContent += chunk.content;
                 
-                onChunk(chunk.content, chunk.done);
+                console.log(`[前端API-流式] 收到增量 #${chunkCount}: +${chunk.content.length}字符, 总长度:${accumulatedContent.length}`);
+                
+                // 传递累积后的完整内容给回调
+                onChunk(accumulatedContent, chunk.done);
                 
                 if (chunk.done) {
                   // 输出累积的完整内容

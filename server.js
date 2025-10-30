@@ -871,9 +871,9 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                 if (isFirstMessage || incrementalText) {
                   accumulatedText += incrementalText;
                   
-                  // 转换为OpenAI标准格式 - 发送累积文本
+                  // 转换为OpenAI标准格式 - 发送增量文本
                   const standardChunk = {
-                    content: accumulatedText, // 发送累积文本
+                    content: incrementalText, // 发送增量文本，不是累积文本
                     done: finishReason === 'stop',
                     timestamp: new Date().toISOString()
                   };
@@ -883,8 +883,9 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                   
                   // Debug日志：打印发送给前端的实际SSE数据
                   logger.debug(`[AI-流式-发送] 消息 #${sseMessage.id}`, {
-                    contentLength: accumulatedText.length,
-                    contentPreview: accumulatedText.slice(0, 100),
+                    incrementalLength: incrementalText.length,
+                    incrementalPreview: incrementalText.slice(0, 100),
+                    accumulatedLength: accumulatedText.length,
                     done: standardChunk.done,
                     sseData: sseData.trim()
                   });
