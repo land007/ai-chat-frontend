@@ -232,47 +232,25 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
 
         const targetLength = targetTextRef.current.length;
         console.log(`[打字机] 流式传输结束，检查显示完整性: ${currentIndex}/${targetLength}`);
-        
-        // 如果还有未显示的内容，继续显示
+
+        // 直接补全全文，避免依赖定时器造成尾部未展示
         if (currentIndex < targetLength && currentIndex >= 0) {
-          const remainingChars = targetLength - currentIndex;
-          console.log(`[打字机] 继续显示剩余内容: ${remainingChars} 字符`);
-          
-          // 继续使用现有的定时器（如果存在），否则创建新的
-          if (!intervalRef.current) {
-            timerRunningRef.current = true;
-            intervalRef.current = setInterval(() => {
-              try {
-                setCurrentIndex(prevIndex => {
-                  if (!targetTextRef.current) {
-                    return prevIndex;
-                  }
-                  const len = targetTextRef.current.length;
-                  if (prevIndex >= len) {
-                    stopTypingTimer();
-                    stopTimeoutTimer();
-                    setIsTyping(false);
-                    onComplete?.();
-                    console.log('[打字机] 全部内容显示完成');
-                    return prevIndex;
-                  }
-                  return prevIndex + 1;
-                });
-              } catch (error) {
-                console.error('[打字机] 补充分显示定时器错误:', error);
-                stopTypingTimer();
-                stopTimeoutTimer();
-              }
-            }, speed);
-          }
-        } else {
-          // 已经全部显示，清理定时器
+          setDisplayedText(targetTextRef.current);
+          setCurrentIndex(targetLength);
           stopTypingTimer();
           stopTimeoutTimer();
           setIsTyping(false);
           onComplete?.();
-          console.log('[打字机] 显示完成，清理定时器');
+          console.log('[打字机] 流式结束，直接补全全文');
+          return;
         }
+
+        // 已经全部显示，清理定时器
+        stopTypingTimer();
+        stopTimeoutTimer();
+        setIsTyping(false);
+        onComplete?.();
+        console.log('[打字机] 显示完成，清理定时器');
       } catch (error) {
         console.error('[打字机] 流式结束处理错误:', error);
         // 异常恢复：直接显示完整内容
