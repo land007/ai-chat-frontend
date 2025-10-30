@@ -20,6 +20,15 @@ const FAST_SUGGEST_API_BASEURL = process.env.FAST_SUGGEST_API_BASEURL || '';
 const FAST_SUGGEST_API_KEY = process.env.FAST_SUGGEST_API_KEY || '';
 const FAST_SUGGEST_MODEL = process.env.FAST_SUGGEST_MODEL || 'qwen-turbo';
 const FAST_SUGGEST_TIMEOUT = parseInt(process.env.FAST_SUGGEST_TIMEOUT || '8000', 10);
+// fast 建议提示词模板（支持 \n 转义为换行；支持占位符：{{N}}、{{USER_QUESTION}}、{{ANSWER}}）
+const FAST_SUGGEST_SYSTEM_PROMPT = (
+  process.env.FAST_SUGGEST_SYSTEM_PROMPT ||
+  '你是对话助手。基于用户问题与当前回答，生成N个下一步追问，要求简短具体、无客套、中文、仅返回JSON数组。不要输出任何额外解释。'
+).replace(/\\n/g, '\n');
+const FAST_SUGGEST_USER_PROMPT_TEMPLATE = (
+  process.env.FAST_SUGGEST_USER_PROMPT_TEMPLATE ||
+  'N={{N}}\\n用户问题: {{USER_QUESTION}}\\n回答: {{ANSWER}}\\n请仅输出JSON数组，如 ["问题1","问题2","问题3"]。'
+).replace(/\\n/g, '\n');
 
 // API超时配置
 const NON_STREAM_API_TIMEOUT = parseInt(process.env.NON_STREAM_API_TIMEOUT || '60000', 10); // 默认60秒（非流式请求超时）
@@ -166,7 +175,8 @@ class AIAdapter {
   getStreamRequestConfig() {
     const headers = {
       'Authorization': `Bearer ${this.apiKey}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream'
     };
 
     if (this.provider === 'dashscope') {
@@ -638,8 +648,11 @@ app.post('/api/fast/suggest', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'answer不能为空', code: 'INVALID_ANSWER' });
     }
 
-    const systemPrompt = '你是对话助手。基于用户问题与当前回答，生成N个下一步追问，要求简短具体、无客套、中文、仅返回JSON数组。不要输出任何额外解释。';
-    const userPrompt = `N=${n}\n用户问题: ${userQuestion || '（无）'}\n回答: ${answer}\n请仅输出JSON数组，如 ["问题1","问题2","问题3"]。`;
+    const systemPrompt = FAST_SUGGEST_SYSTEM_PROMPT;
+    const userPrompt = FAST_SUGGEST_USER_PROMPT_TEMPLATE
+      .replace(/\{\{N\}\}/g, String(n))
+      .replace(/\{\{USER_QUESTION\}\}/g, userQuestion || '（无）')
+      .replace(/\{\{ANSWER\}\}/g, answer);
 
     logger.info('[FAST_SUGGEST] 请求', { user: req.user?.name || 'anonymous', n });
 
@@ -801,11 +814,21 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       // 流式传输模式 - 真正的SSE流处理
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Cache-Control'
+        'Access-Control-Allow-Headers': 'Cache-Control',
+        'Content-Encoding': 'identity',
+        'X-Accel-Buffering': 'no'
       });
+
+      // 立即刷新头，避免代理/浏览器等待
+      if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+      }
+
+      // 发送前置填充，突破某些代理/浏览器的缓冲阈值
+      res.write(':' + ' '.repeat(2048) + '\n');
 
       // 流式传输相关变量（需要在try-catch外部定义，以便catch块可以访问）
       const connectionStartTime = Date.now();

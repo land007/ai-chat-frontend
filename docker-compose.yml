@@ -83,6 +83,9 @@ services:
       - FAST_SUGGEST_API_KEY=${FAST_SUGGEST_API_KEY}
       - FAST_SUGGEST_MODEL=${FAST_SUGGEST_MODEL:-qwen-turbo}
       - FAST_SUGGEST_TIMEOUT=${FAST_SUGGEST_TIMEOUT:-8000}
+      # fast 建议提示词模板（支持占位符：{{N}}、{{USER_QUESTION}}、{{ANSWER}}；可用\n表示换行）
+      - 'FAST_SUGGEST_SYSTEM_PROMPT=${FAST_SUGGEST_SYSTEM_PROMPT:-你是对话助手。基于用户问题与当前回答，生成N个下一步追问，要求简短具体、无客套、中文、仅返回JSON数组。不要输出任何额外解释。}'
+      - 'FAST_SUGGEST_USER_PROMPT_TEMPLATE=${FAST_SUGGEST_USER_PROMPT_TEMPLATE:-N={{N}}\n用户问题: {{USER_QUESTION}}\n回答: {{ANSWER}}\n请仅输出JSON数组，如 ["问题1","问题2","问题3"]。}'
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
