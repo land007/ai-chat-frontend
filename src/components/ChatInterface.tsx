@@ -186,7 +186,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   };
 
   const handleExampleClick = async (question: string) => {
-    setShowExamples(false);
+    // 保留示例问题显示：不再隐藏
     setIsLoading(true);
 
     const userMessage: ChatMessage = {
@@ -1412,8 +1412,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           ))
         )}
         
-        {/* 示例问题显示 */}
-        {showExamples && appConfig.exampleQuestions.length > 0 && messages.length === 1 && messages[0].role === 'assistant' && (
+        {/* 示例问题显示（欢迎语下的固定建议问题，点击后不消失） */}
+        {showExamples && appConfig.exampleQuestions.length > 0 && messages.length >= 1 && messages[0].role === 'assistant' && (messages[0] as any).isWelcome && (
           <div style={getStyles().exampleQuestionsContainer}>
             {appConfig.exampleQuestions.map((question, index) => (
               <button
