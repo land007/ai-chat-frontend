@@ -36,6 +36,8 @@
     "build": "craco build",
     "test": "craco test",
     "eject": "react-scripts eject",
+    "watch": "nodemon --signal SIGTERM --watch server.js --watch src --ext js,ts,tsx,jsx --ignore build --exec node server.js",
+    "watch:server": "nodemon --signal SIGTERM --watch server.js --exec node server.js",
     "server:dev": "pm2 start ecosystem.config.js --env development --watch",
     "server:prod": "pm2 start ecosystem.config.js --env production",
     "server:stop": "pm2 stop ai-chat-server",

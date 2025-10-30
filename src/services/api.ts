@@ -9,6 +9,7 @@ import { authService } from './auth';
 
 class ChatAPI {
   private readonly apiUrl = '/api/chat';
+  private readonly suggestUrl = '/api/fast/suggest';
 
   /**
    * 获取认证header
@@ -24,6 +25,24 @@ class ChatAPI {
     }
     
     return headers;
+  }
+
+  async getFastSuggestions(answer: string, userQuestion: string = '', count?: number): Promise<string[]> {
+    try {
+      const response = await fetch(this.suggestUrl, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ answer, userQuestion, count })
+      });
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      if (Array.isArray(data?.suggestions)) return data.suggestions as string[];
+      return [];
+    } catch (e) {
+      return [];
+    }
   }
 
   async sendMessage(message: string, contextMessages: ChatMessage[] = []): Promise<string> {
@@ -126,7 +145,8 @@ class ChatAPI {
                   contentPreview: accumulatedContent.slice(0, 200) + (accumulatedContent.length > 200 ? '...' : ''),
                   fullContent: accumulatedContent
                 });
-                onChunk('', true);
+                // 传递最终累积的完整内容，避免为空导致后续建议接口answer为空
+                onChunk(accumulatedContent, true);
                 return;
               }
 

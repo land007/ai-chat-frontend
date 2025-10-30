@@ -33,7 +33,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     description: '基于阿里云DashScope的智能对话',
     welcomeMessage: '',
     enableI18nButton: false,
-    exampleQuestions: [] as string[]
+    exampleQuestions: [] as string[],
+    enableFastSuggest: true as boolean,
+    fastSuggestDefaultCount: 3 as number
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
@@ -159,6 +161,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     fetchAppConfig();
   }, []);
 
+  // 在回答完成后请求fast建议并写回对应AI消息
+  const attachFastSuggestions = async (assistantMessageId: string, answerContent: string) => {
+    try {
+      if (!appConfig.enableFastSuggest) return;
+      // 当回调传入的answerContent为空时，从当前消息列表获取该AI消息的最终内容
+      const currentAssistant = messages.find(m => m.id === assistantMessageId);
+      const finalAnswer = (answerContent && answerContent.trim()) ? answerContent : (currentAssistant?.content || '');
+      if (!finalAnswer) return; // 仍为空则放弃本次建议，避免后端校验错误
+
+      const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      const userQuestion = lastUser?.content || '';
+      const suggestions = await chatAPI.getFastSuggestions(
+        finalAnswer,
+        userQuestion,
+        appConfig.fastSuggestDefaultCount
+      );
+      if (suggestions && suggestions.length > 0) {
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, suggestedQuestions: suggestions } : m));
+      }
+    } catch (_) {
+      // 静默失败
+    }
+  };
+
   const handleExampleClick = async (question: string) => {
     setShowExamples(false);
     setIsLoading(true);
@@ -212,6 +238,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
+              // 回答完成后触发fast建议
+              attachFastSuggestions(assistantMessageId, incrementalContent || '');
             }
           },
           (error: string) => {
@@ -242,6 +270,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
+        // 非流式也触发fast建议
+        attachFastSuggestions(assistantMessage.id, response);
       } catch (error) {
         const errorMessage: ChatMessage = {
           id: generateId(),
@@ -312,6 +342,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
+              // 回答完成后触发fast建议
+              attachFastSuggestions(assistantMessageId, content || '');
             }
           },
           (error: string) => {
@@ -344,6 +376,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
+        // 非流式也触发fast建议
+        attachFastSuggestions(assistantMessage.id, response);
       } catch (error) {
         const errorMessage: ChatMessage = {
           id: generateId(),
@@ -409,6 +443,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      attachFastSuggestions(assistantMessage.id, response);
     } catch (error) {
       const errorMessage: ChatMessage = {
         id: generateId(),
@@ -479,6 +514,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
+              attachFastSuggestions(assistantMessageId, content || '');
             }
           },
           (error: string) => {
@@ -511,6 +547,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         };
 
         setMessages(prev => [...prev, assistantMessage]);
+        attachFastSuggestions(assistantMessage.id, response);
       } catch (error) {
         const errorMessage: ChatMessage = {
           id: generateId(),
@@ -1298,6 +1335,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                       >
                         <ThumbsDown size={14} />
                       </button>
+                    </div>
+                  )}
+
+                  {/* fast 建议问题（仅在该AI消息下方显示） */}
+                  {message.role === 'assistant' && Array.isArray(message.suggestedQuestions) && message.suggestedQuestions.length > 0 && (
+                    <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
+                      {message.suggestedQuestions.slice(0, appConfig.fastSuggestDefaultCount).map((q, idx) => (
+                        <button
+                          key={idx}
+                          style={getStyles().exampleQuestionButton}
+                          onClick={() => handleExampleClick(q)}
+                          onMouseEnter={(e) => { Object.assign(e.currentTarget.style, getStyles().exampleQuestionButtonHover); }}
+                          onMouseLeave={(e) => { Object.assign(e.currentTarget.style, getStyles().exampleQuestionButton); }}
+                          title={q}
+                        >
+                          {q}
+                        </button>
+                      ))}
                     </div>
                   )}
                   

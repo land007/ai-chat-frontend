@@ -9,6 +9,7 @@ export interface ChatMessage {
   feedback?: 'like' | 'dislike' | null;
   retryCount?: number;
   isWelcome?: boolean; // 标记是否为欢迎语
+  suggestedQuestions?: string[]; // fast建议问题
 }
 
 // API响应类型

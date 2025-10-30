@@ -13,6 +13,14 @@ const APP_DESCRIPTION = process.env.APP_DESCRIPTION || '基于AI的智能对话'
 const WELCOME_MESSAGE = process.env.WELCOME_MESSAGE || '';
 const CONTEXT_MESSAGE_COUNT = parseInt(process.env.CONTEXT_MESSAGE_COUNT || '5', 10);
 
+// FAST建议（Qwen代理）配置（以 fast 前缀）
+const FAST_SUGGEST_ENABLED = (process.env.FAST_SUGGEST_ENABLED || 'true') === 'true';
+const FAST_SUGGEST_COUNT = parseInt(process.env.FAST_SUGGEST_COUNT || '3', 10);
+const FAST_SUGGEST_API_BASEURL = process.env.FAST_SUGGEST_API_BASEURL || '';
+const FAST_SUGGEST_API_KEY = process.env.FAST_SUGGEST_API_KEY || '';
+const FAST_SUGGEST_MODEL = process.env.FAST_SUGGEST_MODEL || 'qwen-turbo';
+const FAST_SUGGEST_TIMEOUT = parseInt(process.env.FAST_SUGGEST_TIMEOUT || '8000', 10);
+
 // API超时配置
 const NON_STREAM_API_TIMEOUT = parseInt(process.env.NON_STREAM_API_TIMEOUT || '60000', 10); // 默认60秒（非流式请求超时）
 const STREAM_INITIAL_TIMEOUT = parseInt(process.env.STREAM_INITIAL_TIMEOUT || '30000', 10); // 默认30秒（流式初始连接超时）
@@ -606,8 +614,83 @@ app.get('/api/config', (req, res) => {
     welcomeMessage: WELCOME_MESSAGE,
     enableI18nButton: process.env.ENABLE_I18N_BUTTON === 'true',
     enableDebugMode: process.env.ENABLE_DEBUG_MODE === 'true',
-    exampleQuestions: exampleQuestions
+    exampleQuestions: exampleQuestions,
+    // fast 建议配置下发到前端（不开启任何敏感信息）
+    enableFastSuggest: FAST_SUGGEST_ENABLED,
+    fastSuggestDefaultCount: FAST_SUGGEST_COUNT
   });
+});
+
+// 快速建议：基于当前回答与用户问题，生成N个下一步问题（OpenAI兼容协议）
+app.post('/api/fast/suggest', authenticateToken, async (req, res) => {
+  try {
+    if (!FAST_SUGGEST_ENABLED) {
+      return res.status(200).json({ suggestions: [] });
+    }
+    if (!FAST_SUGGEST_API_BASEURL || !FAST_SUGGEST_API_KEY) {
+      logger.error('[FAST_SUGGEST] 缺少API配置');
+      return res.status(500).json({ error: '建议功能未正确配置', code: 'FAST_SUGGEST_CONFIG_MISSING' });
+    }
+
+    const { answer, userQuestion = '', count } = req.body || {};
+    const n = Math.max(1, Math.min(10, parseInt(count || FAST_SUGGEST_COUNT, 10)));
+    if (!answer || typeof answer !== 'string') {
+      return res.status(400).json({ error: 'answer不能为空', code: 'INVALID_ANSWER' });
+    }
+
+    const systemPrompt = '你是对话助手。基于用户问题与当前回答，生成N个下一步追问，要求简短具体、无客套、中文、仅返回JSON数组。不要输出任何额外解释。';
+    const userPrompt = `N=${n}\n用户问题: ${userQuestion || '（无）'}\n回答: ${answer}\n请仅输出JSON数组，如 ["问题1","问题2","问题3"]。`;
+
+    logger.info('[FAST_SUGGEST] 请求', { user: req.user?.name || 'anonymous', n });
+
+    const response = await axios.post(
+      `${FAST_SUGGEST_API_BASEURL.replace(/\/$/, '')}/chat/completions`,
+      {
+        model: FAST_SUGGEST_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        n: 1
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${FAST_SUGGEST_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: FAST_SUGGEST_TIMEOUT
+      }
+    );
+
+    let text = '';
+    try {
+      text = response.data?.choices?.[0]?.message?.content || '';
+    } catch (_) {
+      text = '';
+    }
+
+    // 解析仅JSON数组
+    let suggestions = [];
+    try {
+      // 提取第一个以 [ 开头到 ] 结束的JSON数组片段
+      const match = text.match(/\[[\s\S]*\]/);
+      const jsonStr = match ? match[0] : '[]';
+      const parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed)) {
+        suggestions = parsed.filter(x => typeof x === 'string').slice(0, n);
+      }
+    } catch (e) {
+      logger.warn('[FAST_SUGGEST] 解析失败，返回空数组');
+      suggestions = [];
+    }
+
+    logger.info('[FAST_SUGGEST] 完成', { count: suggestions.length });
+    res.json({ suggestions });
+  } catch (error) {
+    logger.error('[FAST_SUGGEST] 请求失败', { error: error.message, code: error.code });
+    res.status(500).json({ error: '建议生成失败', code: 'FAST_SUGGEST_ERROR' });
+  }
 });
 
 // AI聊天API端点 - 流式传输版本（需要认证）

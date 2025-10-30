@@ -75,6 +75,14 @@ services:
       # LOG_LEVEL=info：开发调试，看到详细请求响应
       # LOG_LEVEL=debug：完整调试，看到所有数据
       - LOG_LEVEL=${LOG_LEVEL:-warn}
+
+      # fast 建议（Qwen代理）配置
+      - FAST_SUGGEST_ENABLED=${FAST_SUGGEST_ENABLED:-true}
+      - FAST_SUGGEST_COUNT=${FAST_SUGGEST_COUNT:-3}
+      - FAST_SUGGEST_API_BASEURL=${FAST_SUGGEST_API_BASEURL:-https://xxx.oneapi.com/v1}
+      - FAST_SUGGEST_API_KEY=${FAST_SUGGEST_API_KEY}
+      - FAST_SUGGEST_MODEL=${FAST_SUGGEST_MODEL:-qwen-turbo}
+      - FAST_SUGGEST_TIMEOUT=${FAST_SUGGEST_TIMEOUT:-8000}
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
