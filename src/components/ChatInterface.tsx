@@ -13,6 +13,13 @@ import {
 import { generateId } from '@/utils';
 import 'highlight.js/styles/github.css';
 
+// 随机选择数组中的n个元素
+const getRandomItems = <T,>(array: T[], count: number): T[] => {
+  if (array.length <= count) return array;
+  const shuffled = [...array].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+};
+
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const { t, i18n } = useTranslation();
   const { user, logout } = useAuth();
@@ -162,7 +169,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         content: welcomeText,
         timestamp: Date.now(),
         isWelcome: true,
-        suggestedQuestions: Array.isArray(appConfig.exampleQuestions) ? appConfig.exampleQuestions : []
+        suggestedQuestions: Array.isArray(appConfig.exampleQuestions)
+          ? getRandomItems(appConfig.exampleQuestions, appConfig.fastSuggestDefaultCount || 3)
+          : []
       };
       newMessages.push(welcomeMessage);
     }
@@ -287,8 +296,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               content: welcomeText,
               timestamp: Date.now(),
               isWelcome: true, // 标记为欢迎语
-              // 将欢迎建议作为“回复建议”直接挂在欢迎消息下
-              suggestedQuestions: Array.isArray(config.exampleQuestions) ? config.exampleQuestions : []
+              // 将欢迎建议作为"回复建议"直接挂在欢迎消息下
+              suggestedQuestions: Array.isArray(config.exampleQuestions)
+                ? getRandomItems(config.exampleQuestions, config.fastSuggestDefaultCount || 3)
+                : []
             };
             setMessages([welcomeMessage]);
           }
