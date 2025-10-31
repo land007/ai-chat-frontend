@@ -1318,7 +1318,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                     {message.role === 'assistant' ? (
                       <TypewriterEffect
                         text={message.content}
-                        enabled={!message.isWelcome} // 欢迎语禁用打字机效果
+                        enabled={streamingMessageId === message.id} // 只对当前流式消息启用打字机
                         isDarkMode={isDarkMode}
                         isStreaming={streamingMessageId === message.id}
                         isThinking={isStreamingThinking && streamingMessageId === message.id}
