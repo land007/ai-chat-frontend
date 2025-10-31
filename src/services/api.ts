@@ -3,13 +3,16 @@ import {
   ChatMessage, 
   ChatResponse, 
   ChatError, 
-  StreamChunk
+  StreamChunk,
+  FeedbackListResponse,
+  FeedbackDetailResponse
 } from '@/types';
 import { authService } from './auth';
 
 class ChatAPI {
   private readonly apiUrl = '/api/chat';
   private readonly suggestUrl = '/api/fast/suggest';
+  private readonly feedbackUrl = '/api/feedback';
   private currentAbortController: AbortController | null = null;
 
   /**
@@ -225,6 +228,102 @@ class ChatAPI {
       onError?.(errorMessage);
     } finally {
       this.currentAbortController = null;
+    }
+  }
+
+  /**
+   * 保存用户反馈
+   */
+  async saveFeedback(
+    feedback: 'like' | 'dislike',
+    messages: ChatMessage[],
+    messageId: string
+  ): Promise<{ success: boolean; message: string; filename: string }> {
+    try {
+      console.log(`[前端API-反馈] 保存反馈: ${feedback}, 消息数: ${messages.length}`);
+
+      const response = await fetch(this.feedbackUrl, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          feedback,
+          messages,
+          messageId
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`保存反馈失败: ${errorData.error}`);
+      }
+
+      const data = await response.json();
+      console.log(`[前端API-反馈] 保存成功: ${data.filename}`);
+
+      return data;
+    } catch (error) {
+      console.error('[前端API-反馈] 保存错误:', error);
+      throw new Error('保存反馈失败，请稍后重试');
+    }
+  }
+
+  /**
+   * 获取反馈列表（管理员）
+   */
+  async getFeedbackList(
+    page: number = 1,
+    pageSize: number = 20,
+    type: 'all' | 'like' | 'dislike' = 'all'
+  ): Promise<FeedbackListResponse> {
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+        type: type
+      });
+
+      const response = await fetch(`${this.feedbackUrl}/list?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`获取反馈列表失败: ${errorData.error}`);
+      }
+
+      const data: FeedbackListResponse = await response.json();
+      console.log(`[前端API-反馈列表] 获取成功, 总数: ${data.pagination.total}`);
+
+      return data;
+    } catch (error) {
+      console.error('[前端API-反馈列表] 获取错误:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取反馈详情（管理员）
+   */
+  async getFeedbackDetail(filename: string): Promise<FeedbackDetailResponse> {
+    try {
+      const response = await fetch(`${this.feedbackUrl}/${filename}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`获取反馈详情失败: ${errorData.error}`);
+      }
+
+      const data: FeedbackDetailResponse = await response.json();
+      console.log(`[前端API-反馈详情] 获取成功: ${filename}`);
+
+      return data;
+    } catch (error) {
+      console.error('[前端API-反馈详情] 获取错误:', error);
+      throw error;
     }
   }
 }

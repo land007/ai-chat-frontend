@@ -141,6 +141,49 @@ export interface EnvironmentVariables {
   NODE_ENV?: 'development' | 'production' | 'test';
 }
 
+// 反馈系统类型
+export interface FeedbackData {
+  id: string;
+  filename: string;
+  type: 'like' | 'dislike';
+  username: string;
+  userId: string;
+  timestamp: number;
+  messageId: string;
+  messages: ChatMessage[];
+  metadata: {
+    userAgent: string;
+    language: string;
+    ip: string;
+  };
+}
+
+export interface FeedbackListItem {
+  filename: string;
+  type: 'like' | 'dislike';
+  username: string;
+  timestamp: number;
+  messageCount: number;
+  mtime: number;
+}
+
+export interface FeedbackListResponse {
+  success: boolean;
+  data: FeedbackListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
+
+export interface FeedbackDetailResponse {
+  success: boolean;
+  data: FeedbackData;
+}
+
 // 窗口对象扩展
 declare global {
   interface Window {

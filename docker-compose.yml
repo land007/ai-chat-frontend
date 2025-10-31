@@ -9,6 +9,8 @@ services:
     volumes:
       # 映射企业微信域名验证文件
       - ./public/WW_verify_XXXXXXXXXXXXXXX.txt:/app/public/WW_verify_XXXXXXXXXXXXXXX.txt:ro
+      # 反馈数据持久化
+      - ./feedbacks:/app/feedbacks
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -86,6 +88,11 @@ services:
       # fast 建议提示词模板（支持占位符：{{N}}、{{USER_QUESTION}}、{{ANSWER}}；可用\n表示换行）
       - 'FAST_SUGGEST_SYSTEM_PROMPT=${FAST_SUGGEST_SYSTEM_PROMPT:-你是对话助手。基于用户问题与当前回答，生成N个下一步追问，要求简短具体、无客套、中文、仅返回JSON数组。不要输出任何额外解释。}'
       - 'FAST_SUGGEST_USER_PROMPT_TEMPLATE=${FAST_SUGGEST_USER_PROMPT_TEMPLATE:-N={{N}}\n用户问题: {{USER_QUESTION}}\n回答: {{ANSWER}}\n请仅输出JSON数组，如 ["问题1","问题2","问题3"]。}'
+
+      # 反馈系统配置
+      - FEEDBACK_DIR=${FEEDBACK_DIR:-./feedbacks}
+      - FEEDBACK_PAGE_SIZE=${FEEDBACK_PAGE_SIZE:-20}
+      - ADMIN_USERS=${ADMIN_USERS:-admin}
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]

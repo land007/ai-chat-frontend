@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut } from 'lucide-react';
+import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatAPI } from '@/services/api';
 import TypewriterEffect from './TypewriterEffect';
+import FeedbackAdmin from './FeedbackAdmin';
 import { 
   ChatMessage, 
   ChatInterfaceProps
@@ -42,6 +43,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const hasAddedStreamingMessageRef = useRef(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const touchStartY = useRef<number>(0);
+  const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<string[]>(['admin']);
+  
+  // 检查是否是管理员用户
+  const isAdmin = user?.userId && adminUsers.includes(user.userId);
+  
+  // 调试信息：打印当前用户和管理员列表
+  useEffect(() => {
+    if (user) {
+      console.log('[管理员调试] 当前用户:', user.userId, user.name);
+      console.log('[管理员调试] 管理员列表:', adminUsers);
+      console.log('[管理员调试] 是否管理员:', isAdmin);
+    }
+  }, [user, adminUsers, isAdmin]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
@@ -132,6 +147,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         if (response.ok) {
           const config = await response.json();
           setAppConfig(config);
+          // 设置管理员列表
+          if (config.adminUsers && Array.isArray(config.adminUsers)) {
+            setAdminUsers(config.adminUsers);
+          }
           // 动态设置页面标题
           document.title = config.name;
           
@@ -859,12 +878,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   };
 
   // 消息反馈
-  const handleMessageFeedback = (messageId: string, feedback: 'like' | 'dislike') => {
+  const handleMessageFeedback = async (messageId: string, feedback: 'like' | 'dislike') => {
+    // 更新UI状态
     setMessages(prev => prev.map(msg => 
       msg.id === messageId 
         ? { ...msg, feedback: msg.feedback === feedback ? null : feedback }
         : msg
     ));
+
+    // 如果是取消反馈，不保存
+    const currentMessage = messages.find(msg => msg.id === messageId);
+    if (currentMessage?.feedback === feedback) {
+      return;
+    }
+
+    // 保存反馈到服务器
+    try {
+      await chatAPI.saveFeedback(feedback, messages, messageId);
+      console.log(`[反馈] ${feedback}保存成功`);
+    } catch (error) {
+      console.error(`[反馈] ${feedback}保存失败:`, error);
+      // 保存失败不影响UI状态，静默失败
+    }
   };
 
   // 重试消息
@@ -1480,6 +1515,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           >
             <Trash2 size={18} />
           </button>
+          {/* 管理员面板入口 */}
+          {isAdmin && (
+            <button
+              style={getStyles().actionButton}
+              onClick={() => setShowFeedbackAdmin(true)}
+              onMouseEnter={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+              }}
+              onMouseLeave={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().actionButton);
+              }}
+              title="反馈管理"
+            >
+              <Settings size={18} />
+            </button>
+          )}
           {/* 只有用户名密码登录的用户才显示注销按钮 */}
           {user && user.loginType === 'password' && (
             <button
@@ -1810,6 +1861,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           </button>
         </div>
       </div>
+
+      {/* 反馈管理面板 */}
+      {showFeedbackAdmin && (
+        <FeedbackAdmin
+          isDarkMode={isDarkMode}
+          onClose={() => setShowFeedbackAdmin(false)}
+        />
+      )}
     </div>
   );
 };

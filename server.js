@@ -3,6 +3,15 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const { promisify } = require('util');
+
+// 文件系统Promise化
+const mkdir = promisify(fs.mkdir);
+const readdir = promisify(fs.readdir);
+const readFile = promisify(fs.readFile);
+const writeFile = promisify(fs.writeFile);
+const stat = promisify(fs.stat);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -59,6 +68,11 @@ const BASIC_AUTH_USERS = process.env.BASIC_AUTH_USERS || 'admin:admin123';
 const LOG_LEVEL = process.env.LOG_LEVEL || 'warn';
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
 const currentLevel = LOG_LEVELS[LOG_LEVEL] || LOG_LEVELS.warn;
+
+// 反馈系统配置
+const FEEDBACK_DIR = process.env.FEEDBACK_DIR || './feedbacks';
+const FEEDBACK_PAGE_SIZE = parseInt(process.env.FEEDBACK_PAGE_SIZE || '20', 10);
+const ADMIN_USERS = (process.env.ADMIN_USERS || 'admin').split(',').map(u => u.trim());
 
 // 统一日志工具
 const logger = {
@@ -384,6 +398,54 @@ function authenticateToken(req, res, next) {
   });
 }
 
+/**
+ * 可选认证中间件（尝试获取用户信息，但不强制要求）
+ */
+function optionalAuth(req, res, next) {
+  // 如果认证开关关闭，直接跳过
+  if (!ENABLE_AUTH) {
+    return next();
+  }
+
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    // 没有token，继续但不设置用户信息
+    return next();
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (!err) {
+      req.user = user;
+    }
+    // 无论验证成功与否都继续
+    next();
+  });
+}
+
+/**
+ * 管理员权限中间件
+ */
+function requireAdmin(req, res, next) {
+  // 如果认证开关关闭，允许访问
+  if (!ENABLE_AUTH) {
+    return next();
+  }
+
+  const userId = req.user?.userId;
+  if (!userId || !ADMIN_USERS.includes(userId)) {
+    logger.warn('[管理员] 权限不足, userId:', userId);
+    return res.status(403).json({ 
+      error: '需要管理员权限',
+      code: 'ADMIN_REQUIRED'
+    });
+  }
+  
+  logger.info('[管理员] 权限验证通过, userId:', userId);
+  next();
+}
+
 // API路由 - 必须在静态文件服务之前定义
 // 健康检查端点（无需认证）
 app.get('/api/health', (req, res) => {
@@ -627,7 +689,9 @@ app.get('/api/config', (req, res) => {
     exampleQuestions: exampleQuestions,
     // fast 建议配置下发到前端（不开启任何敏感信息）
     enableFastSuggest: FAST_SUGGEST_ENABLED,
-    fastSuggestDefaultCount: FAST_SUGGEST_COUNT
+    fastSuggestDefaultCount: FAST_SUGGEST_COUNT,
+    // 管理员用户列表（用于前端判断是否显示管理入口）
+    adminUsers: ADMIN_USERS
   });
 });
 
@@ -703,6 +767,237 @@ app.post('/api/fast/suggest', authenticateToken, async (req, res) => {
   } catch (error) {
     logger.error('[FAST_SUGGEST] 请求失败', { error: error.message, code: error.code });
     res.status(500).json({ error: '建议生成失败', code: 'FAST_SUGGEST_ERROR' });
+  }
+});
+
+// ==================== 反馈系统API ====================
+
+/**
+ * 保存用户反馈（支持匿名用户）
+ */
+app.post('/api/feedback', optionalAuth, async (req, res) => {
+  try {
+    const { feedback, messages, messageId } = req.body;
+    
+    // 验证参数
+    if (!feedback || !['like', 'dislike'].includes(feedback)) {
+      return res.status(400).json({
+        error: '无效的反馈类型',
+        code: 'INVALID_FEEDBACK_TYPE'
+      });
+    }
+    
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({
+        error: '消息历史不能为空',
+        code: 'INVALID_MESSAGES'
+      });
+    }
+    
+    if (!messageId) {
+      return res.status(400).json({
+        error: '消息ID不能为空',
+        code: 'INVALID_MESSAGE_ID'
+      });
+    }
+    
+    // 确保feedbacks目录存在
+    try {
+      await mkdir(FEEDBACK_DIR, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+    
+    // 获取用户信息（支持匿名）
+    const username = req.user?.userId || req.user?.name || 'anonymous';
+    const userId = req.user?.userId || 'anonymous';
+    
+    // 生成文件名：YYYYMMDD_HHmmss_username_feedback.json
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const timeStr = now.toISOString().slice(11, 19).replace(/:/g, '');
+    const filename = `${dateStr}_${timeStr}_${username}_${feedback}.json`;
+    const filepath = path.join(FEEDBACK_DIR, filename);
+    
+    // 构建反馈数据
+    const feedbackData = {
+      id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      filename: filename,
+      type: feedback,
+      username: username,
+      userId: userId,
+      timestamp: now.getTime(),
+      messageId: messageId,
+      messages: messages,
+      metadata: {
+        userAgent: req.headers['user-agent'] || '',
+        language: req.headers['accept-language'] || '',
+        ip: req.ip || req.connection.remoteAddress || ''
+      }
+    };
+    
+    // 保存到文件
+    await writeFile(filepath, JSON.stringify(feedbackData, null, 2), 'utf8');
+    
+    logger.warn('[反馈] 保存成功', {
+      user: username,
+      type: feedback,
+      filename: filename,
+      messageCount: messages.length
+    });
+    
+    res.json({
+      success: true,
+      message: '反馈保存成功',
+      filename: filename
+    });
+    
+  } catch (error) {
+    logger.error('[反馈] 保存失败:', error.message);
+    res.status(500).json({
+      error: '保存反馈失败',
+      code: 'FEEDBACK_SAVE_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 获取反馈列表（需要管理员权限）
+ */
+app.get('/api/feedback/list', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page || '1', 10);
+    const pageSize = parseInt(req.query.pageSize || String(FEEDBACK_PAGE_SIZE), 10);
+    const type = req.query.type || 'all'; // all, like, dislike
+    
+    // 确保feedbacks目录存在
+    try {
+      await mkdir(FEEDBACK_DIR, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+    
+    // 读取文件列表
+    let files = await readdir(FEEDBACK_DIR);
+    
+    // 过滤JSON文件
+    files = files.filter(f => f.endsWith('.json'));
+    
+    // 按类型过滤
+    if (type !== 'all') {
+      files = files.filter(f => f.includes(`_${type}.json`));
+    }
+    
+    // 获取文件详细信息并排序（时间倒序）
+    const fileInfos = await Promise.all(
+      files.map(async (filename) => {
+        const filepath = path.join(FEEDBACK_DIR, filename);
+        const stats = await stat(filepath);
+        const content = await readFile(filepath, 'utf8');
+        const data = JSON.parse(content);
+        
+        return {
+          filename: filename,
+          type: data.type,
+          username: data.username,
+          timestamp: data.timestamp,
+          messageCount: data.messages ? data.messages.length : 0,
+          mtime: stats.mtime.getTime()
+        };
+      })
+    );
+    
+    // 按时间戳倒序排序
+    fileInfos.sort((a, b) => b.timestamp - a.timestamp);
+    
+    // 分页
+    const total = fileInfos.length;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const items = fileInfos.slice(start, end);
+    
+    logger.info('[反馈列表] 查询成功', {
+      user: req.user?.userId,
+      page: page,
+      pageSize: pageSize,
+      type: type,
+      total: total,
+      returned: items.length
+    });
+    
+    res.json({
+      success: true,
+      data: items,
+      pagination: {
+        page: page,
+        pageSize: pageSize,
+        total: total,
+        totalPages: Math.ceil(total / pageSize),
+        hasMore: end < total
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[反馈列表] 查询失败:', error.message);
+    res.status(500).json({
+      error: '获取反馈列表失败',
+      code: 'FEEDBACK_LIST_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 获取反馈详情（需要管理员权限）
+ */
+app.get('/api/feedback/:filename', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const filename = req.params.filename;
+    
+    // 安全检查：确保文件名不包含路径穿越字符
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({
+        error: '无效的文件名',
+        code: 'INVALID_FILENAME'
+      });
+    }
+    
+    const filepath = path.join(FEEDBACK_DIR, filename);
+    
+    // 检查文件是否存在
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({
+        error: '反馈文件不存在',
+        code: 'FEEDBACK_NOT_FOUND'
+      });
+    }
+    
+    // 读取文件内容
+    const content = await readFile(filepath, 'utf8');
+    const data = JSON.parse(content);
+    
+    logger.info('[反馈详情] 查询成功', {
+      user: req.user?.userId,
+      filename: filename
+    });
+    
+    res.json({
+      success: true,
+      data: data
+    });
+    
+  } catch (error) {
+    logger.error('[反馈详情] 查询失败:', error.message);
+    res.status(500).json({
+      error: '获取反馈详情失败',
+      code: 'FEEDBACK_DETAIL_ERROR',
+      details: error.message
+    });
   }
 });
 

@@ -4,16 +4,25 @@ import ChatInterface from './components/ChatInterface';
 import AudioQueuePlayerTest from './components/AudioQueuePlayerTest';
 import StreamSegmentationTest from './components/StreamSegmentationTest';
 import TTSIntegrationTest from './components/TTSIntegrationTest';
+import FeedbackAdmin from './components/FeedbackAdmin';
 import Login from './components/Login';
 import { Loader2 } from 'lucide-react';
 import './App.css';
 
-type Page = 'chat' | 'audio' | 'stream-segment' | 'tts';
+type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback';
 
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('chat');
   const [debugMode, setDebugMode] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<string[]>(['admin']);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // 自动检测系统主题偏好
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  
+  // 检查是否是管理员
+  const isAdmin = user?.userId && adminUsers.includes(user.userId);
 
   // 获取调试模式配置
   useEffect(() => {
@@ -23,6 +32,10 @@ function AppContent() {
         if (response.ok) {
           const config = await response.json();
           setDebugMode(config.enableDebugMode === true);
+          // 设置管理员列表
+          if (config.adminUsers && Array.isArray(config.adminUsers)) {
+            setAdminUsers(config.adminUsers);
+          }
           // 如果启用调试模式，默认显示测试页面
           if (config.enableDebugMode === true) {
             setCurrentPage('tts');
@@ -118,6 +131,14 @@ function AppContent() {
           >
             🎙️ TTS集成测试
           </button>
+          {isAdmin && (
+            <button 
+              onClick={() => setCurrentPage('feedback')}
+              style={buttonStyle('feedback')}
+            >
+              📊 反馈管理
+            </button>
+          )}
         </div>
       )}
       
@@ -125,6 +146,11 @@ function AppContent() {
       {currentPage === 'audio' && <AudioQueuePlayerTest />}
       {currentPage === 'stream-segment' && <StreamSegmentationTest />}
       {currentPage === 'tts' && <TTSIntegrationTest />}
+      {currentPage === 'feedback' && isAdmin && (
+        <div style={{ height: '100vh', overflow: 'hidden' }}>
+          <FeedbackAdmin isDarkMode={isDarkMode} onClose={() => setCurrentPage('chat')} />
+        </div>
+      )}
     </div>
   );
 }
