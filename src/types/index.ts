@@ -184,6 +184,54 @@ export interface FeedbackDetailResponse {
   data: FeedbackData;
 }
 
+// 历史记录系统类型
+// 会话元数据
+export interface ChatSession {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messageCount: number;
+  preview: string;
+}
+
+// 会话详情
+export interface ChatSessionDetail {
+  id: string;
+  userId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ChatMessage[];
+}
+
+// 会话列表响应
+export interface ChatHistoryListResponse {
+  success: boolean;
+  data: ChatSession[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
+
+// 会话保存响应
+export interface ChatHistorySaveResponse {
+  success: boolean;
+  message: string;
+  session: ChatSession;
+}
+
+// 会话删除响应
+export interface ChatHistoryDeleteResponse {
+  success: boolean;
+  message: string;
+}
+
 // 窗口对象扩展
 declare global {
   interface Window {

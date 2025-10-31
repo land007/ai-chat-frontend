@@ -11,6 +11,8 @@ services:
       - ./public/WW_verify_XXXXXXXXXXXXXXX.txt:/app/public/WW_verify_XXXXXXXXXXXXXXX.txt:ro
       # 反馈数据持久化
       - ./feedbacks:/app/feedbacks
+      # 历史记录数据持久化
+      - ./chat-history:/app/chat-history
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -93,6 +95,14 @@ services:
       - FEEDBACK_DIR=${FEEDBACK_DIR:-./feedbacks}
       - FEEDBACK_PAGE_SIZE=${FEEDBACK_PAGE_SIZE:-20}
       - ADMIN_USERS=${ADMIN_USERS:-admin}
+
+      # ========== 历史记录配置 ==========
+      # 历史记录存储目录
+      - CHAT_HISTORY_DIR=${CHAT_HISTORY_DIR:-./chat-history}
+      # 历史记录分页大小
+      - CHAT_HISTORY_PAGE_SIZE=${CHAT_HISTORY_PAGE_SIZE:-20}
+      # 是否自动保存历史记录
+      - CHAT_HISTORY_AUTO_SAVE=${CHAT_HISTORY_AUTO_SAVE:-true}
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]

@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut, Settings } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut, Settings, Menu } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatAPI } from '@/services/api';
 import TypewriterEffect from './TypewriterEffect';
 import FeedbackAdmin from './FeedbackAdmin';
+import ChatHistorySidebar from './ChatHistorySidebar';
 import { 
   ChatMessage, 
   ChatInterfaceProps
@@ -46,6 +47,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
   const [adminUsers, setAdminUsers] = useState<string[]>(['admin']);
   
+  // 历史记录相关状态
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  
   // 检查是否是管理员用户
   const isAdmin = user?.userId && adminUsers.includes(user.userId);
   
@@ -62,6 +68,119 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // 自动保存当前会话（使用useEffect确保状态同步）
+  const pendingSaveRef = useRef(false);
+  
+  const saveCurrentSession = useCallback(() => {
+    // 标记需要保存
+    pendingSaveRef.current = true;
+  }, []);
+
+  // 使用useEffect监听messages变化，确保在状态更新后保存
+  useEffect(() => {
+    if (!pendingSaveRef.current) return;
+    
+    // 重置标记
+    pendingSaveRef.current = false;
+    
+    // 过滤欢迎消息
+    const validMessages = messages.filter(m => !m.isWelcome);
+    if (validMessages.length === 0) {
+      console.log('[历史记录] 没有有效消息，跳过保存');
+      return;
+    }
+
+    // 执行保存
+    const doSave = async () => {
+      try {
+        console.log('[历史记录] 自动保存会话', { 
+          currentSessionId, 
+          messageCount: validMessages.length,
+          messages: validMessages.map(m => ({ role: m.role, contentLength: m.content.length }))
+        });
+        
+        const session = await chatAPI.saveSession(currentSessionId, validMessages);
+        
+        // 如果是新建会话，更新sessionId
+        if (!currentSessionId) {
+          setCurrentSessionId(session.id);
+          console.log('[历史记录] 新会话已创建', session.id);
+        } else {
+          console.log('[历史记录] 会话已更新', session.id);
+        }
+      } catch (error) {
+        console.error('[历史记录] 自动保存失败:', error);
+        // 静默失败，不影响用户体验
+      }
+    };
+
+    doSave();
+  }, [messages, currentSessionId]);
+
+  // 加载会话
+  const loadSession = useCallback(async (sessionId: string) => {
+    try {
+      setIsHistoryLoading(true);
+      console.log('[历史记录] 加载会话', sessionId);
+      
+      const detail = await chatAPI.getSessionDetail(sessionId);
+      
+      // 设置消息（不包括欢迎消息，因为会话中已经过滤了）
+      setMessages(detail.messages);
+      setCurrentSessionId(sessionId);
+      
+      // 重置其他状态
+      setEditingMessageId(null);
+      setEditValue('');
+      setInputValue('');
+      
+      console.log('[历史记录] 会话加载成功', { messageCount: detail.messages.length });
+    } catch (error) {
+      console.error('[历史记录] 加载会话失败:', error);
+      alert('加载会话失败，请重试');
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, []);
+
+  // 新建对话
+  const handleNewChat = useCallback(() => {
+    console.log('[历史记录] 新建对话');
+    
+    // 重新创建欢迎消息（如果配置了）
+    const newMessages: ChatMessage[] = [];
+    if (appConfig.welcomeMessage && appConfig.welcomeMessage.trim()) {
+      const welcomeText = appConfig.welcomeMessage.replace(
+        /\{\{name\}\}/g, 
+        user?.name || ''
+      );
+      
+      const welcomeMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: welcomeText,
+        timestamp: Date.now(),
+        isWelcome: true,
+        suggestedQuestions: Array.isArray(appConfig.exampleQuestions) ? appConfig.exampleQuestions : []
+      };
+      newMessages.push(welcomeMessage);
+    }
+    
+    setMessages(newMessages);
+    
+    // 重置状态
+    setCurrentSessionId(null);
+    setEditingMessageId(null);
+    setEditValue('');
+    setInputValue('');
+    setIsLoading(false);
+    setStreamingMessageId(null);
+    setIsStreamingThinking(false);
+    
+    // 关闭侧边栏
+    setIsSidebarOpen(false);
+  }, [appConfig, user]);
 
   // 处理滚动事件，检测用户是否在查看历史消息
   const handleScroll = () => {
@@ -313,6 +432,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               abortControllerRef.current = null;
               // 回答完成后触发fast建议（显式传入本次问题以避免读取到旧问题）
               attachFastSuggestions(assistantMessageId, incrementalContent || '', question);
+              // 自动保存会话
+              saveCurrentSession();
             }
           },
           (error: string) => {
@@ -372,6 +493,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, assistantMessage]);
         // 非流式也触发fast建议（显式传入本次问题）
         attachFastSuggestions(assistantMessage.id, response, question);
+        // 自动保存会话
+        saveCurrentSession();
       } catch (error) {
         // 检查是否是用户主动中止
         if (error instanceof Error && error.name === 'AbortError') {
@@ -455,6 +578,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               abortControllerRef.current = null;
               // 回答完成后触发fast建议（显式传入本次问题）
               attachFastSuggestions(assistantMessageId, content || '', currentInput);
+              // 自动保存会话
+              saveCurrentSession();
             }
           },
           (error: string) => {
@@ -516,6 +641,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, assistantMessage]);
         // 非流式也触发fast建议（显式传入本次问题）
         attachFastSuggestions(assistantMessage.id, response, currentInput);
+        // 自动保存会话
+        saveCurrentSession();
       } catch (error) {
         // 检查是否是用户主动中止
         if (error instanceof Error && error.name === 'AbortError') {
@@ -624,6 +751,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               abortControllerRef.current = null;
               attachFastSuggestions(assistantMessageId, content || '', editValue.trim());
               setEditValue('');
+              // 自动保存会话
+              saveCurrentSession();
             }
           },
           (error: string) => {
@@ -688,6 +817,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
         setMessages(prev => [...prev, assistantMessage]);
         attachFastSuggestions(assistantMessage.id, response, editValue.trim());
+        // 自动保存会话
+        saveCurrentSession();
       } catch (error) {
         // 检查是否是用户主动中止
         if (error instanceof Error && error.name === 'AbortError') {
@@ -771,6 +902,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsLoading(false);
               abortControllerRef.current = null;
               attachFastSuggestions(assistantMessageId, content || '', userMessage.content);
+              // 自动保存会话
+              saveCurrentSession();
             }
           },
           (error: string) => {
@@ -831,6 +964,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
         setMessages(prev => [...prev, assistantMessage]);
         attachFastSuggestions(assistantMessage.id, response, userMessage.content);
+        // 自动保存会话
+        saveCurrentSession();
       } catch (error) {
         // 检查是否是用户主动中止
         if (error instanceof Error && error.name === 'AbortError') {
@@ -861,6 +996,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     setShowClearConfirm(false);
     setEditingMessageId(null);
     setEditValue('');
+    // 清空对话时重置会话ID
+    setCurrentSessionId(null);
   };
 
   const handleCancelClear = () => {
@@ -1428,10 +1565,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 };
 
   return (
-    <div 
-      style={getStyles().container}
-      onTouchMove={handleContainerTouchMove}
-    >
+    <>
+      {/* 历史侧边栏 */}
+      <ChatHistorySidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        onSessionSelect={loadSession}
+        onNewChat={handleNewChat}
+        currentSessionId={currentSessionId}
+        isDarkMode={isDarkMode}
+      />
+      
+      <div 
+        style={getStyles().container}
+        onTouchMove={handleContainerTouchMove}
+      >
       {/* 添加旋转动画样式 */}
       <style>
         {`
@@ -1470,9 +1618,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           <h1 style={getStyles().headerTitle}>{appConfig.name}</h1>
           <p style={getStyles().headerSubtitle}>{appConfig.description}</p>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        </div>
         <div style={getStyles().headerActions}>
+          {/* 历史记录按钮 */}
+          <button
+            style={getStyles().actionButton}
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            onMouseEnter={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+            }}
+            onMouseLeave={(e) => {
+              Object.assign(e.currentTarget.style, getStyles().actionButton);
+            }}
+            title="历史记录"
+          >
+            <Menu size={18} />
+          </button>
           {appConfig.enableI18nButton && (
             <button
               style={getStyles().actionButton}
@@ -1869,7 +2029,37 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           onClose={() => setShowFeedbackAdmin(false)}
         />
       )}
-    </div>
+      </div>
+      
+      {/* 加载遮罩 */}
+      {isHistoryLoading && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000
+        }}>
+          <div style={{
+            backgroundColor: isDarkMode ? '#374151' : 'white',
+            padding: '24px 32px',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            color: isDarkMode ? '#f9fafb' : '#111827'
+          }}>
+            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
+            <span>加载中...</span>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

@@ -74,6 +74,11 @@ const FEEDBACK_DIR = process.env.FEEDBACK_DIR || './feedbacks';
 const FEEDBACK_PAGE_SIZE = parseInt(process.env.FEEDBACK_PAGE_SIZE || '20', 10);
 const ADMIN_USERS = (process.env.ADMIN_USERS || 'admin').split(',').map(u => u.trim());
 
+// 历史记录配置
+const CHAT_HISTORY_DIR = process.env.CHAT_HISTORY_DIR || './chat-history';
+const CHAT_HISTORY_PAGE_SIZE = parseInt(process.env.CHAT_HISTORY_PAGE_SIZE || '20', 10);
+const CHAT_HISTORY_AUTO_SAVE = process.env.CHAT_HISTORY_AUTO_SAVE !== 'false';
+
 // 统一日志工具
 const logger = {
   error: (...args) => {
@@ -996,6 +1001,521 @@ app.get('/api/feedback/:filename', authenticateToken, requireAdmin, async (req, 
     res.status(500).json({
       error: '获取反馈详情失败',
       code: 'FEEDBACK_DETAIL_ERROR',
+      details: error.message
+    });
+  }
+});
+
+// ==================== 历史记录系统API ====================
+
+/**
+ * 生成会话标题（基于第一条用户消息）
+ */
+function generateSessionTitle(messages) {
+  const firstUserMessage = messages.find(m => m.role === 'user' && !m.isWelcome);
+  if (!firstUserMessage || !firstUserMessage.content) {
+    return '新对话';
+  }
+  
+  const content = firstUserMessage.content.trim().replace(/\s+/g, ' ');
+  if (content.length <= 30) {
+    return content;
+  }
+  return content.slice(0, 30) + '...';
+}
+
+/**
+ * 生成会话预览文本
+ */
+function generateSessionPreview(messages) {
+  const firstUserMessage = messages.find(m => m.role === 'user' && !m.isWelcome);
+  if (!firstUserMessage || !firstUserMessage.content) {
+    return '';
+  }
+  
+  const content = firstUserMessage.content.trim().replace(/\s+/g, ' ');
+  if (content.length <= 50) {
+    return content;
+  }
+  return content.slice(0, 50) + '...';
+}
+
+/**
+ * 保存或更新会话
+ */
+app.post('/api/history/save', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId, messages } = req.body;
+    
+    // 验证参数
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({
+        error: '消息列表不能为空',
+        code: 'INVALID_MESSAGES'
+      });
+    }
+    
+    // 过滤欢迎消息
+    const validMessages = messages.filter(m => !m.isWelcome);
+    if (validMessages.length === 0) {
+      return res.status(400).json({
+        error: '没有有效的消息需要保存',
+        code: 'NO_VALID_MESSAGES'
+      });
+    }
+    
+    const userId = req.user?.userId || req.user?.name || 'anonymous';
+    const now = Date.now();
+    
+    // 确保用户历史目录存在
+    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
+    try {
+      await mkdir(userHistoryDir, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+    
+    // 生成或使用现有会话ID
+    let finalSessionId = sessionId;
+    let isNewSession = false;
+    
+    if (!finalSessionId) {
+      // 新建会话
+      const timestamp = now;
+      const randomId = Math.random().toString(36).substr(2, 9);
+      finalSessionId = `${timestamp}_${randomId}`;
+      isNewSession = true;
+    }
+    
+    // 检查会话是否存在（如果提供了sessionId）
+    const metadataPath = path.join(userHistoryDir, `${finalSessionId}_metadata.json`);
+    const messagesPath = path.join(userHistoryDir, `${finalSessionId}_messages.json`);
+    
+    let metadata;
+    let createdAt = now;
+    
+    if (!isNewSession && fs.existsSync(metadataPath)) {
+      // 更新现有会话
+      const existingMetadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+      createdAt = existingMetadata.createdAt;
+    } else {
+      isNewSession = true;
+    }
+    
+    // 生成会话标题和预览
+    const title = generateSessionTitle(validMessages);
+    const preview = generateSessionPreview(validMessages);
+    
+    // 构建元数据
+    metadata = {
+      id: finalSessionId,
+      userId: userId,
+      title: title,
+      createdAt: createdAt,
+      updatedAt: now,
+      messageCount: validMessages.length,
+      preview: preview
+    };
+    
+    // 保存文件
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+    await writeFile(messagesPath, JSON.stringify(validMessages, null, 2), 'utf8');
+    
+    logger.warn('[历史记录] 会话保存成功', {
+      user: userId,
+      sessionId: finalSessionId,
+      messageCount: validMessages.length,
+      isNew: isNewSession
+    });
+    
+    res.json({
+      success: true,
+      message: isNewSession ? '会话创建成功' : '会话更新成功',
+      session: metadata
+    });
+    
+  } catch (error) {
+    logger.error('[历史记录] 保存失败:', error.message);
+    res.status(500).json({
+      error: '保存会话失败',
+      code: 'HISTORY_SAVE_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 获取会话列表（分页）
+ */
+app.get('/api/history/list', authenticateToken, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page || '1', 10);
+    const pageSize = parseInt(req.query.pageSize || String(CHAT_HISTORY_PAGE_SIZE), 10);
+    
+    const userId = req.user?.userId || req.user?.name || 'anonymous';
+    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
+    
+    // 确保用户历史目录存在
+    try {
+      await mkdir(userHistoryDir, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+    
+    // 读取所有元数据文件
+    let files = await readdir(userHistoryDir);
+    files = files.filter(f => f.endsWith('_metadata.json'));
+    
+    // 读取所有元数据
+    const sessions = await Promise.all(
+      files.map(async (filename) => {
+        const filepath = path.join(userHistoryDir, filename);
+        try {
+          const content = await readFile(filepath, 'utf8');
+          return JSON.parse(content);
+        } catch (err) {
+          logger.warn('[历史记录] 读取元数据失败:', filename, err.message);
+          return null;
+        }
+      })
+    );
+    
+    // 过滤无效数据并按更新时间倒序排序
+    const validSessions = sessions.filter(s => s !== null);
+    validSessions.sort((a, b) => b.updatedAt - a.updatedAt);
+    
+    // 分页
+    const total = validSessions.length;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const items = validSessions.slice(start, end);
+    
+    logger.info('[历史记录] 列表查询成功', {
+      user: userId,
+      page: page,
+      pageSize: pageSize,
+      total: total,
+      returned: items.length
+    });
+    
+    res.json({
+      success: true,
+      data: items,
+      pagination: {
+        page: page,
+        pageSize: pageSize,
+        total: total,
+        totalPages: Math.ceil(total / pageSize),
+        hasMore: end < total
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[历史记录] 列表查询失败:', error.message);
+    res.status(500).json({
+      error: '获取会话列表失败',
+      code: 'HISTORY_LIST_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 获取会话详情
+ */
+app.get('/api/history/:sessionId', authenticateToken, async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    
+    // 安全检查
+    if (sessionId.includes('..') || sessionId.includes('/') || sessionId.includes('\\')) {
+      return res.status(400).json({
+        error: '无效的会话ID',
+        code: 'INVALID_SESSION_ID'
+      });
+    }
+    
+    const userId = req.user?.userId || req.user?.name || 'anonymous';
+    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
+    
+    const metadataPath = path.join(userHistoryDir, `${sessionId}_metadata.json`);
+    const messagesPath = path.join(userHistoryDir, `${sessionId}_messages.json`);
+    
+    // 检查文件是否存在
+    if (!fs.existsSync(metadataPath) || !fs.existsSync(messagesPath)) {
+      return res.status(404).json({
+        error: '会话不存在',
+        code: 'SESSION_NOT_FOUND'
+      });
+    }
+    
+    // 读取数据
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+    const messages = JSON.parse(await readFile(messagesPath, 'utf8'));
+    
+    logger.info('[历史记录] 详情查询成功', {
+      user: userId,
+      sessionId: sessionId
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        ...metadata,
+        messages: messages
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[历史记录] 详情查询失败:', error.message);
+    res.status(500).json({
+      error: '获取会话详情失败',
+      code: 'HISTORY_DETAIL_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 删除会话
+ */
+app.delete('/api/history/:sessionId', authenticateToken, async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    
+    // 安全检查
+    if (sessionId.includes('..') || sessionId.includes('/') || sessionId.includes('\\')) {
+      return res.status(400).json({
+        error: '无效的会话ID',
+        code: 'INVALID_SESSION_ID'
+      });
+    }
+    
+    const userId = req.user?.userId || req.user?.name || 'anonymous';
+    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
+    
+    const metadataPath = path.join(userHistoryDir, `${sessionId}_metadata.json`);
+    const messagesPath = path.join(userHistoryDir, `${sessionId}_messages.json`);
+    
+    // 检查文件是否存在
+    if (!fs.existsSync(metadataPath)) {
+      return res.status(404).json({
+        error: '会话不存在',
+        code: 'SESSION_NOT_FOUND'
+      });
+    }
+    
+    // 删除文件
+    try {
+      if (fs.existsSync(metadataPath)) {
+        fs.unlinkSync(metadataPath);
+      }
+      if (fs.existsSync(messagesPath)) {
+        fs.unlinkSync(messagesPath);
+      }
+    } catch (err) {
+      throw new Error(`删除文件失败: ${err.message}`);
+    }
+    
+    logger.warn('[历史记录] 会话删除成功', {
+      user: userId,
+      sessionId: sessionId
+    });
+    
+    res.json({
+      success: true,
+      message: '会话删除成功'
+    });
+    
+  } catch (error) {
+    logger.error('[历史记录] 删除失败:', error.message);
+    res.status(500).json({
+      error: '删除会话失败',
+      code: 'HISTORY_DELETE_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 更新会话标题
+ */
+app.put('/api/history/:sessionId/title', authenticateToken, async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const { title } = req.body;
+    
+    // 验证参数
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({
+        error: '标题不能为空',
+        code: 'INVALID_TITLE'
+      });
+    }
+    
+    // 安全检查
+    if (sessionId.includes('..') || sessionId.includes('/') || sessionId.includes('\\')) {
+      return res.status(400).json({
+        error: '无效的会话ID',
+        code: 'INVALID_SESSION_ID'
+      });
+    }
+    
+    const userId = req.user?.userId || req.user?.name || 'anonymous';
+    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
+    
+    const metadataPath = path.join(userHistoryDir, `${sessionId}_metadata.json`);
+    
+    // 检查文件是否存在
+    if (!fs.existsSync(metadataPath)) {
+      return res.status(404).json({
+        error: '会话不存在',
+        code: 'SESSION_NOT_FOUND'
+      });
+    }
+    
+    // 读取并更新元数据
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+    metadata.title = title.trim();
+    metadata.updatedAt = Date.now();
+    
+    // 保存
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+    
+    logger.info('[历史记录] 标题更新成功', {
+      user: userId,
+      sessionId: sessionId,
+      newTitle: title.trim()
+    });
+    
+    res.json({
+      success: true,
+      message: '标题更新成功',
+      session: metadata
+    });
+    
+  } catch (error) {
+    logger.error('[历史记录] 标题更新失败:', error.message);
+    res.status(500).json({
+      error: '更新标题失败',
+      code: 'HISTORY_TITLE_UPDATE_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * 搜索会话（全文搜索）
+ */
+app.get('/api/history/search', authenticateToken, async (req, res) => {
+  try {
+    const keyword = req.query.keyword || '';
+    const page = parseInt(req.query.page || '1', 10);
+    const pageSize = parseInt(req.query.pageSize || String(CHAT_HISTORY_PAGE_SIZE), 10);
+    
+    if (!keyword || keyword.trim().length === 0) {
+      return res.status(400).json({
+        error: '搜索关键词不能为空',
+        code: 'INVALID_KEYWORD'
+      });
+    }
+    
+    const userId = req.user?.userId || req.user?.name || 'anonymous';
+    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
+    
+    // 确保用户历史目录存在
+    try {
+      await mkdir(userHistoryDir, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+    
+    // 读取所有元数据文件
+    let files = await readdir(userHistoryDir);
+    files = files.filter(f => f.endsWith('_metadata.json'));
+    
+    const searchKeywordLower = keyword.trim().toLowerCase();
+    const matchedSessions = [];
+    
+    // 搜索所有会话
+    for (const filename of files) {
+      const sessionId = filename.replace('_metadata.json', '');
+      const metadataPath = path.join(userHistoryDir, filename);
+      const messagesPath = path.join(userHistoryDir, `${sessionId}_messages.json`);
+      
+      try {
+        const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+        
+        // 搜索标题
+        if (metadata.title && metadata.title.toLowerCase().includes(searchKeywordLower)) {
+          matchedSessions.push({ session: metadata, relevance: 2 }); // 标题匹配优先级高
+          continue;
+        }
+        
+        // 搜索消息内容
+        if (fs.existsSync(messagesPath)) {
+          const messages = JSON.parse(await readFile(messagesPath, 'utf8'));
+          const hasMatch = messages.some(msg => 
+            msg.content && msg.content.toLowerCase().includes(searchKeywordLower)
+          );
+          
+          if (hasMatch) {
+            matchedSessions.push({ session: metadata, relevance: 1 }); // 内容匹配优先级低
+          }
+        }
+      } catch (err) {
+        logger.warn('[历史记录] 搜索时读取文件失败:', filename, err.message);
+      }
+    }
+    
+    // 按相关度和更新时间排序
+    matchedSessions.sort((a, b) => {
+      if (a.relevance !== b.relevance) {
+        return b.relevance - a.relevance;
+      }
+      return b.session.updatedAt - a.session.updatedAt;
+    });
+    
+    const sessions = matchedSessions.map(m => m.session);
+    
+    // 分页
+    const total = sessions.length;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const items = sessions.slice(start, end);
+    
+    logger.info('[历史记录] 搜索成功', {
+      user: userId,
+      keyword: keyword,
+      page: page,
+      pageSize: pageSize,
+      total: total,
+      returned: items.length
+    });
+    
+    res.json({
+      success: true,
+      data: items,
+      pagination: {
+        page: page,
+        pageSize: pageSize,
+        total: total,
+        totalPages: Math.ceil(total / pageSize),
+        hasMore: end < total
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[历史记录] 搜索失败:', error.message);
+    res.status(500).json({
+      error: '搜索会话失败',
+      code: 'HISTORY_SEARCH_ERROR',
       details: error.message
     });
   }

@@ -5,7 +5,12 @@ import {
   ChatError, 
   StreamChunk,
   FeedbackListResponse,
-  FeedbackDetailResponse
+  FeedbackDetailResponse,
+  ChatSession,
+  ChatSessionDetail,
+  ChatHistoryListResponse,
+  ChatHistorySaveResponse,
+  ChatHistoryDeleteResponse
 } from '@/types';
 import { authService } from './auth';
 
@@ -13,6 +18,7 @@ class ChatAPI {
   private readonly apiUrl = '/api/chat';
   private readonly suggestUrl = '/api/fast/suggest';
   private readonly feedbackUrl = '/api/feedback';
+  private readonly historyUrl = '/api/history';
   private currentAbortController: AbortController | null = null;
 
   /**
@@ -323,6 +329,187 @@ class ChatAPI {
       return data;
     } catch (error) {
       console.error('[前端API-反馈详情] 获取错误:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 保存当前会话
+   */
+  async saveSession(
+    sessionId: string | null,
+    messages: ChatMessage[]
+  ): Promise<ChatSession> {
+    try {
+      console.log('[前端API-历史] 保存会话', { sessionId, messageCount: messages.length });
+
+      const response = await fetch(`${this.historyUrl}/save`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          sessionId,
+          messages
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`保存会话失败: ${errorData.error}`);
+      }
+
+      const data: ChatHistorySaveResponse = await response.json();
+      console.log('[前端API-历史] 保存成功', data.session.id);
+
+      return data.session;
+    } catch (error) {
+      console.error('[前端API-历史] 保存错误:', error);
+      throw new Error('保存会话失败，请稍后重试');
+    }
+  }
+
+  /**
+   * 获取会话列表
+   */
+  async getSessionList(
+    page: number = 1,
+    pageSize: number = 20
+  ): Promise<ChatHistoryListResponse> {
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize)
+      });
+
+      const response = await fetch(`${this.historyUrl}/list?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`获取会话列表失败: ${errorData.error}`);
+      }
+
+      const data: ChatHistoryListResponse = await response.json();
+      console.log('[前端API-历史] 获取列表成功', { total: data.pagination.total });
+
+      return data;
+    } catch (error) {
+      console.error('[前端API-历史] 获取列表错误:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取会话详情
+   */
+  async getSessionDetail(sessionId: string): Promise<ChatSessionDetail> {
+    try {
+      const response = await fetch(`${this.historyUrl}/${sessionId}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`获取会话详情失败: ${errorData.error}`);
+      }
+
+      const result = await response.json();
+      console.log('[前端API-历史] 获取详情成功', sessionId);
+
+      return result.data;
+    } catch (error) {
+      console.error('[前端API-历史] 获取详情错误:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 删除会话
+   */
+  async deleteSession(sessionId: string): Promise<{ success: boolean }> {
+    try {
+      const response = await fetch(`${this.historyUrl}/${sessionId}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`删除会话失败: ${errorData.error}`);
+      }
+
+      const data: ChatHistoryDeleteResponse = await response.json();
+      console.log('[前端API-历史] 删除成功', sessionId);
+
+      return { success: data.success };
+    } catch (error) {
+      console.error('[前端API-历史] 删除错误:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 搜索会话
+   */
+  async searchSessions(
+    keyword: string,
+    page: number = 1,
+    pageSize: number = 20
+  ): Promise<ChatHistoryListResponse> {
+    try {
+      const params = new URLSearchParams({
+        keyword,
+        page: String(page),
+        pageSize: String(pageSize)
+      });
+
+      const response = await fetch(`${this.historyUrl}/search?${params}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`搜索会话失败: ${errorData.error}`);
+      }
+
+      const data: ChatHistoryListResponse = await response.json();
+      console.log('[前端API-历史] 搜索成功', { keyword, total: data.pagination.total });
+
+      return data;
+    } catch (error) {
+      console.error('[前端API-历史] 搜索错误:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 更新会话标题
+   */
+  async updateSessionTitle(
+    sessionId: string,
+    title: string
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await fetch(`${this.historyUrl}/${sessionId}/title`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ title })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`更新标题失败: ${errorData.error}`);
+      }
+
+      const data = await response.json();
+      console.log('[前端API-历史] 标题更新成功', sessionId);
+
+      return { success: data.success };
+    } catch (error) {
+      console.error('[前端API-历史] 更新标题错误:', error);
       throw error;
     }
   }
