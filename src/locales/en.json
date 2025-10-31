@@ -9,6 +9,7 @@
     "inputPlaceholder": "Enter your question...",
     "loading": "AI is thinking...",
     "send": "Send",
+    "stop": "Stop",
     "clear": "Clear Chat",
     "copy": "Copy Message",
     "edit": "Edit Question",
@@ -21,6 +22,7 @@
     "switchLanguage": "Switch Language",
     "confirm": "Confirm",
     "cancel": "Cancel",
+    "cancelled": "Cancelled",
     "editPlaceholder": "Modify your question..."
   },
   "messages": {

@@ -10,6 +10,18 @@ import { authService } from './auth';
 class ChatAPI {
   private readonly apiUrl = '/api/chat';
   private readonly suggestUrl = '/api/fast/suggest';
+  private currentAbortController: AbortController | null = null;
+
+  /**
+   * 中止当前请求
+   */
+  abortCurrentRequest(): void {
+    if (this.currentAbortController) {
+      console.log('[前端API] 中止当前请求');
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
+  }
 
   /**
    * 获取认证header
@@ -45,10 +57,14 @@ class ChatAPI {
     }
   }
 
-  async sendMessage(message: string, contextMessages: ChatMessage[] = []): Promise<string> {
+  async sendMessage(message: string, contextMessages: ChatMessage[] = [], signal?: AbortSignal): Promise<string> {
     try {
       console.log(`[前端API] 发送消息: ${message}`);
       console.log(`[前端API] 上下文消息数量: ${contextMessages.length}`);
+
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      this.currentAbortController = abortController;
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
@@ -57,7 +73,8 @@ class ChatAPI {
           message: message,
           contextMessages: contextMessages,
           stream: false
-        })
+        }),
+        signal: signal || abortController.signal
       });
 
       if (!response.ok) {
@@ -70,8 +87,15 @@ class ChatAPI {
 
       return data.message;
     } catch (error) {
+      // 检查是否是用户主动中止
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('[前端API] 请求已被中止');
+        throw error;
+      }
       console.error('[前端API] 调用错误:', error);
       throw new Error('发送消息失败，请稍后重试');
+    } finally {
+      this.currentAbortController = null;
     }
   }
 
@@ -79,11 +103,16 @@ class ChatAPI {
     message: string, 
     contextMessages: ChatMessage[] = [],
     onChunk: (content: string, done: boolean) => void,
-    onError?: (error: string) => void
+    onError?: (error: string) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     try {
       console.log(`[前端API-流式] 发送消息: ${message}`);
       console.log(`[前端API-流式] 上下文消息数量: ${contextMessages.length}`);
+
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      this.currentAbortController = abortController;
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
@@ -92,7 +121,8 @@ class ChatAPI {
           message: message,
           contextMessages: contextMessages,
           stream: true
-        })
+        }),
+        signal: signal || abortController.signal
       });
 
       if (!response.ok) {
@@ -184,9 +214,17 @@ class ChatAPI {
       }
 
     } catch (error) {
+      // 检查是否是用户主动中止
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('[前端API-流式] 请求已被中止');
+        onError?.('请求已取消');
+        return;
+      }
       console.error('[前端API-流式] 调用错误:', error);
       const errorMessage = error instanceof Error ? error.message : '发送消息失败，请稍后重试';
       onError?.(errorMessage);
+    } finally {
+      this.currentAbortController = null;
     }
   }
 }

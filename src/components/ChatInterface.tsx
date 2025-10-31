@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut } from 'lucide-react';
+import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatAPI } from '@/services/api';
@@ -42,6 +42,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const hasAddedStreamingMessageRef = useRef(false);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const touchStartY = useRef<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -188,7 +189,52 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     }
   };
 
+  // 停止当前请求
+  const handleStopRequest = () => {
+    if (abortControllerRef.current) {
+      console.log('[UI] 用户请求中止');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    // 使用 chatAPI 的中止方法作为备用
+    chatAPI.abortCurrentRequest();
+    
+    // 找到最后一条用户消息，恢复到输入框
+    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMessage) {
+      setInputValue(lastUserMessage.content);
+      // 删除最后一条用户消息和未完成的 AI 消息（如果存在）
+      setMessages(prev => {
+        const lastUserIndex = prev.findIndex(m => m.id === lastUserMessage.id);
+        if (lastUserIndex !== -1) {
+          // 删除从该用户消息开始的所有后续消息（包括用户消息和未完成的 AI 回复）
+          return prev.slice(0, lastUserIndex);
+        }
+        return prev;
+      });
+    }
+    
+    // 重置所有加载状态
+    setIsLoading(false);
+    setStreamingMessageId(null);
+    setIsStreamingThinking(false);
+    hasAddedStreamingMessageRef.current = false;
+    
+    // 清除编辑状态（如果有）
+    setEditingMessageId(null);
+    setEditValue('');
+  };
+
   const handleExampleClick = async (question: string) => {
+    // 如果正在加载，禁止点击
+    if (isLoading) {
+      console.log('[UI] 正在加载中，禁止点击建议问题');
+      return;
+    }
+    
+    // 清空输入框
+    setInputValue('');
+    
     // 保留示例问题显示：不再隐藏
     setIsLoading(true);
 
@@ -214,6 +260,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       setStreamingMessageId(assistantMessageId);
       setIsStreamingThinking(true);
       hasAddedStreamingMessageRef.current = false;
+
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
 
       try {
         await chatAPI.sendMessageStream(
@@ -241,29 +291,57 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
+              abortControllerRef.current = null;
               // 回答完成后触发fast建议（显式传入本次问题以避免读取到旧问题）
               attachFastSuggestions(assistantMessageId, incrementalContent || '', question);
             }
           },
           (error: string) => {
+            // 检查是否是用户中止
+            if (error === '请求已取消') {
+              console.log('[UI] 请求已被用户取消');
+              setIsStreamingThinking(false);
+              setStreamingMessageId(null);
+              hasAddedStreamingMessageRef.current = false;
+              setIsLoading(false);
+              abortControllerRef.current = null;
+              return;
+            }
             setIsStreamingThinking(false);
             setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
             setStreamingMessageId(null);
             hasAddedStreamingMessageRef.current = false;
             setIsLoading(false);
-          }
+            abortControllerRef.current = null;
+          },
+          abortController.signal
         );
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          setIsStreamingThinking(false);
+          setStreamingMessageId(null);
+          hasAddedStreamingMessageRef.current = false;
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          return;
+        }
         setIsStreamingThinking(false);
         setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
         setStreamingMessageId(null);
         hasAddedStreamingMessageRef.current = false;
         setIsLoading(false);
+        abortControllerRef.current = null;
       }
     } else {
       // 非流式传输模式
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
-        const response = await chatAPI.sendMessage(question, messages);
+        const response = await chatAPI.sendMessage(question, messages, abortController.signal);
         
         const assistantMessage: ChatMessage = {
           id: generateId(),
@@ -276,6 +354,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         // 非流式也触发fast建议（显式传入本次问题）
         attachFastSuggestions(assistantMessage.id, response, question);
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          return;
+        }
         const errorMessage: ChatMessage = {
           id: generateId(),
           role: 'assistant',
@@ -285,6 +368,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, errorMessage]);
       } finally {
         setIsLoading(false);
+        abortControllerRef.current = null;
       }
     }
   };
@@ -319,6 +403,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       setIsStreamingThinking(true);
       hasAddedStreamingMessageRef.current = false;
 
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
         await chatAPI.sendMessageStream(
           currentInput,
@@ -345,31 +433,59 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
+              abortControllerRef.current = null;
               // 回答完成后触发fast建议（显式传入本次问题）
               attachFastSuggestions(assistantMessageId, content || '', currentInput);
             }
           },
           (error: string) => {
+            // 检查是否是用户中止
+            if (error === '请求已取消') {
+              console.log('[UI] 请求已被用户取消');
+              setIsStreamingThinking(false);
+              setStreamingMessageId(null);
+              hasAddedStreamingMessageRef.current = false;
+              setIsLoading(false);
+              abortControllerRef.current = null;
+              return;
+            }
             // 错误处理：停止思考状态并添加错误消息
             setIsStreamingThinking(false);
             setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
             setStreamingMessageId(null);
             hasAddedStreamingMessageRef.current = false;
             setIsLoading(false);
-          }
+            abortControllerRef.current = null;
+          },
+          abortController.signal
         );
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          setIsStreamingThinking(false);
+          setStreamingMessageId(null);
+          hasAddedStreamingMessageRef.current = false;
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          return;
+        }
         // 异常处理：停止思考状态并添加错误消息
         setIsStreamingThinking(false);
         setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
         setStreamingMessageId(null);
         hasAddedStreamingMessageRef.current = false;
         setIsLoading(false);
+        abortControllerRef.current = null;
       }
     } else {
       // 非流式传输模式
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
-        const response = await chatAPI.sendMessage(currentInput, messages);
+        const response = await chatAPI.sendMessage(currentInput, messages, abortController.signal);
         
         const assistantMessage: ChatMessage = {
           id: generateId(),
@@ -382,6 +498,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         // 非流式也触发fast建议（显式传入本次问题）
         attachFastSuggestions(assistantMessage.id, response, currentInput);
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          return;
+        }
         const errorMessage: ChatMessage = {
           id: generateId(),
           role: 'assistant',
@@ -391,6 +512,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, errorMessage]);
       } finally {
         setIsLoading(false);
+        abortControllerRef.current = null;
       }
     }
   };
@@ -450,6 +572,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       setIsStreamingThinking(true);
       hasAddedStreamingMessageRef.current = false;
 
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
         await chatAPI.sendMessageStream(
           editValue.trim(),
@@ -476,33 +602,63 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
+              abortControllerRef.current = null;
               attachFastSuggestions(assistantMessageId, content || '', editValue.trim());
               setEditValue('');
             }
           },
           (error: string) => {
+            // 检查是否是用户中止
+            if (error === '请求已取消') {
+              console.log('[UI] 请求已被用户取消');
+              setIsStreamingThinking(false);
+              setStreamingMessageId(null);
+              hasAddedStreamingMessageRef.current = false;
+              setIsLoading(false);
+              abortControllerRef.current = null;
+              setEditValue('');
+              return;
+            }
             // 错误处理：停止思考状态并添加错误消息
             setIsStreamingThinking(false);
             setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
             setStreamingMessageId(null);
             hasAddedStreamingMessageRef.current = false;
             setIsLoading(false);
+            abortControllerRef.current = null;
             setEditValue('');
-          }
+          },
+          abortController.signal
         );
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          setIsStreamingThinking(false);
+          setStreamingMessageId(null);
+          hasAddedStreamingMessageRef.current = false;
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          setEditValue('');
+          return;
+        }
         // 异常处理：停止思考状态并添加错误消息
         setIsStreamingThinking(false);
         setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
         setStreamingMessageId(null);
         hasAddedStreamingMessageRef.current = false;
         setIsLoading(false);
+        abortControllerRef.current = null;
         setEditValue('');
       }
     } else {
       // 非流式传输模式
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
-        const response = await chatAPI.sendMessage(editValue.trim(), newMessages);
+        const response = await chatAPI.sendMessage(editValue.trim(), newMessages, abortController.signal);
         
         const assistantMessage: ChatMessage = {
           id: generateId(),
@@ -514,6 +670,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, assistantMessage]);
         attachFastSuggestions(assistantMessage.id, response, editValue.trim());
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          return;
+        }
         const errorMessage: ChatMessage = {
           id: generateId(),
           role: 'assistant',
@@ -523,6 +684,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, errorMessage]);
       } finally {
         setIsLoading(false);
+        abortControllerRef.current = null;
         setEditValue('');
       }
     }
@@ -558,6 +720,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       setIsStreamingThinking(true);
       hasAddedStreamingMessageRef.current = false;
 
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
         await chatAPI.sendMessageStream(
           userMessage.content,
@@ -584,30 +750,58 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               setIsStreamingThinking(false);
               hasAddedStreamingMessageRef.current = false;
               setIsLoading(false);
+              abortControllerRef.current = null;
               attachFastSuggestions(assistantMessageId, content || '', userMessage.content);
             }
           },
           (error: string) => {
+            // 检查是否是用户中止
+            if (error === '请求已取消') {
+              console.log('[UI] 请求已被用户取消');
+              setIsStreamingThinking(false);
+              setStreamingMessageId(null);
+              hasAddedStreamingMessageRef.current = false;
+              setIsLoading(false);
+              abortControllerRef.current = null;
+              return;
+            }
             // 错误处理：停止思考状态并添加错误消息
             setIsStreamingThinking(false);
             setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
             setStreamingMessageId(null);
             hasAddedStreamingMessageRef.current = false;
             setIsLoading(false);
-          }
+            abortControllerRef.current = null;
+          },
+          abortController.signal
         );
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          setIsStreamingThinking(false);
+          setStreamingMessageId(null);
+          hasAddedStreamingMessageRef.current = false;
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          return;
+        }
         // 异常处理：停止思考状态并添加错误消息
         setIsStreamingThinking(false);
         setMessages(prev => [...prev, { ...assistantMessage, content: t('messages.errorMessage') }]);
         setStreamingMessageId(null);
         hasAddedStreamingMessageRef.current = false;
         setIsLoading(false);
+        abortControllerRef.current = null;
       }
     } else {
       // 非流式传输模式
+      // 创建新的 AbortController
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
-        const response = await chatAPI.sendMessage(userMessage.content, newMessages);
+        const response = await chatAPI.sendMessage(userMessage.content, newMessages, abortController.signal);
         
         const assistantMessage: ChatMessage = {
           id: generateId(),
@@ -619,6 +813,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, assistantMessage]);
         attachFastSuggestions(assistantMessage.id, response, userMessage.content);
       } catch (error) {
+        // 检查是否是用户主动中止
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.log('[UI] 请求已被用户取消');
+          return;
+        }
         const errorMessage: ChatMessage = {
           id: generateId(),
           role: 'assistant',
@@ -628,6 +827,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setMessages(prev => [...prev, errorMessage]);
       } finally {
         setIsLoading(false);
+        abortControllerRef.current = null;
       }
     }
   };
@@ -1172,6 +1372,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     exampleQuestionButtonHover: {
       backgroundColor: isDark ? '#4b5563' : '#e5e7eb',
       borderColor: '#3b82f6'
+    },
+    exampleQuestionButtonDisabled: {
+      padding: '12px 16px',
+      backgroundColor: isDark ? '#1f2937' : '#f9fafb',
+      border: `1px solid ${borderColor}`,
+      borderRadius: '8px',
+      cursor: 'not-allowed',
+      textAlign: 'left' as const,
+      color: isDark ? '#4b5563' : '#9ca3af',
+      fontSize: '16px',
+      opacity: 0.5,
+      transition: 'all 0.2s ease'
+    },
+    stopButton: {
+      backgroundColor: '#ef4444',
+      color: 'white'
     }
   };
 };
@@ -1416,10 +1632,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                       {message.suggestedQuestions.slice(0, appConfig.fastSuggestDefaultCount).map((q, idx) => (
                         <button
                           key={idx}
-                          style={getStyles().exampleQuestionButton}
+                          disabled={isLoading}
+                          style={isLoading ? getStyles().exampleQuestionButtonDisabled : getStyles().exampleQuestionButton}
                           onClick={() => handleExampleClick(q)}
-                          onMouseEnter={(e) => { Object.assign(e.currentTarget.style, getStyles().exampleQuestionButtonHover); }}
-                          onMouseLeave={(e) => { Object.assign(e.currentTarget.style, getStyles().exampleQuestionButton); }}
+                          onMouseEnter={(e) => { 
+                            if (!isLoading) {
+                              Object.assign(e.currentTarget.style, getStyles().exampleQuestionButtonHover);
+                            }
+                          }}
+                          onMouseLeave={(e) => { 
+                            if (!isLoading) {
+                              Object.assign(e.currentTarget.style, getStyles().exampleQuestionButton);
+                            }
+                          }}
                           title={q}
                         >
                           {q}
@@ -1558,24 +1783,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             rows={1}
           />
           <button
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isLoading}
+            onClick={isLoading ? handleStopRequest : handleSendMessage}
+            disabled={!isLoading && !inputValue.trim()}
             style={{
               ...getStyles().sendButton,
-              ...((!inputValue.trim() || isLoading) ? getStyles().sendButtonDisabled : {})
+              ...(isLoading ? getStyles().stopButton : {}),
+              ...(!isLoading && !inputValue.trim() ? getStyles().sendButtonDisabled : {})
             }}
             onMouseEnter={(e) => {
-              if (!(!inputValue.trim() || isLoading)) {
+              if (isLoading) {
+                e.currentTarget.style.backgroundColor = '#dc2626';
+              } else if (inputValue.trim()) {
                 e.currentTarget.style.backgroundColor = '#2563eb';
               }
             }}
             onMouseLeave={(e) => {
-              if (!(!inputValue.trim() || isLoading)) {
+              if (isLoading) {
+                e.currentTarget.style.backgroundColor = '#ef4444';
+              } else if (inputValue.trim()) {
                 e.currentTarget.style.backgroundColor = '#3b82f6';
               }
             }}
+            title={isLoading ? t('ui.stop') : t('ui.send')}
           >
-            <Send size={20} />
+            {isLoading ? <Square size={20} /> : <Send size={20} />}
           </button>
         </div>
       </div>
