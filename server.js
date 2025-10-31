@@ -1225,6 +1225,120 @@ app.get('/api/history/list', authenticateToken, async (req, res) => {
 });
 
 /**
+ * 搜索会话（全文搜索）
+ * 注意：必须在动态路由 /:sessionId 之前定义，否则会被拦截
+ */
+app.get('/api/history/search', authenticateToken, async (req, res) => {
+  try {
+    const keyword = req.query.keyword || '';
+    const page = parseInt(req.query.page || '1', 10);
+    const pageSize = parseInt(req.query.pageSize || String(CHAT_HISTORY_PAGE_SIZE), 10);
+    
+    if (!keyword || keyword.trim().length === 0) {
+      return res.status(400).json({
+        error: '搜索关键词不能为空',
+        code: 'INVALID_KEYWORD'
+      });
+    }
+    
+    const userId = req.user?.userId || req.user?.name || 'anonymous';
+    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
+    
+    // 确保用户历史目录存在
+    try {
+      await mkdir(userHistoryDir, { recursive: true });
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        throw err;
+      }
+    }
+    
+    // 读取所有元数据文件
+    let files = await readdir(userHistoryDir);
+    files = files.filter(f => f.endsWith('_metadata.json'));
+    
+    const searchKeywordLower = keyword.trim().toLowerCase();
+    const matchedSessions = [];
+    
+    // 搜索所有会话
+    for (const filename of files) {
+      const sessionId = filename.replace('_metadata.json', '');
+      const metadataPath = path.join(userHistoryDir, filename);
+      const messagesPath = path.join(userHistoryDir, `${sessionId}_messages.json`);
+      
+      try {
+        const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+        
+        // 搜索标题
+        if (metadata.title && metadata.title.toLowerCase().includes(searchKeywordLower)) {
+          matchedSessions.push({ session: metadata, relevance: 2 }); // 标题匹配优先级高
+          continue;
+        }
+        
+        // 搜索消息内容
+        if (fs.existsSync(messagesPath)) {
+          const messages = JSON.parse(await readFile(messagesPath, 'utf8'));
+          const hasMatch = messages.some(msg => 
+            msg.content && msg.content.toLowerCase().includes(searchKeywordLower)
+          );
+          
+          if (hasMatch) {
+            matchedSessions.push({ session: metadata, relevance: 1 }); // 内容匹配优先级低
+          }
+        }
+      } catch (err) {
+        logger.warn('[历史记录] 搜索时读取文件失败:', filename, err.message);
+      }
+    }
+    
+    // 按相关度和更新时间排序
+    matchedSessions.sort((a, b) => {
+      if (a.relevance !== b.relevance) {
+        return b.relevance - a.relevance;
+      }
+      return b.session.updatedAt - a.session.updatedAt;
+    });
+    
+    const sessions = matchedSessions.map(m => m.session);
+    
+    // 分页
+    const total = sessions.length;
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    const items = sessions.slice(start, end);
+    
+    logger.info('[历史记录] 搜索成功', {
+      user: userId,
+      keyword: keyword,
+      page: page,
+      pageSize: pageSize,
+      total: total,
+      returned: items.length
+    });
+    
+    res.json({
+      success: true,
+      data: items,
+      pagination: {
+        page: page,
+        pageSize: pageSize,
+        total: total,
+        totalPages: Math.ceil(total / pageSize),
+        hasMore: end < total
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[历史记录] 搜索失败:', error.message);
+    res.status(500).json({
+      error: '搜索会话失败',
+      code: 'HISTORY_SEARCH_ERROR',
+      details: error.message
+    });
+  }
+});
+
+/**
  * 获取会话详情
  */
 app.get('/api/history/:sessionId', authenticateToken, async (req, res) => {
@@ -1403,119 +1517,6 @@ app.put('/api/history/:sessionId/title', authenticateToken, async (req, res) => 
     res.status(500).json({
       error: '更新标题失败',
       code: 'HISTORY_TITLE_UPDATE_ERROR',
-      details: error.message
-    });
-  }
-});
-
-/**
- * 搜索会话（全文搜索）
- */
-app.get('/api/history/search', authenticateToken, async (req, res) => {
-  try {
-    const keyword = req.query.keyword || '';
-    const page = parseInt(req.query.page || '1', 10);
-    const pageSize = parseInt(req.query.pageSize || String(CHAT_HISTORY_PAGE_SIZE), 10);
-    
-    if (!keyword || keyword.trim().length === 0) {
-      return res.status(400).json({
-        error: '搜索关键词不能为空',
-        code: 'INVALID_KEYWORD'
-      });
-    }
-    
-    const userId = req.user?.userId || req.user?.name || 'anonymous';
-    const userHistoryDir = path.join(CHAT_HISTORY_DIR, userId);
-    
-    // 确保用户历史目录存在
-    try {
-      await mkdir(userHistoryDir, { recursive: true });
-    } catch (err) {
-      if (err.code !== 'EEXIST') {
-        throw err;
-      }
-    }
-    
-    // 读取所有元数据文件
-    let files = await readdir(userHistoryDir);
-    files = files.filter(f => f.endsWith('_metadata.json'));
-    
-    const searchKeywordLower = keyword.trim().toLowerCase();
-    const matchedSessions = [];
-    
-    // 搜索所有会话
-    for (const filename of files) {
-      const sessionId = filename.replace('_metadata.json', '');
-      const metadataPath = path.join(userHistoryDir, filename);
-      const messagesPath = path.join(userHistoryDir, `${sessionId}_messages.json`);
-      
-      try {
-        const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
-        
-        // 搜索标题
-        if (metadata.title && metadata.title.toLowerCase().includes(searchKeywordLower)) {
-          matchedSessions.push({ session: metadata, relevance: 2 }); // 标题匹配优先级高
-          continue;
-        }
-        
-        // 搜索消息内容
-        if (fs.existsSync(messagesPath)) {
-          const messages = JSON.parse(await readFile(messagesPath, 'utf8'));
-          const hasMatch = messages.some(msg => 
-            msg.content && msg.content.toLowerCase().includes(searchKeywordLower)
-          );
-          
-          if (hasMatch) {
-            matchedSessions.push({ session: metadata, relevance: 1 }); // 内容匹配优先级低
-          }
-        }
-      } catch (err) {
-        logger.warn('[历史记录] 搜索时读取文件失败:', filename, err.message);
-      }
-    }
-    
-    // 按相关度和更新时间排序
-    matchedSessions.sort((a, b) => {
-      if (a.relevance !== b.relevance) {
-        return b.relevance - a.relevance;
-      }
-      return b.session.updatedAt - a.session.updatedAt;
-    });
-    
-    const sessions = matchedSessions.map(m => m.session);
-    
-    // 分页
-    const total = sessions.length;
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const items = sessions.slice(start, end);
-    
-    logger.info('[历史记录] 搜索成功', {
-      user: userId,
-      keyword: keyword,
-      page: page,
-      pageSize: pageSize,
-      total: total,
-      returned: items.length
-    });
-    
-    res.json({
-      success: true,
-      data: items,
-      pagination: {
-        page: page,
-        pageSize: pageSize,
-        total: total,
-        totalPages: Math.ceil(total / pageSize),
-        hasMore: end < total
-      }
-    });
-    
-  } catch (error) {
-    logger.error('[历史记录] 搜索失败:', error.message);
-    res.status(500).json({
-      error: '搜索会话失败',
-      code: 'HISTORY_SEARCH_ERROR',
       details: error.message
     });
   }
