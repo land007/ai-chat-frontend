@@ -10,7 +10,7 @@ import {
   ChatMessage, 
   ChatInterfaceProps
 } from '@/types';
-import { generateId } from '@/utils';
+import { generateId, copyToClipboard } from '@/utils';
 import 'highlight.js/styles/github.css';
 
 // 随机选择数组中的n个元素
@@ -58,6 +58,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  
+  // 复制反馈状态
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // 检查是否是管理员用户
   const isAdmin = user?.userId && adminUsers.includes(user.userId);
@@ -1016,14 +1020,38 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   };
 
   // 复制消息
-  const handleCopyMessage = async (content: string) => {
+  const handleCopyMessage = async (messageId: string, content: string) => {
     try {
-      await navigator.clipboard.writeText(content);
-      console.log(t('messages.copySuccess'));
+      const success = await copyToClipboard(content);
+      if (success) {
+        // 清除之前的定时器（如果有）
+        if (copyTimerRef.current) {
+          clearTimeout(copyTimerRef.current);
+        }
+        // 设置复制成功状态
+        setCopiedMessageId(messageId);
+        console.log('[复制] 消息已复制到剪贴板', messageId);
+        // 2秒后自动恢复
+        copyTimerRef.current = setTimeout(() => {
+          setCopiedMessageId(null);
+          copyTimerRef.current = null;
+        }, 2000);
+      } else {
+        console.error('[复制] 复制失败', messageId);
+      }
     } catch (error) {
-      console.error(t('messages.copyError'), error);
+      console.error('[复制] 复制错误:', error, messageId);
     }
   };
+  
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   // 消息反馈
   const handleMessageFeedback = async (messageId: string, feedback: 'like' | 'dislike') => {
@@ -1771,17 +1799,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   {message.role === 'assistant' && (
                     <div style={getStyles().messageActions}>
                       <button
-                        style={getStyles().actionButton}
-                        onClick={() => handleCopyMessage(message.content)}
+                        style={{
+                          ...getStyles().actionButton,
+                          ...(copiedMessageId === message.id ? { color: '#10b981' } : {})
+                        }}
+                        onClick={() => handleCopyMessage(message.id, message.content)}
                         onMouseEnter={(e) => {
-                          Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+                          if (copiedMessageId !== message.id) {
+                            Object.assign(e.currentTarget.style, getStyles().actionButtonHover);
+                          }
                         }}
                         onMouseLeave={(e) => {
-                          Object.assign(e.currentTarget.style, getStyles().actionButton);
+                          if (copiedMessageId !== message.id) {
+                            Object.assign(e.currentTarget.style, getStyles().actionButton);
+                          } else {
+                            e.currentTarget.style.color = '#10b981';
+                          }
                         }}
-                        title={t('ui.copy')}
+                        title={copiedMessageId === message.id ? t('messages.copySuccess') : t('ui.copy')}
                       >
-                        <Copy size={14} />
+                        {copiedMessageId === message.id ? (
+                          <Check size={14} style={{ transition: 'all 0.2s ease' }} />
+                        ) : (
+                          <Copy size={14} style={{ transition: 'all 0.2s ease' }} />
+                        )}
                       </button>
                       <button
                         style={getStyles().actionButton}
