@@ -5,6 +5,23 @@ import rehypeHighlight from 'rehype-highlight';
 import { TypewriterEffectProps } from '@/types';
 import 'highlight.js/styles/github.css';
 
+// 动态导入mermaid，避免SSR问题
+let mermaid: any = null;
+if (typeof window !== 'undefined') {
+  // @ts-ignore - mermaid类型声明在安装后会自动识别
+  import('mermaid').then((mod) => {
+    mermaid = mod.default;
+    // 初始化mermaid配置
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose',
+    });
+  }).catch((err) => {
+    console.warn('[Mermaid] 模块加载失败，Mermaid图表功能将不可用:', err);
+  });
+}
+
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   text,
   speed = 10,
@@ -84,6 +101,87 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     };
   }, []);
 
+  // Mermaid图表组件
+  const MermaidChart: React.FC<{ code: string; isDarkMode: boolean }> = ({ code, isDarkMode }) => {
+    const mermaidRef = useRef<HTMLDivElement>(null);
+    const [error, setError] = useState<string | null>(null);
+    const lastCodeRef = useRef<string>('');
+
+    useEffect(() => {
+      if (!mermaid || !mermaidRef.current || !code.trim()) return;
+
+      const trimmedCode = code.trim();
+      
+      // 如果代码没有变化，不重新渲染
+      if (trimmedCode === lastCodeRef.current) return;
+      
+      // 更新最后处理的代码
+      lastCodeRef.current = trimmedCode;
+      
+      // 检查是否是完整的Mermaid代码块（避免流式渲染时的中间状态）
+      // 如果代码包含换行符，说明可能是完整的代码块
+      if (trimmedCode && (trimmedCode.includes('\n') || trimmedCode.length > 10)) {
+        const renderChart = async () => {
+          try {
+            // 生成唯一的图表ID
+            const chartId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // 更新主题
+            if (mermaid) {
+              mermaid.initialize({
+                startOnLoad: false,
+                theme: isDarkMode ? 'dark' : 'default',
+                securityLevel: 'loose',
+              });
+            }
+
+            // 清理之前的内容
+            if (mermaidRef.current) {
+              mermaidRef.current.innerHTML = '';
+            }
+
+            // 渲染图表 - mermaid 10.x返回{svg: string}对象
+            const result = await mermaid.render(chartId, trimmedCode);
+            const svgContent = typeof result === 'string' ? result : result?.svg || '';
+            
+            if (mermaidRef.current && svgContent) {
+              mermaidRef.current.innerHTML = svgContent;
+              setError(null);
+              console.log('[Mermaid] 图表渲染成功', chartId);
+            } else {
+              throw new Error('渲染结果为空');
+            }
+          } catch (err: any) {
+            console.error('[Mermaid] 渲染失败:', err);
+            setError(err.message || '渲染失败');
+            if (mermaidRef.current) {
+              mermaidRef.current.innerHTML = `<pre style="color: ${isDarkMode ? '#ef4444' : '#dc2626'}; padding: 8px; background-color: ${isDarkMode ? '#2d1f1f' : '#fee'}; border-radius: 4px;">Mermaid渲染错误: ${err.message || '未知错误'}</pre>`;
+            }
+          }
+        };
+
+        renderChart();
+      }
+    }, [code, isDarkMode]);
+
+    return (
+      <div
+        ref={mermaidRef}
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          margin: '16px 0',
+          padding: '16px',
+          backgroundColor: isDarkMode ? '#1e1e1e' : '#f8f9fa',
+          borderRadius: '8px',
+          overflow: 'auto',
+          minHeight: '100px',
+        }}
+      />
+    );
+  };
+
   // 渲染Markdown内容
   const renderMarkdown = (content: string) => (
     <ReactMarkdown
@@ -92,7 +190,20 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
       components={{
         code: ({ className, children, ...props }: any) => {
           const match = /language-(\w+)/.exec(className || '');
+          const language = match ? match[1] : '';
           const isInline = !match;
+          const codeString = String(children).replace(/\n$/, '');
+          
+          // 如果是Mermaid代码块，使用Mermaid组件渲染
+          if (!isInline && language === 'mermaid') {
+            return (
+              <div style={{ margin: '16px 0' }}>
+                <MermaidChart code={codeString} isDarkMode={isDarkMode} />
+              </div>
+            );
+          }
+          
+          // 普通代码块
           return !isInline ? (
             <pre style={{ 
               backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
