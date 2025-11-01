@@ -49,6 +49,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
   const hasAddedStreamingMessageRef = useRef(false);
+  const editContainerRef = useRef<HTMLDivElement | null>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const touchStartY = useRef<number>(0);
   const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
@@ -246,6 +247,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       scrollToBottom();
     }
   }, [messages, isUserScrolling]);
+
+  // 编辑容器自动滚动到可视区域
+  useEffect(() => {
+    if (editingMessageId && editContainerRef.current) {
+      // 使用 setTimeout 确保 DOM 已更新
+      setTimeout(() => {
+        editContainerRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest', // 如果已经在视图中，不滚动；如果不在，滚动到最近位置
+          inline: 'nearest'
+        });
+      }, 0);
+    }
+  }, [editingMessageId]);
 
   // 调试用户信息
   useEffect(() => {
@@ -1354,7 +1369,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       padding: '12px',
       backgroundColor: isDark ? '#2d3748' : '#f8fafc',
       borderRadius: '8px',
-      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
+      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box' as const,
+      overflow: 'hidden' as const
     },
     editInput: {
       width: '100%',
@@ -1369,7 +1388,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       outline: 'none',
       transition: 'border-color 0.2s ease',
       backgroundColor: surfaceColor,
-      color: textColor
+      color: textColor,
+      boxSizing: 'border-box' as const,
+      maxWidth: '100%'
     },
     editInputFocus: {
       borderColor: '#3b82f6',
@@ -1918,7 +1939,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   
                   {/* 编辑模式 */}
                   {message.role === 'assistant' && editingMessageId === message.id && (
-                    <div style={getStyles().editContainer}>
+                    <div ref={editContainerRef} style={getStyles().editContainer}>
                       <textarea
                         style={getStyles().editInput}
                         value={editValue}
