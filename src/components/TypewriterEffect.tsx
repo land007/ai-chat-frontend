@@ -302,6 +302,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           
           // 如果是Map代码块，使用MapViewer组件渲染
           if (!isInline && language === 'map') {
+            // 只有在打字机完成且流式结束后才渲染地图，否则显示普通代码块
+            if (isStreaming || !isTypingComplete) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0'
+                }}>
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 打字机完成且流式结束后，解析并渲染地图
             try {
               // 解析JSON格式的地图配置
               const mapConfig: MapConfig = JSON.parse(codeString);
