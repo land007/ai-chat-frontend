@@ -6,6 +6,8 @@ import { TypewriterEffectProps, MapConfig } from '@/types';
 import MermaidChart from './MermaidChart';
 import ImageViewer from './ImageViewer';
 import MapViewer from './MapViewer';
+import AudioPlayer from './AudioPlayer';
+import VideoPlayer from './VideoPlayer';
 import 'highlight.js/styles/github.css';
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
@@ -140,6 +142,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                 </div>
               );
             }
+          }
+          
+          // 如果是Audio代码块，使用AudioPlayer组件渲染
+          if (!isInline && language === 'audio') {
+            return (
+              <div style={{ margin: '16px 0' }}>
+                <AudioPlayer url={codeString} isDarkMode={isDarkMode} />
+              </div>
+            );
+          }
+          
+          // 如果是Video代码块，使用VideoPlayer组件渲染
+          if (!isInline && language === 'video') {
+            return (
+              <div style={{ margin: '16px 0' }}>
+                <VideoPlayer url={codeString} isDarkMode={isDarkMode} />
+              </div>
+            );
           }
           
           // 普通代码块

@@ -897,6 +897,93 @@ classDiagram
 
 > **提示**：地图支持放大缩小和平移操作，可以更清楚地查看地理位置关系。在移动设备上可以使用手势操作。`
     },
+    'audio-basic': {
+      name: '音频播放器',
+      category: '音视频功能',
+      content: `## 音频播放器示例
+
+这是一个音频播放器测试：
+
+\`\`\`audio
+https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3
+\`\`\`
+
+**说明**：音频播放器支持播放/暂停、进度控制和音量调节。可以使用浏览器原生 controls 进行操作。
+
+### 功能特性
+
+- ✅ 支持多种音频格式（MP3、WAV、OGG等）
+- ✅ 自动适配深色模式
+- ✅ 响应式设计，支持移动端
+- ✅ 错误处理和空URL验证`
+    },
+    'video-basic': {
+      name: '视频播放器',
+      category: '音视频功能',
+      content: `## 视频播放器示例
+
+这是一个视频播放器测试：
+
+\`\`\`video
+https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4
+\`\`\`
+
+**说明**：视频播放器支持播放/暂停、进度控制、音量调节和全屏功能。最大高度为600px，保持响应式布局。
+
+### 功能特性
+
+- ✅ 支持多种视频格式（MP4、WebM、OGV等）
+- ✅ 自动适配深色模式
+- ✅ 响应式设计，自适应宽度
+- ✅ 最大高度限制，避免页面过长
+- ✅ 错误处理和空URL验证`
+    },
+    'audio-video-mixed': {
+      name: '音视频混合',
+      category: '音视频功能',
+      content: `## 音视频混合内容示例
+
+### 音频示例
+
+以下是一个音频文件的播放：
+
+\`\`\`audio
+https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3
+\`\`\`
+
+### 视频示例
+
+以下是一个视频文件的播放：
+
+\`\`\`video
+https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4
+\`\`\`
+
+### 使用说明
+
+1. **音频代码块**：使用 \`\`\`audio 代码块，直接传入音频URL
+2. **视频代码块**：使用 \`\`\`video 代码块，直接传入视频URL
+3. **格式要求**：URL必须完整且可访问
+
+### 代码示例
+
+\`\`\`markdown
+\`\`\`audio
+https://example.com/audio.mp3
+\`\`\`
+
+\`\`\`video
+https://example.com/video.mp4
+\`\`\`
+\`\`\`
+
+### 注意事项
+
+> **重要提示**：
+> - 音频和视频文件需要支持跨域访问（CORS）
+> - 建议使用HTTPS协议的URL
+> - 文件大小会影响加载速度`
+    },
     'edge-cases': {
       name: '边界情况',
       category: '边界测试',
