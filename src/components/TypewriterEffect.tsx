@@ -17,6 +17,7 @@ import FileDownloader from './FileDownloader';
 import ChecklistItem from './ChecklistItem';
 import TreeViewer from './TreeViewer';
 import PDFViewer from './PDFViewer';
+import ChartRenderer from './ChartRenderer';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 
@@ -433,6 +434,29 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'tree') {
             return (
               <TreeViewer code={codeString} isDarkMode={isDarkMode} />
+            );
+          }
+
+          // 如果是图表代码块，使用 ChartRenderer 渲染
+          if (!isInline && language === 'chart') {
+            if (isStreaming || !isTypingComplete) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0'
+                }}>
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+
+            return (
+              <ChartRenderer config={codeString} isDarkMode={isDarkMode} />
             );
           }
 

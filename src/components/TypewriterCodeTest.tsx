@@ -2408,6 +2408,346 @@ https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
 - PDF 显示区域高度自适应
 
 **说明**：测试 PDF 查看器在移动端的显示和交互效果。`
+    },
+    'chart-line-basic': {
+      name: '折线图趋势分析',
+      category: '数据可视化',
+      content: `## 折线图：AI 服务请求量趋势
+
+### 近 12 周请求量
+
+\`\`\`chart
+{
+  "type": "line",
+  "data": [
+    { "week": "W01", "value": 680 },
+    { "week": "W02", "value": 720 },
+    { "week": "W03", "value": 835 },
+    { "week": "W04", "value": 910 },
+    { "week": "W05", "value": 1050 },
+    { "week": "W06", "value": 1230 },
+    { "week": "W07", "value": 1315 },
+    { "week": "W08", "value": 1420 },
+    { "week": "W09", "value": 1570 },
+    { "week": "W10", "value": 1680 },
+    { "week": "W11", "value": 1765 },
+    { "week": "W12", "value": 1890 }
+  ],
+  "xField": "week",
+  "yField": "value",
+  "smooth": true,
+  "point": {
+    "size": 4,
+    "shape": "circle",
+    "style": { "stroke": "#ffffff", "lineWidth": 1 }
+  },
+  "tooltip": { "showMarkers": true }
+}
+\`\`\`
+
+**说明**：展示 AI 服务请求量的连续增长趋势。`
+    },
+    'chart-column-group': {
+      name: '分组柱状图',
+      category: '数据可视化',
+      content: `## 柱状图：模型调用对比
+
+### 行业模型调用量（月度）
+
+\`\`\`chart
+{
+  "type": "column",
+  "data": [
+    { "category": "客服问答", "value": 420, "year": "2024" },
+    { "category": "智能客服", "value": 360, "year": "2024" },
+    { "category": "营销文案", "value": 275, "year": "2024" },
+    { "category": "代码助手", "value": 480, "year": "2024" },
+    { "category": "客服问答", "value": 540, "year": "2025" },
+    { "category": "智能客服", "value": 510, "year": "2025" },
+    { "category": "营销文案", "value": 360, "year": "2025" },
+    { "category": "代码助手", "value": 640, "year": "2025" }
+  ],
+  "xField": "category",
+  "yField": "value",
+  "seriesField": "year",
+  "isGroup": true,
+  "columnStyle": { "radius": [4, 4, 0, 0] },
+  "legend": { "position": "top" }
+}
+\`\`\`
+
+**说明**：对比不同年份行业模型的调用量变化。`
+    },
+    'chart-area-stacked': {
+      name: '堆叠面积图',
+      category: '数据可视化',
+      content: `## 面积图：渠道增长贡献
+
+\`\`\`chart
+{
+  "type": "area",
+  "data": [
+    { "month": "Jan", "value": 420, "channel": "官网" },
+    { "month": "Jan", "value": 180, "channel": "合作伙伴" },
+    { "month": "Jan", "value": 120, "channel": "社区" },
+    { "month": "Feb", "value": 480, "channel": "官网" },
+    { "month": "Feb", "value": 210, "channel": "合作伙伴" },
+    { "month": "Feb", "value": 165, "channel": "社区" },
+    { "month": "Mar", "value": 530, "channel": "官网" },
+    { "month": "Mar", "value": 260, "channel": "合作伙伴" },
+    { "month": "Mar", "value": 198, "channel": "社区" },
+    { "month": "Apr", "value": 610, "channel": "官网" },
+    { "month": "Apr", "value": 305, "channel": "合作伙伴" },
+    { "month": "Apr", "value": 232, "channel": "社区" }
+  ],
+  "xField": "month",
+  "yField": "value",
+  "seriesField": "channel",
+  "isStack": true,
+  "areaStyle": { "fillOpacity": 0.85 },
+  "smooth": true
+}
+\`\`\`
+
+**说明**：展示不同渠道对整体增长的贡献占比。`
+    },
+    'chart-pie-donut': {
+      name: '环形图占比',
+      category: '数据可视化',
+      content: `## 环形图：流量来源结构
+
+\`\`\`chart
+{
+  "type": "donut",
+  "data": [
+    { "item": "官网", "value": 0.38 },
+    { "item": "API", "value": 0.26 },
+    { "item": "生态伙伴", "value": 0.18 },
+    { "item": "推广活动", "value": 0.12 },
+    { "item": "其它", "value": 0.06 }
+  ],
+  "angleField": "value",
+  "colorField": "item",
+  "legend": { "position": "right" },
+  "label": {
+    "type": "inner",
+    "offset": "-30%",
+    "style": { "textAlign": "center", "fontSize": 14 },
+    "content": "{percentage}"
+  },
+  "statistic": {
+    "title": { "content": "总流量" },
+    "content": { "content": "100%" }
+  }
+}
+\`\`\`
+
+**说明**：展示不同来源占总流量的比例。`
+    },
+    'chart-radar-competency': {
+      name: '雷达图对比',
+      category: '数据可视化',
+      content: `## 雷达图：模型能力谱
+
+\`\`\`chart
+{
+  "type": "radar",
+  "data": [
+    { "indicator": "推理能力", "name": "Model-A", "score": 92 },
+    { "indicator": "创造力", "name": "Model-A", "score": 78 },
+    { "indicator": "多语支持", "name": "Model-A", "score": 82 },
+    { "indicator": "代码生成", "name": "Model-A", "score": 88 },
+    { "indicator": "安全合规", "name": "Model-A", "score": 94 },
+    { "indicator": "推理能力", "name": "Model-B", "score": 85 },
+    { "indicator": "创造力", "name": "Model-B", "score": 84 },
+    { "indicator": "多语支持", "name": "Model-B", "score": 90 },
+    { "indicator": "代码生成", "name": "Model-B", "score": 80 },
+    { "indicator": "安全合规", "name": "Model-B", "score": 95 }
+  ],
+  "xField": "indicator",
+  "yField": "score",
+  "seriesField": "name",
+  "point": { "size": 2 },
+  "area": { "style": { "fillOpacity": 0.2 } },
+  "yAxis": { "max": 100, "min": 0 }
+}
+\`\`\`
+
+**说明**：对比两个模型在多个维度的表现差异。`
+    },
+    'chart-scatter-bubble': {
+      name: '散点与气泡',
+      category: '数据可视化',
+      content: `## 散点图：模型性能取舍
+
+\`\`\`chart
+{
+  "type": "bubble",
+  "data": [
+    { "model": "Alpha", "latency": 86, "accuracy": 92, "requests": 38 },
+    { "model": "Beta", "latency": 72, "accuracy": 88, "requests": 44 },
+    { "model": "Gamma", "latency": 64, "accuracy": 84, "requests": 26 },
+    { "model": "Delta", "latency": 58, "accuracy": 79, "requests": 52 },
+    { "model": "Sigma", "latency": 95, "accuracy": 96, "requests": 18 }
+  ],
+  "xField": "latency",
+  "yField": "accuracy",
+  "sizeField": "requests",
+  "colorField": "model",
+  "size": [8, 32],
+  "shape": "circle",
+  "tooltip": {
+    "showMarkers": false,
+    "fields": ["model", "latency", "accuracy", "requests"]
+  },
+  "xAxis": { "title": { "text": "延迟 (ms)" } },
+  "yAxis": { "title": { "text": "准确率 (%)" }, "min": 70, "max": 100 }
+}
+\`\`\`
+
+**说明**：展示不同模型在延迟、准确率与请求量之间的平衡。`
+    },
+    'chart-dual-axes': {
+      name: '双轴组合图',
+      category: '数据可视化',
+      content: `## 双轴图：营收与用户增长
+
+\`\`\`chart
+{
+  "type": "dual-axes",
+  "data": [
+    [
+      { "month": "Jan", "revenue": 68000 },
+      { "month": "Feb", "revenue": 72000 },
+      { "month": "Mar", "revenue": 81500 },
+      { "month": "Apr", "revenue": 92000 },
+      { "month": "May", "revenue": 103500 },
+      { "month": "Jun", "revenue": 116200 }
+    ],
+    [
+      { "month": "Jan", "users": 1.8 },
+      { "month": "Feb", "users": 2.1 },
+      { "month": "Mar", "users": 2.6 },
+      { "month": "Apr", "users": 3.0 },
+      { "month": "May", "users": 3.6 },
+      { "month": "Jun", "users": 4.2 }
+    ]
+  ],
+  "xField": "month",
+  "yField": ["revenue", "users"],
+  "geometryOptions": [
+    {
+      "geometry": "column",
+      "color": "#5B8FF9",
+      "columnWidthRatio": 0.4
+    },
+    {
+      "geometry": "line",
+      "smooth": true,
+      "color": "#5AD8A6",
+      "lineStyle": {
+        "lineWidth": 2
+      },
+      "point": {
+        "size": 4,
+        "shape": "circle"
+      }
+    }
+  ],
+  "yAxis": {
+    "revenue": {
+      "title": {
+        "text": "月度营收 (¥)"
+      }
+    },
+    "users": {
+      "title": {
+        "text": "新增付费用户 (万)"
+      }
+    }
+  },
+  "legend": {
+    "position": "top-right"
+  }
+}
+\`\`\`
+
+**说明**：同时观察营收与付费用户新增的趋势。`
+    },
+    'chart-tiny-metrics': {
+      name: '迷你趋势图',
+      category: '数据可视化',
+      content: `## 迷你图：核心指标快照
+
+### 日活跃用户微趋势
+
+\`\`\`chart
+{
+  "type": "tiny-line",
+  "data": [520, 560, 610, 640, 690, 720, 760],
+  "height": 80,
+  "smooth": true
+}
+\`\`\`
+
+### 会话转化率微趋势
+
+\`\`\`chart
+{
+  "type": "tiny-column",
+  "data": [0.21, 0.24, 0.23, 0.27, 0.31, 0.29, 0.33],
+  "height": 80
+}
+\`\`\`
+
+### 平均响应时长微趋势
+
+\`\`\`chart
+{
+  "type": "tiny-area",
+  "data": [2.8, 2.6, 2.4, 2.5, 2.3, 2.1, 1.9],
+  "height": 80
+}
+\`\`\`
+
+**说明**：在少量空间中呈现关键指标的微趋势。`
+    },
+    'chart-progress-indicator': {
+      name: '进度与水位图',
+      category: '数据可视化',
+      content: `## 仪表盘：SLA 达成率
+
+\`\`\`chart
+{
+  "type": "gauge",
+  "percent": 0.78,
+  "range": {
+    "ticks": [0, 0.5, 1],
+    "color": ["#fca5a5", "#22c55e"]
+  },
+  "indicator": {
+    "pointer": { "style": { "stroke": "#16a34a" } },
+    "pin": { "style": { "stroke": "#16a34a" } }
+  },
+  "innerRadius": 0.7,
+  "statistic": {
+    "title": { "content": "SLA" },
+    "content": { "content": "78%" }
+  }
+}
+\`\`\`
+
+### 水位图：资源使用率
+
+\`\`\`chart
+{
+  "type": "liquid",
+  "percent": 0.63,
+  "color": "#06b6d4"
+}
+\`\`\`
+
+**说明**：快速查看达成率与资源利用率。`
     }
   };
 
