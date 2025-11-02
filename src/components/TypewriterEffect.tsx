@@ -14,6 +14,7 @@ import AudioPlayer from './AudioPlayer';
 import VideoPlayer from './VideoPlayer';
 import DiffViewer from './DiffViewer';
 import FileDownloader from './FileDownloader';
+import ChecklistItem from './ChecklistItem';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 
@@ -447,7 +448,93 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         p: ({ children }) => <p style={{ margin: '0', lineHeight: '1.5' }}>{children}</p>,
         ul: ({ children }) => <ul style={{ margin: '0', paddingLeft: '20px' }}>{children}</ul>,
         ol: ({ children }) => <ol style={{ margin: '0', paddingLeft: '20px' }}>{children}</ol>,
-        li: ({ children }) => <li style={{ margin: '0', lineHeight: '1.4' }}>{children}</li>,
+        li: ({ children, ...props }: any) => {
+          // 检测是否是任务列表项（包含 checkbox）
+          let hasCheckbox = false;
+          let isChecked = false;
+          let taskContent: React.ReactNode[] = [];
+          
+          // 递归查找 checkbox
+          const findCheckbox = (node: any): boolean => {
+            if (!node) return false;
+            
+            // 检查是否是 input checkbox
+            if (node.type === 'input' && node.props?.type === 'checkbox') {
+              hasCheckbox = true;
+              isChecked = node.props.checked || false;
+              return true;
+            }
+            
+            // 检查数组
+            if (Array.isArray(node)) {
+              return node.some(findCheckbox);
+            }
+            
+            // 检查对象（React 元素）
+            if (typeof node === 'object' && node.props) {
+              // 如果是 input checkbox，设置状态
+              if (node.type === 'input' && node.props.type === 'checkbox') {
+                hasCheckbox = true;
+                isChecked = node.props.checked || false;
+                return true;
+              }
+              // 递归检查子元素
+              if (node.props.children) {
+                return findCheckbox(node.props.children);
+              }
+            }
+            
+            return false;
+          };
+          
+          // 尝试找到 checkbox
+          findCheckbox(children);
+          
+          // 提取任务内容（排除 checkbox）
+          const extractContent = (node: any): React.ReactNode[] => {
+            if (!node) return [];
+            
+            // 字符串节点
+            if (typeof node === 'string') {
+              return [node];
+            }
+            
+            // 数组节点
+            if (Array.isArray(node)) {
+              return node.flatMap(extractContent);
+            }
+            
+            // React 元素节点
+            if (typeof node === 'object' && node.type) {
+              // 跳过 checkbox input
+              if (node.type === 'input' && node.props?.type === 'checkbox') {
+                return [];
+              }
+              
+              // 保留其他元素
+              return [node];
+            }
+            
+            return [node];
+          };
+          
+          // 提取任务内容
+          taskContent = extractContent(children);
+          
+          // 如果是任务列表项，使用 ChecklistItem 组件
+          if (hasCheckbox) {
+            return (
+              <li style={{ margin: '0', lineHeight: '1.4', listStyle: 'none', paddingLeft: '0' }} {...props}>
+                <ChecklistItem checked={isChecked} isDarkMode={isDarkMode}>
+                  {taskContent}
+                </ChecklistItem>
+              </li>
+            );
+          }
+          
+          // 普通列表项
+          return <li style={{ margin: '0', lineHeight: '1.4' }} {...props}>{children}</li>;
+        },
         strong: ({ children }) => <strong style={{ fontWeight: 'bold' }}>{children}</strong>,
         em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
         h1: ({ children }) => <h1 style={{ fontSize: '1.5em', margin: '8px 0 2px 0', fontWeight: 'bold' }}>{children}</h1>,
