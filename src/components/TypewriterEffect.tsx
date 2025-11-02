@@ -15,6 +15,7 @@ import VideoPlayer from './VideoPlayer';
 import DiffViewer from './DiffViewer';
 import FileDownloader from './FileDownloader';
 import ChecklistItem from './ChecklistItem';
+import TreeViewer from './TreeViewer';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 
@@ -417,6 +418,13 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'diff') {
             return (
               <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+            );
+          }
+
+          // 如果是Tree代码块，使用TreeViewer组件渲染
+          if (!isInline && language === 'tree') {
+            return (
+              <TreeViewer code={codeString} isDarkMode={isDarkMode} />
             );
           }
           

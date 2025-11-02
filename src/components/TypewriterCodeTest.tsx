@@ -1824,6 +1824,228 @@ npm run build
 - [ ] 未完成任务：灰色复选框 + 正常文本
 
 **说明**：测试任务列表中各种文本格式的显示效果。`
+    },
+    'tree-basic': {
+      name: '基础文件树',
+      category: '文件树',
+      content: `## 基础文件树测试
+
+### 简单文件树
+
+\`\`\`tree
+root/
+  file1.js
+  file2.ts
+  folder/
+    file3.js
+    file4.ts
+\`\`\`
+
+### 多层嵌套文件树
+
+\`\`\`tree
+project/
+  src/
+    components/
+      Button.tsx
+      Input.tsx
+    utils/
+      helpers.ts
+      constants.ts
+  public/
+    index.html
+    favicon.ico
+  package.json
+  README.md
+\`\`\`
+
+**说明**：基础文件树测试，显示目录结构和文件层级关系。`
+    },
+    'tree-complex': {
+      name: '复杂文件树',
+      category: '文件树',
+      content: `## 复杂文件树测试
+
+### 完整项目结构
+
+\`\`\`tree
+my-app/
+  src/
+    components/
+      common/
+        Button.tsx
+        Input.tsx
+        Card.tsx
+      layout/
+        Header.tsx
+        Footer.tsx
+        Sidebar.tsx
+      features/
+        dashboard/
+          Dashboard.tsx
+          Chart.tsx
+        settings/
+          Settings.tsx
+          Profile.tsx
+    hooks/
+      useAuth.ts
+      useTheme.ts
+      useApi.ts
+    utils/
+      api.ts
+      format.ts
+      validation.ts
+    types/
+      index.ts
+      user.ts
+      api.ts
+    styles/
+      globals.css
+      theme.css
+    App.tsx
+    index.tsx
+  public/
+    images/
+      logo.png
+      icon.png
+    fonts/
+      roboto.woff2
+  tests/
+    components/
+      Button.test.tsx
+      Input.test.tsx
+    utils/
+      format.test.ts
+  docs/
+    README.md
+    CHANGELOG.md
+    API.md
+  .gitignore
+  package.json
+  tsconfig.json
+  vite.config.ts
+\`\`\`
+
+**说明**：复杂文件树测试，展示完整的项目目录结构，包含多层嵌套文件夹。`
+    },
+    'tree-mixed': {
+      name: '混合文件树',
+      category: '文件树',
+      content: `## 混合文件树测试
+
+### 文件树与其他内容混合
+
+这是一个包含文件树的段落。
+
+\`\`\`tree
+config/
+  database.yml
+  routes.rb
+  application.rb
+\`\`\`
+
+### 文件树与代码块
+
+项目结构：
+
+\`\`\`tree
+src/
+  index.js
+  App.js
+  components/
+    Header.js
+    Footer.js
+\`\`\`
+
+对应的代码：
+
+\`\`\`javascript
+// src/index.js
+import React from 'react';
+import App from './App';
+
+ReactDOM.render(<App />, document.getElementById('root'));
+\`\`\`
+
+### 文件树与警告框
+
+> [!info] 项目说明
+> 以下是项目的目录结构：
+
+\`\`\`tree
+project/
+  src/
+    main.ts
+    app.ts
+  dist/
+    bundle.js
+\`\`\`
+
+**说明**：测试文件树与其他 Markdown 内容的混合显示效果。`
+    },
+    'tree-formatting': {
+      name: '格式化文件树',
+      category: '文件树',
+      content: `## 格式化文件树测试
+
+### 不同缩进方式
+
+#### 使用空格缩进
+
+\`\`\`tree
+root/
+  file1.js
+  folder/
+    file2.js
+\`\`\`
+
+#### 使用制表符缩进
+
+\`\`\`tree
+root/
+\tfile1.js
+\tfolder/
+\t\tfile2.js
+\`\`\`
+
+### 混合格式文件树
+
+\`\`\`tree
+project/
+  .config/
+    .env
+    settings.json
+  src/
+    components/
+      Header.tsx
+      Footer.tsx
+    utils/
+      helpers.ts
+      types.ts
+  public/
+    assets/
+      images/
+        logo.png
+      fonts/
+        roboto.woff2
+  README.md
+  package.json
+  tsconfig.json
+\`\`\`
+
+### 特殊文件命名
+
+\`\`\`tree
+project/
+  .gitignore
+  .env.local
+  file-name.js
+  file_name.ts
+  FileName.tsx
+  config-file.json
+\`\`\`
+
+**说明**：测试文件树的各种格式和命名方式的显示效果。`
     }
   };
 
