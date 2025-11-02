@@ -49,14 +49,9 @@ const MapViewer: React.FC<MapViewerProps> = ({ config, isDarkMode = false }) => 
   const [mapInstance, setMapInstance] = useState<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 深色主题的瓦片图层URL
-  const tileLayerUrl = isDarkMode
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-  const tileLayerAttribution = isDarkMode
-    ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+  // 地图底图始终使用正常颜色的瓦片图层，不受暗色模式影响
+  const tileLayerUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const tileLayerAttribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
   // 处理轨迹点击事件
   const handleTrackClick = useCallback((track: MapTrack) => {

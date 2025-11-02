@@ -279,13 +279,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (isStreaming || !isTypingComplete) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -306,13 +314,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (isStreaming || !isTypingComplete) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -357,13 +373,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (isStreaming || !isTypingComplete) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -384,13 +408,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (isStreaming || !isTypingComplete) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -411,13 +443,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (isStreaming || !isTypingComplete) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -429,13 +469,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (!fileInfo) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -478,13 +526,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (isStreaming || !isTypingComplete) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -502,13 +558,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (isStreaming || !isTypingComplete) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -520,13 +584,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             if (!pdfUrl || (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://'))) {
               return (
                 <pre style={{ 
-                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
                   padding: '12px', 
                   borderRadius: '6px', 
                   overflow: 'auto',
-                  margin: '8px 0'
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
                 }}>
-                  <code className={className} {...props}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
                     {children}
                   </code>
                 </pre>
@@ -542,13 +614,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           // 普通代码块
           return !isInline ? (
             <pre style={{ 
-              backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+              backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
               padding: '12px', 
               borderRadius: '6px', 
               overflow: 'auto',
-              margin: '8px 0'
+              margin: '8px 0',
+              color: isDarkMode ? '#f1f5f9' : '#111827'
             }}>
-              <code className={className} {...props}>
+              <code 
+                className={className} 
+                style={{ 
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                }}
+                {...props}
+              >
                 {children}
               </code>
             </pre>
