@@ -23,6 +23,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isTypingComplete, setIsTypingComplete] = useState(!enabled); // 如果打字机被禁用，则认为已完成
   const targetTextRef = useRef('');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -32,8 +33,12 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     if (!enabled) {
       setDisplayedText(text);
       setCurrentIndex(text.length);
+      setIsTypingComplete(true); // 打字机被禁用时，立即设置为完成
       return;
     }
+    
+    // 打字机启用时，重置完成状态
+    setIsTypingComplete(false);
 
     // 更新目标文本
     targetTextRef.current = text;
@@ -74,6 +79,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         currentIndex,
         targetLength: targetTextRef.current.length
       });
+      setIsTypingComplete(true); // 打字机完成，设置完成状态
       onComplete?.();
     }
   }, [isStreaming, currentIndex, enabled, onComplete]);
@@ -146,18 +152,54 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           
           // 如果是Audio代码块，使用AudioPlayer组件渲染
           if (!isInline && language === 'audio') {
+            // 只有在打字机完成且流式结束后才渲染播放器，否则显示普通代码块（不触发下载）
+            if (isStreaming || !isTypingComplete) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0'
+                }}>
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 打字机完成且流式结束后，渲染播放器
             return (
               <div style={{ margin: '16px 0' }}>
-                <AudioPlayer url={codeString} isDarkMode={isDarkMode} />
+                <AudioPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
               </div>
             );
           }
           
           // 如果是Video代码块，使用VideoPlayer组件渲染
           if (!isInline && language === 'video') {
+            // 只有在打字机完成且流式结束后才渲染播放器，否则显示普通代码块（不触发下载）
+            if (isStreaming || !isTypingComplete) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0'
+                }}>
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 打字机完成且流式结束后，渲染播放器
             return (
               <div style={{ margin: '16px 0' }}>
-                <VideoPlayer url={codeString} isDarkMode={isDarkMode} />
+                <VideoPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
               </div>
             );
           }
