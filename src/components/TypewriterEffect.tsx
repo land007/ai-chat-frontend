@@ -275,6 +275,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           
           // 如果是Mermaid代码块，使用Mermaid组件渲染
           if (!isInline && language === 'mermaid') {
+            // 只有在打字机完成且流式结束后才渲染图表，否则显示普通代码块
+            if (isStreaming || !isTypingComplete) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0'
+                }}>
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 打字机完成且流式结束后，渲染图表
             return (
               <div style={{ margin: '16px 0' }}>
                 <MermaidChart code={codeString} isDarkMode={isDarkMode} />
