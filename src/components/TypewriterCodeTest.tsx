@@ -2767,12 +2767,15 @@ https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
 
   return (
     <div style={{
-      padding: '20px',
+      padding: '20px 20px 80px 20px',
       maxWidth: '1400px',
       margin: '0 auto',
       backgroundColor: isDarkMode ? '#1a1a1a' : '#ffffff',
       minHeight: '100vh',
-      transition: 'background-color 0.3s'
+      height: '100vh',
+      overflowY: 'auto',
+      transition: 'background-color 0.3s',
+      boxSizing: 'border-box'
     }}>
       {/* 控制面板 */}
       <div style={{
@@ -2946,10 +2949,12 @@ https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
       {/* 渲染结果区域 */}
       <div style={{
         backgroundColor: isDarkMode ? '#2d2d2d' : '#fafafa',
-        padding: '24px',
+        padding: '24px 24px 80px 24px',
         borderRadius: '8px',
         border: `1px solid ${isDarkMode ? '#444' : '#ddd'}`,
-        minHeight: '400px'
+        minHeight: '400px',
+        boxSizing: 'border-box',
+        marginBottom: '40px'
       }}>
         <div style={{
           marginBottom: '12px',
