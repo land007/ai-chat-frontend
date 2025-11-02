@@ -77,9 +77,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   }, [user, adminUsers, isAdmin]);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // 检测用户是否在底部附近（距离底部小于100px）
+  const isNearBottom = useCallback(() => {
+    if (!messagesAreaRef.current) return false;
+    const { scrollTop, scrollHeight, clientHeight } = messagesAreaRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    return distanceFromBottom <= 100;
+  }, []);
+
+  // 平滑滚动到底部
+  // immediate: 是否立即滚动（用于用户发送消息时），使用 requestAnimationFrame 确保DOM更新后再滚动
+  const scrollToBottom = useCallback((immediate: boolean = false) => {
+    if (immediate) {
+      // 立即滚动模式：使用 requestAnimationFrame 确保DOM更新后再滚动
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'end' 
+        });
+      });
+    } else {
+      // 普通模式：直接滚动
+      messagesEndRef.current?.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'end' 
+      });
+    }
+  }, []);
 
   // 自动保存当前会话（使用useEffect确保状态同步）
   const pendingSaveRef = useRef(false);
@@ -204,7 +228,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     
     // 如果距离底部超过100px，认为用户在查看历史消息
-    setIsUserScrolling(distanceFromBottom > 100);
+    // 用户手动滚动时，浏览器会自动中断平滑滚动动画，这里我们标记状态以阻止后续自动滚动
+    const userScrolling = distanceFromBottom > 100;
+    setIsUserScrolling(userScrolling);
+    
+    // 如果用户正在向上滚动（查看历史消息），立即停止自动滚动跟随
+    // 浏览器本身会中断平滑滚动，这里额外标记以确保代码逻辑停止触发新的滚动
   };
 
   // 处理触摸开始事件
@@ -414,6 +443,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    // 用户消息添加后立即平滑滚动到底部
+    scrollToBottom(true);
 
     if (isStreamingEnabled) {
       // 流式传输模式
@@ -452,6 +483,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   ? { ...msg, content: incrementalContent }
                   : msg
               ));
+              // 流式输出期间，如果用户在底部附近且没有手动向上滚动，持续跟随滚动
+              // 浏览器会在用户手动滚动时自动中断平滑滚动动画，这里我们额外检查 isUserScrolling 状态
+              if (isNearBottom() && !isUserScrolling) {
+                scrollToBottom();
+              }
             }
             
             if (done) {
@@ -556,6 +592,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    // 用户消息添加后立即平滑滚动到底部
+    scrollToBottom(true);
     const currentInput = inputValue.trim();
     setInputValue('');
     setIsLoading(true);
@@ -598,6 +636,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   ? { ...msg, content }
                   : msg
               ));
+              // 流式输出期间，如果用户在底部附近且没有手动向上滚动，持续跟随滚动
+              // 浏览器会在用户手动滚动时自动中断平滑滚动动画，这里我们额外检查 isUserScrolling 状态
+              if (isNearBottom() && !isUserScrolling) {
+                scrollToBottom();
+              }
             }
             
             if (done) {
@@ -771,6 +814,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   ? { ...msg, content }
                   : msg
               ));
+              // 流式输出期间，如果用户在底部附近且没有手动向上滚动，持续跟随滚动
+              // 浏览器会在用户手动滚动时自动中断平滑滚动动画，这里我们额外检查 isUserScrolling 状态
+              if (isNearBottom() && !isUserScrolling) {
+                scrollToBottom();
+              }
             }
 
             if (done) {
@@ -923,6 +971,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   ? { ...msg, content }
                   : msg
               ));
+              // 流式输出期间，如果用户在底部附近且没有手动向上滚动，持续跟随滚动
+              // 浏览器会在用户手动滚动时自动中断平滑滚动动画，这里我们额外检查 isUserScrolling 状态
+              if (isNearBottom() && !isUserScrolling) {
+                scrollToBottom();
+              }
             }
             
             if (done) {
