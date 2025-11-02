@@ -696,7 +696,10 @@ app.get('/api/config', (req, res) => {
     enableFastSuggest: FAST_SUGGEST_ENABLED,
     fastSuggestDefaultCount: FAST_SUGGEST_COUNT,
     // 管理员用户列表（用于前端判断是否显示管理入口）
-    adminUsers: ADMIN_USERS
+    adminUsers: ADMIN_USERS,
+    // 输入框配置
+    textareaMinRows: parseInt(process.env.TEXTAREA_MIN_ROWS || '2', 10),
+    textareaMaxRows: parseInt(process.env.TEXTAREA_MAX_ROWS || '5', 10)
   });
 });
 

@@ -44,7 +44,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     enableI18nButton: false,
     exampleQuestions: [] as string[],
     enableFastSuggest: true as boolean,
-    fastSuggestDefaultCount: 3 as number
+    fastSuggestDefaultCount: 3 as number,
+    textareaMinRows: 2 as number,
+    textareaMaxRows: 5 as number
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
@@ -52,6 +54,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const editContainerRef = useRef<HTMLDivElement | null>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const touchStartY = useRef<number>(0);
+  const mainTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [showFeedbackAdmin, setShowFeedbackAdmin] = useState(false);
   const [adminUsers, setAdminUsers] = useState<string[]>(['admin']);
   
@@ -359,7 +363,57 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       }
     };
     fetchAppConfig();
-  }, []);
+  }, [user]);
+
+  // textarea自动调整高度
+  const autoResizeTextarea = useCallback((textarea: HTMLTextAreaElement | null) => {
+    if (!textarea) return;
+    
+    // 重置高度以获取正确的scrollHeight
+    textarea.style.height = 'auto';
+    
+    // 获取实际内容高度
+    const scrollHeight = textarea.scrollHeight;
+    
+    // 计算最小和最大行数
+    const minRows = appConfig.textareaMinRows || 2;
+    const maxRows = appConfig.textareaMaxRows || 5;
+    
+    // 获取计算后的样式来计算行高
+    const computedStyle = window.getComputedStyle(textarea);
+    const fontSize = parseFloat(computedStyle.fontSize) || 16;
+    const lineHeightStr = computedStyle.lineHeight || '1.5';
+    const lineHeight = lineHeightStr.includes('px') 
+      ? parseFloat(lineHeightStr) 
+      : parseFloat(lineHeightStr) * fontSize;
+    
+    // 计算最小和最大高度
+    const minHeight = minRows * lineHeight;
+    const maxHeight = maxRows * lineHeight;
+    
+    // 限制scrollHeight在最小和最大高度之间
+    const targetHeight = Math.max(minHeight, Math.min(maxHeight, scrollHeight));
+    
+    // 设置高度和滚动条
+    textarea.style.height = `${targetHeight}px`;
+    textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [appConfig.textareaMinRows, appConfig.textareaMaxRows]);
+
+  // 监听主输入框内容变化，自动调整高度
+  useEffect(() => {
+    autoResizeTextarea(mainTextareaRef.current);
+  }, [inputValue, autoResizeTextarea]);
+
+  // 监听编辑框内容变化，自动调整高度
+  useEffect(() => {
+    autoResizeTextarea(editTextareaRef.current);
+  }, [editValue, autoResizeTextarea]);
+
+  // 监听配置变化，重新调整高度（当配置加载完成后）
+  useEffect(() => {
+    autoResizeTextarea(mainTextareaRef.current);
+    autoResizeTextarea(editTextareaRef.current);
+  }, [appConfig.textareaMinRows, appConfig.textareaMaxRows, autoResizeTextarea]);
 
   // 在回答完成后请求fast建议并写回对应AI消息
   const attachFastSuggestions = async (assistantMessageId: string, answerContent: string, userQuestionOverride?: string) => {
@@ -1435,8 +1489,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       borderRadius: '6px',
       fontSize: '14px',
       lineHeight: '1.5',
-      resize: 'vertical' as const,
-      minHeight: '40px',
+      resize: 'none' as const,
       fontFamily: 'inherit',
       outline: 'none',
       transition: 'border-color 0.2s ease',
@@ -1496,11 +1549,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       resize: 'none' as const,
       outline: 'none',
       fontSize: '16px',
+      lineHeight: '1.5',
       fontFamily: 'inherit',
-      minHeight: '48px',
-      maxHeight: '120px',
       backgroundColor: surfaceColor,
-      color: textColor
+      color: textColor,
+      boxSizing: 'border-box' as const
     },
     textareaFocus: {
       borderColor: '#3b82f6',
@@ -1994,11 +2047,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                   {message.role === 'assistant' && editingMessageId === message.id && (
                     <div ref={editContainerRef} style={getStyles().editContainer}>
                       <textarea
+                        ref={editTextareaRef}
                         style={getStyles().editInput}
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         placeholder={t('ui.editPlaceholder')}
-                        rows={2}
                         onFocus={(e) => {
                           Object.assign(e.currentTarget.style, getStyles().editInputFocus);
                         }}
@@ -2109,6 +2162,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       <div style={getStyles().inputArea}>
         <div style={getStyles().inputContainer}>
           <textarea
+            ref={mainTextareaRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
@@ -2117,7 +2171,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               ...getStyles().textarea,
               ...(inputValue.trim() ? getStyles().textareaFocus : {})
             }}
-            rows={1}
           />
           <button
             onClick={isLoading ? handleStopRequest : handleSendMessage}

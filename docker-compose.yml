@@ -103,6 +103,10 @@ services:
       - CHAT_HISTORY_PAGE_SIZE=${CHAT_HISTORY_PAGE_SIZE:-20}
       # 是否自动保存历史记录
       - CHAT_HISTORY_AUTO_SAVE=${CHAT_HISTORY_AUTO_SAVE:-true}
+
+      # 输入框配置
+      - TEXTAREA_MIN_ROWS=${TEXTAREA_MIN_ROWS:-2}
+      - TEXTAREA_MAX_ROWS=${TEXTAREA_MAX_ROWS:-5}
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000/api/health" ]
