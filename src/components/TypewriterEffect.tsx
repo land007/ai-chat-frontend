@@ -5,7 +5,7 @@ import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import hljs from 'highlight.js';
-import { Info, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Info, AlertTriangle, CheckCircle2, XCircle, Copy, Check } from 'lucide-react';
 import { TypewriterEffectProps, MapConfig } from '@/types';
 import MermaidChart from './MermaidChart';
 import ImageViewer from './ImageViewer';
@@ -19,6 +19,7 @@ import TreeViewer from './TreeViewer';
 import PDFViewer from './PDFViewer';
 import ChartRenderer from './ChartRenderer';
 import Model3DViewer from './Model3DViewer';
+import { copyToClipboard } from '@/utils';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 
@@ -36,8 +37,11 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTypingComplete, setIsTypingComplete] = useState(!enabled); // 如果打字机被禁用，则认为已完成
+  const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const targetTextRef = useRef('');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const codeBlockCounterRef = useRef(0);
 
   // enabled=false：直接渲染完整内容（历史消息）
   // enabled=true：启动打字机（当前流式消息）
@@ -104,8 +108,194 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
         intervalRef.current = null;
         console.log('[打字机] 组件卸载，清理定时器');
       }
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
     };
   }, []);
+
+  // 复制代码块内容
+  const handleCopyCode = async (codeId: string, codeContent: string) => {
+    try {
+      const success = await copyToClipboard(codeContent);
+      if (success) {
+        // 清除之前的定时器（如果有）
+        if (copyTimerRef.current) {
+          clearTimeout(copyTimerRef.current);
+        }
+        // 设置复制成功状态
+        setCopiedCodeId(codeId);
+        console.log('[复制代码] 代码已复制到剪贴板', codeId);
+        // 2秒后自动恢复
+        copyTimerRef.current = setTimeout(() => {
+          setCopiedCodeId(null);
+          copyTimerRef.current = null;
+        }, 2000);
+      } else {
+        console.error('[复制代码] 复制失败', codeId);
+      }
+    } catch (error) {
+      console.error('[复制代码] 复制错误:', error, codeId);
+    }
+  };
+
+  // 生成代码块ID
+  const generateCodeBlockId = () => {
+    codeBlockCounterRef.current += 1;
+    return `code-block-${codeBlockCounterRef.current}`;
+  };
+
+  // 渲染带有复制按钮的代码块
+  const renderCodeBlockWithCopy = (
+    codeContent: string,
+    className: string,
+    children: any,
+    codeProps: any,
+    preStyle: React.CSSProperties,
+    codeStyle: React.CSSProperties,
+    language?: string
+  ) => {
+    const codeId = generateCodeBlockId();
+    const isCopied = copiedCodeId === codeId;
+    const showLanguageLabel = language && language.trim().length > 0;
+    const toolbarBgColor = isDarkMode ? '#374151' : '#f3f4f6';
+    const toolbarBorderColor = isDarkMode ? '#4b5563' : '#e5e7eb';
+
+    return (
+      <div
+        style={{
+          position: 'relative',
+          margin: '8px 0',
+          borderRadius: '6px',
+          overflow: 'hidden',
+          border: `1px solid ${toolbarBorderColor}`,
+          backgroundColor: preStyle.backgroundColor || (isDarkMode ? '#1e293b' : '#f6f8fa')
+        }}
+        className="code-block-wrapper"
+        onMouseEnter={(e) => {
+          const wrapper = e.currentTarget;
+          const copyButton = wrapper.querySelector('.code-copy-button') as HTMLElement;
+          if (copyButton) {
+            copyButton.style.opacity = '1';
+          }
+        }}
+        onMouseLeave={(e) => {
+          const wrapper = e.currentTarget;
+          const copyButton = wrapper.querySelector('.code-copy-button') as HTMLElement;
+          if (copyButton && !isCopied) {
+            copyButton.style.opacity = '0';
+          }
+        }}
+      >
+        {/* 顶部工具栏 */}
+        <div
+          className="code-toolbar"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '8px 12px',
+            backgroundColor: toolbarBgColor,
+            borderBottom: `1px solid ${toolbarBorderColor}`,
+            position: 'sticky',
+            top: 0,
+            zIndex: 10
+          }}
+        >
+          {/* 语言标签 */}
+          <div style={{ flex: showLanguageLabel ? 0 : 1 }}>
+            {showLanguageLabel && (
+              <span
+                className="code-language-label"
+                style={{
+                  padding: '4px 8px',
+                  backgroundColor: isDarkMode ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.8)',
+                  border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+                  color: isDarkMode ? '#d1d5db' : '#374151',
+                  textTransform: 'lowercase',
+                  fontWeight: '500',
+                  display: 'inline-block'
+                }}
+              >
+                {language}
+              </span>
+            )}
+          </div>
+          
+          {/* 复制按钮 */}
+          <button
+            className="code-copy-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              handleCopyCode(codeId, codeContent);
+            }}
+            style={{
+              padding: '6px 8px',
+              backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: isCopied ? 1 : 0,
+              transition: 'opacity 0.2s ease, background-color 0.2s ease',
+              color: isCopied
+                ? (isDarkMode ? '#10b981' : '#059669')
+                : (isDarkMode ? '#d1d5db' : '#6b7280'),
+              boxShadow: isDarkMode
+                ? '0 2px 4px rgba(0, 0, 0, 0.3)'
+                : '0 2px 4px rgba(0, 0, 0, 0.1)',
+              pointerEvents: 'auto'
+            }}
+            onMouseEnter={(e) => {
+              e.stopPropagation();
+              if (!isCopied) {
+                e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.stopPropagation();
+              if (!isCopied) {
+                e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
+              }
+            }}
+            title={isCopied ? '已复制' : '复制代码'}
+          >
+            {isCopied ? (
+              <Check size={16} style={{ transition: 'all 0.2s ease' }} />
+            ) : (
+              <Copy size={16} style={{ transition: 'all 0.2s ease' }} />
+            )}
+          </button>
+        </div>
+
+        {/* 代码内容区域 */}
+        <pre style={{
+          ...preStyle,
+          margin: 0,
+          borderRadius: 0,
+          border: 'none',
+          borderTop: 'none',
+          padding: preStyle.padding || '12px',
+          paddingTop: '12px'
+        }}>
+          <code
+            className={className}
+            style={codeStyle}
+            {...codeProps}
+          >
+            {children}
+          </code>
+        </pre>
+      </div>
+    );
+  };
 
   // 递归提取文本内容
   const extractTextContent = (node: any): string => {
@@ -278,26 +468,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'mermaid') {
             // 只有在打字机完成且流式结束后才渲染图表，否则显示普通代码块
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
@@ -313,26 +501,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'map') {
             // 只有在打字机完成且流式结束后才渲染地图，否则显示普通代码块
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
@@ -372,26 +558,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'audio') {
             // 只有在打字机完成且流式结束后才渲染播放器，否则显示普通代码块（不触发下载）
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
@@ -407,26 +591,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'video') {
             // 只有在打字机完成且流式结束后才渲染播放器，否则显示普通代码块（不触发下载）
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
@@ -442,52 +624,48 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'file') {
             // 只有在打字机完成且流式结束后才渲染下载链接，否则显示普通代码块（不触发下载）
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
             // 解析文件信息
             const fileInfo = parseFileInfo(codeString);
             if (!fileInfo) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
@@ -525,26 +703,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           // 如果是图表代码块，使用 ChartRenderer 渲染
           if (!isInline && language === 'chart') {
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
 
@@ -557,52 +733,48 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'pdf') {
             // 只有在打字机完成且流式结束后才渲染PDF查看器，否则显示普通代码块（不触发加载）
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
             // 解析PDF信息（类似 FileDownloader）
             const pdfUrl = codeString.trim().split('\n')[0].trim();
             if (!pdfUrl || (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://'))) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
@@ -616,52 +788,48 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === '3d') {
             // 只有在打字机完成且流式结束后才渲染模型，否则显示普通代码块（不触发加载）
             if (isStreaming || !isTypingComplete) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
             // 解析3D模型URL
             const modelUrl = codeString.trim().split('\n')[0].trim();
             if (!modelUrl || (!modelUrl.startsWith('http://') && !modelUrl.startsWith('https://'))) {
-              return (
-                <pre style={{ 
-                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-                  padding: '12px', 
-                  borderRadius: '6px', 
+              return renderCodeBlockWithCopy(
+                codeString,
+                className || '',
+                children,
+                props,
+                {
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
                   overflow: 'auto',
-                  margin: '8px 0',
+                  margin: '0',
                   color: isDarkMode ? '#f1f5f9' : '#111827'
-                }}>
-                  <code 
-                    className={className} 
-                    style={{ 
-                      color: isDarkMode ? '#f1f5f9' : '#111827',
-                      backgroundColor: 'transparent'
-                    }}
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                </pre>
+                },
+                {
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                },
+                language
               );
             }
             
@@ -673,25 +841,25 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           
           // 普通代码块
           return !isInline ? (
-            <pre style={{ 
-              backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
-              padding: '12px', 
-              borderRadius: '6px', 
-              overflow: 'auto',
-              margin: '8px 0',
-              color: isDarkMode ? '#f1f5f9' : '#111827'
-            }}>
-              <code 
-                className={className} 
-                style={{ 
-                  color: isDarkMode ? '#f1f5f9' : '#111827',
-                  backgroundColor: 'transparent'
-                }}
-                {...props}
-              >
-                {children}
-              </code>
-            </pre>
+            renderCodeBlockWithCopy(
+              codeString,
+              className || '',
+              children,
+              props,
+              {
+                backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                padding: '12px',
+                borderRadius: '6px',
+                overflow: 'auto',
+                margin: '0',
+                color: isDarkMode ? '#f1f5f9' : '#111827'
+              },
+              {
+                color: isDarkMode ? '#f1f5f9' : '#111827',
+                backgroundColor: 'transparent'
+              },
+              language || undefined
+            )
           ) : (
             <code style={{ 
               backgroundColor: isDarkMode ? '#4b5563' : '#f1f3f4', 
@@ -961,6 +1129,23 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               color: #f9fafb;
             }
           ` : ''}
+          /* 代码块工具栏样式 */
+          .code-block-wrapper {
+            position: relative;
+          }
+          .code-block-wrapper .code-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .code-block-wrapper .code-toolbar .code-language-label {
+            display: inline-block;
+          }
+          .code-block-wrapper .code-toolbar .code-copy-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
         `}
       </style>
       <div className="markdown-content">
