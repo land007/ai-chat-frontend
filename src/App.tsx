@@ -4,12 +4,13 @@ import ChatInterface from './components/ChatInterface';
 import AudioQueuePlayerTest from './components/AudioQueuePlayerTest';
 import StreamSegmentationTest from './components/StreamSegmentationTest';
 import TTSIntegrationTest from './components/TTSIntegrationTest';
+import TypewriterCodeTest from './components/TypewriterCodeTest';
 import FeedbackAdmin from './components/FeedbackAdmin';
 import Login from './components/Login';
 import { Loader2 } from 'lucide-react';
 import './App.css';
 
-type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback';
+type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback' | 'typewriter-code';
 
 function AppContent() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -131,6 +132,12 @@ function AppContent() {
           >
             🎙️ TTS集成测试
           </button>
+          <button 
+            onClick={() => setCurrentPage('typewriter-code')}
+            style={buttonStyle('typewriter-code')}
+          >
+            📝 打字机代码测试
+          </button>
           {isAdmin && (
             <button 
               onClick={() => setCurrentPage('feedback')}
@@ -146,6 +153,7 @@ function AppContent() {
       {currentPage === 'audio' && <AudioQueuePlayerTest />}
       {currentPage === 'stream-segment' && <StreamSegmentationTest />}
       {currentPage === 'tts' && <TTSIntegrationTest />}
+      {currentPage === 'typewriter-code' && <TypewriterCodeTest />}
       {currentPage === 'feedback' && isAdmin && (
         <div style={{ height: '100vh', overflow: 'hidden' }}>
           <FeedbackAdmin isDarkMode={isDarkMode} onClose={() => setCurrentPage('chat')} />
