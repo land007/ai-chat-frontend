@@ -200,7 +200,135 @@ curl "http://localhost:3000/api/pdf/proxy?url=https://www.w3.org/WAI/ER/tests/xh
 - **pdfjs-dist**: 5.4.296
 - **react-pdf**: 10.x
 - **Worker**: pdf.worker.min.mjs (本地)
+- **cmaps**: 本地目录（1.7MB）
+- **standard_fonts**: 本地目录（804KB）
 - **代理**: Node.js + axios
+
+---
+
+## PDF.js 资源文件说明
+
+### 1. `pdf.worker.min.mjs` (1.0MB)
+
+**作用**: PDF.js Worker 文件，用于在后台线程处理 PDF 解析
+
+**位置**: `public/pdf.worker.min.mjs`
+
+**配置**:
+```typescript
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+```
+
+---
+
+### 2. `cmaps/` 目录 (1.7MB)
+
+**作用**: 字符映射表（CMap），用于支持中日韩等多字节字符编码
+
+**位置**: `public/cmaps/`
+
+**内容**: 包含 100+ 个字符映射文件（.bcmap 格式）
+
+**示例文件**:
+```
+78-EUC-H.bcmap          # 日文 EUC-JP 编码
+78-RKSJ-H.bcmap         # 日文 Shift-JIS 编码
+GB1-H.bcmap             # 中文 GB2312 编码
+GBK-EUC-H.bcmap         # 中文 GBK 编码
+KSC-EUC-H.bcmap         # 韩文编码
+... (共约 100+ 个文件)
+```
+
+**用途**:
+- ✅ **必需**: 如果 PDF 包含中文、日文、韩文文字
+- ❌ **不需要**: 纯英文 PDF（虽然建议保留）
+
+**如果不使用**:
+- 中日韩文字可能显示为乱码或方块
+- 某些 PDF 可能无法正确渲染
+
+**配置**:
+```typescript
+options={{
+  cMapUrl: '/cmaps/',
+  cMapPacked: true,
+}}
+```
+
+---
+
+### 3. `standard_fonts/` 目录 (804KB)
+
+**作用**: 提供 PDF 中常用的 14 种标准字体
+
+**位置**: `public/standard_fonts/`
+
+**内容**: 包含标准字体文件（.pfb 和 .ttf 格式）
+
+**示例文件**:
+```
+FoxitFixed.pfb           # 等宽字体（Regular）
+FoxitFixedBold.pfb       # 等宽字体（加粗）
+FoxitSerif.pfb           # 衬线字体（Regular）
+FoxitSerifBold.pfb       # 衬线字体（加粗）
+FoxitSymbol.pfb          # 符号字体
+LiberationSans-Regular.ttf  # 无衬线字体（Liberation Sans）
+... (共 14 个字体文件)
+```
+
+**标准字体列表**:
+- Times (Roman, Bold, Italic, BoldItalic)
+- Helvetica (Regular, Bold, Oblique, BoldOblique)
+- Courier (Regular, Bold, Oblique, BoldOblique)
+- Symbol
+- ZapfDingbats
+
+**用途**:
+- ✅ **建议**: 所有 PDF（某些 PDF 使用标准字体）
+- ❌ **可能不需要**: PDF 已嵌入所有字体
+
+**如果不使用**:
+- 使用标准字体的文本可能无法正确渲染
+- 可能回退到系统默认字体（样式可能不匹配）
+
+**配置**:
+```typescript
+options={{
+  standardFontDataUrl: '/standard_fonts/',
+}}
+```
+
+---
+
+## 资源文件需求总结
+
+| PDF 内容类型 | Worker | cmaps | standard_fonts |
+|------------|--------|-------|---------------|
+| **纯英文 PDF** | ✅ 必需 | ❌ 不需要 | ⚠️ 建议 |
+| **包含中文的 PDF** | ✅ 必需 | ✅ **必需** | ⚠️ 建议 |
+| **包含日文/韩文的 PDF** | ✅ 必需 | ✅ **必需** | ⚠️ 建议 |
+| **嵌入所有字体的 PDF** | ✅ 必需 | ⚠️ 可能不需要 | ⚠️ 可能不需要 |
+
+**最佳实践**: 建议保留所有资源文件，确保 PDF 在各种情况下都能正确渲染。
+
+---
+
+## 自动化维护
+
+所有资源文件通过 `postinstall` 脚本自动维护：
+
+```json
+{
+  "scripts": {
+    "postinstall": "自动复制 worker、cmaps、standard_fonts 到 public 目录"
+  }
+}
+```
+
+每次运行 `npm install` 后，脚本会：
+1. 复制 `pdf.worker.min.mjs` 到 `public/`
+2. 递归复制 `cmaps/` 目录到 `public/cmaps/`
+3. 递归复制 `standard_fonts/` 目录到 `public/standard_fonts/`
 
 ---
 
@@ -210,6 +338,7 @@ curl "http://localhost:3000/api/pdf/proxy?url=https://www.w3.org/WAI/ER/tests/xh
 1. 浏览器控制台日志
 2. 后端服务日志（`npm run server:logs`）
 3. Network 面板（查看请求和响应）
+4. 确认资源文件是否已正确复制（检查 `public/` 和 `build/` 目录）
 
 最后更新: 2025-11-02
 

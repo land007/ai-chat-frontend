@@ -7,18 +7,13 @@ import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 // 配置 PDF.js worker - 使用本地文件（支持 http 和 https）
 // 注意：react-pdf v10 需要正确配置 worker 才能发起网络请求
 if (typeof window !== 'undefined') {
-  // 优先使用本地 worker 文件（public 目录）
-  // 如果本地文件不存在，fallback 到 CDN
+  // 使用本地 worker 文件（public 目录）
   const localWorkerUrl = '/pdf.worker.min.mjs';
-  const cdnWorkerUrl = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-  
-  // 使用本地文件（开发和生产环境都适用，支持 http）
   pdfjs.GlobalWorkerOptions.workerSrc = localWorkerUrl;
   
   console.log('[PDF查看器] Worker 配置完成:', {
     version: pdfjs.version,
-    workerSrc: localWorkerUrl,
-    fallback: cdnWorkerUrl
+    workerSrc: localWorkerUrl
   });
 }
 
@@ -507,9 +502,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
                   </div>
                 }
                 options={{
-                  cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
+                  cMapUrl: '/cmaps/',
                   cMapPacked: true,
-                  standardFontDataUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+                  standardFontDataUrl: '/standard_fonts/',
                 }}
                 externalLinkTarget="_blank"
                 onSourceError={(error) => {
