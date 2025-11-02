@@ -461,6 +461,76 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ==================== PDF 代理接口 ====================
+
+/**
+ * PDF 文件代理接口（绕过 CORS）
+ * GET /api/pdf/proxy?url=https://example.com/file.pdf
+ */
+app.get('/api/pdf/proxy', optionalAuth, async (req, res) => {
+  try {
+    const pdfUrl = decodeURIComponent(req.query.url || '');
+    
+    logger.info('[PDF代理] 请求PDF文件:', pdfUrl);
+    
+    if (!pdfUrl || (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://'))) {
+      logger.warn('[PDF代理] URL格式无效:', pdfUrl);
+      return res.status(400).json({
+        error: 'URL格式无效，必须是有效的HTTP或HTTPS链接',
+        code: 'INVALID_URL'
+      });
+    }
+
+    // 使用 axios 获取 PDF 文件
+    const response = await axios.get(pdfUrl, {
+      responseType: 'arraybuffer',
+      timeout: 30000, // 30秒超时
+      headers: {
+        'Accept': 'application/pdf,*/*',
+        'User-Agent': 'Mozilla/5.0 (compatible; PDF-Proxy/1.0)'
+      },
+      maxContentLength: 50 * 1024 * 1024, // 最大50MB
+    });
+
+    logger.info('[PDF代理] PDF加载成功, size:', response.data.length, 'bytes');
+
+    // 设置响应头
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', response.data.length);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 缓存1小时
+
+    // 返回 PDF 文件
+    res.send(Buffer.from(response.data));
+    
+  } catch (error) {
+    logger.error('[PDF代理] 加载失败:', error.message);
+    
+    if (error.response) {
+      // HTTP 错误响应
+      res.status(error.response.status || 500).json({
+        error: `PDF加载失败: ${error.response.status} ${error.response.statusText}`,
+        code: 'PDF_LOAD_ERROR',
+        status: error.response.status
+      });
+    } else if (error.request) {
+      // 请求发送但无响应
+      res.status(504).json({
+        error: 'PDF服务器无响应',
+        code: 'PDF_TIMEOUT'
+      });
+    } else {
+      // 其他错误
+      res.status(500).json({
+        error: `PDF加载失败: ${error.message}`,
+        code: 'PDF_ERROR'
+      });
+    }
+  }
+});
+
 // ==================== 认证路由 ====================
 
 /**

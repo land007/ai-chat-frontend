@@ -16,6 +16,7 @@ import DiffViewer from './DiffViewer';
 import FileDownloader from './FileDownloader';
 import ChecklistItem from './ChecklistItem';
 import TreeViewer from './TreeViewer';
+import PDFViewer from './PDFViewer';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 
@@ -432,6 +433,49 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'tree') {
             return (
               <TreeViewer code={codeString} isDarkMode={isDarkMode} />
+            );
+          }
+
+          // 如果是PDF代码块，使用PDFViewer组件渲染
+          if (!isInline && language === 'pdf') {
+            // 只有在打字机完成且流式结束后才渲染PDF查看器，否则显示普通代码块（不触发加载）
+            if (isStreaming || !isTypingComplete) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0'
+                }}>
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 解析PDF信息（类似 FileDownloader）
+            const pdfUrl = codeString.trim().split('\n')[0].trim();
+            if (!pdfUrl || (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://'))) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0'
+                }}>
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 打字机完成且流式结束后，渲染PDF查看器
+            return (
+              <PDFViewer url={pdfUrl} isDarkMode={isDarkMode} />
             );
           }
           

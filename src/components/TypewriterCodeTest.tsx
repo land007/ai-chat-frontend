@@ -2282,6 +2282,132 @@ class ApiClient {
 \`\`\`
 
 **说明**：测试合并冲突在不同语言和格式下的显示效果。`
+    },
+    'pdf-basic': {
+      name: '基础 PDF 查看',
+      category: 'PDF查看器',
+      content: `## 基础 PDF 查看测试
+
+### 简单 PDF 文档
+
+\`\`\`pdf
+https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
+\`\`\`
+
+**说明**：基础 PDF 查看测试，支持缩放、平移、页面导航等功能。`
+    },
+    'pdf-multi-page': {
+      name: '多页 PDF 文档',
+      category: 'PDF查看器',
+      content: `## 多页 PDF 文档测试
+
+### 带完整内容的 PDF
+
+\`\`\`pdf
+https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf
+\`\`\`
+
+**说明**：测试多页 PDF 文档的导航和渲染功能。`
+    },
+    'pdf-mixed': {
+      name: '混合 PDF 查看',
+      category: 'PDF查看器',
+      content: `## 混合 PDF 查看测试
+
+### PDF 与其他内容混合
+
+这是一个包含 PDF 的段落。
+
+\`\`\`pdf
+https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
+\`\`\`
+
+### PDF 与代码块
+
+查看以下 PDF 文档：
+
+\`\`\`pdf
+https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf
+\`\`\`
+
+然后查看以下代码：
+
+\`\`\`javascript
+// PDF 处理代码
+const pdfUrl = 'https://example.com/document.pdf';
+fetch(pdfUrl)
+  .then(response => response.blob())
+  .then(blob => {
+    console.log('PDF 加载成功');
+  });
+\`\`\`
+
+### PDF 与警告框
+
+> [!info] PDF 查看提示
+> 以下 PDF 文档支持缩放、平移和页面导航功能：
+
+\`\`\`pdf
+https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
+\`\`\`
+
+**说明**：测试 PDF 查看器与其他 Markdown 内容的混合显示效果。`
+    },
+    'pdf-features': {
+      name: 'PDF 功能测试',
+      category: 'PDF查看器',
+      content: `## PDF 功能测试
+
+### 缩放功能
+
+- 使用缩放按钮：点击放大/缩小按钮
+- 使用滚轮缩放：按住 Ctrl（Mac: Cmd）+ 滚轮
+- 使用手势缩放（移动端）：双指捏合
+- 重置缩放：点击重置按钮
+
+\`\`\`pdf
+https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf
+\`\`\`
+
+### 平移功能
+
+- 拖拽平移（桌面端）：点击并拖拽 PDF
+- 触摸滑动（移动端）：单指滑动
+
+### 页面导航
+
+- 使用上一页/下一页按钮
+- 显示当前页面和总页数
+
+**说明**：测试 PDF 查看器的所有功能，包括缩放、平移和页面导航。`
+    },
+    'pdf-mobile': {
+      name: '移动端 PDF 测试',
+      category: 'PDF查看器',
+      content: `## 移动端 PDF 测试
+
+### 移动端适配
+
+以下 PDF 在移动端应该能够正常显示和操作：
+
+\`\`\`pdf
+https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
+\`\`\`
+
+### 移动端功能
+
+- **触摸滑动**：单指滑动平移 PDF
+- **手势缩放**：双指捏合缩放
+- **响应式按钮**：控制按钮大小适合触摸操作
+- **自适应布局**：根据屏幕宽度自动调整
+
+### 移动端优化
+
+- 按钮大小适合触摸
+- 控制栏布局自适应
+- PDF 显示区域高度自适应
+
+**说明**：测试 PDF 查看器在移动端的显示和交互效果。`
     }
   };
 
