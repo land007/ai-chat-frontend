@@ -663,6 +663,159 @@ classDiagram
 
 **说明**：电商系统的核心实体和关系设计。`
     },
+    'mermaid-gantt-basic': {
+      name: 'Mermaid 甘特图基础',
+      category: 'Mermaid图表',
+      content: `## 甘特图基础示例
+
+这是一个简单的项目开发计划：
+
+\`\`\`mermaid
+gantt
+    title AI 聊天系统开发计划
+    dateFormat YYYY-MM-DD
+    section 需求分析
+    需求调研           :done,    des1, 2024-01-01, 2024-01-05
+    产品原型设计       :done,    des2, 2024-01-06, 3d
+    技术方案评审       :active,  des3, after des2, 2d
+    
+    section 前端开发
+    UI 组件库搭建      :         front1, 2024-01-10, 5d
+    页面开发           :         front2, after front1, 8d
+    接口联调           :         front3, after front2, 3d
+    
+    section 后端开发
+    API 接口开发       :         back1, 2024-01-08, 7d
+    数据库设计         :         back2, 2024-01-12, 4d
+    性能优化           :         back3, after back2, 3d
+    
+    section 测试部署
+    单元测试           :         test1, 2024-01-22, 4d
+    集成测试           :         test2, after test1, 3d
+    生产部署           :milestone, deploy, after test2, 1d
+\`\`\`
+
+**说明**：展示项目各阶段的开发进度和时间安排。`
+    },
+    'mermaid-gantt-complex': {
+      name: 'Mermaid 甘特图复杂场景',
+      category: 'Mermaid图表',
+      content: `## 甘特图复杂场景示例
+
+这是一个包含依赖关系、里程碑和多种状态的复杂甘特图：
+
+\`\`\`mermaid
+gantt
+    title 企业数字化转型项目
+    dateFormat YYYY-MM-DD
+    
+    section 规划阶段
+    项目启动会         :done,    plan1, 2024-01-01, 1d
+    现状分析           :done,    plan2, after plan1, 5d
+    目标设定           :done,    plan3, after plan2, 3d
+    资源规划           :active,  plan4, after plan3, 4d
+    方案评审           :crit,    plan5, after plan4, 2d
+    
+    section 建设阶段
+    基础设施搭建       :         build1, after plan5, 10d
+    核心系统开发       :         build2, after plan5, 15d
+    集成测试环境       :         build3, after build1, 5d
+    系统集成联调       :crit,    build4, after build2, after build3, 8d
+    数据迁移           :         build5, after build4, 6d
+    
+    section 上线阶段
+    用户培训           :         launch1, after build5, 5d
+    试运行             :crit,    launch2, after launch1, 7d
+    正式上线           :milestone, launch3, after launch2, 1d
+    运营监控           :         launch4, after launch3, 14d
+    
+    section 优化阶段
+    问题修复           :         opt1, after launch3, 21d
+    性能优化           :         opt2, after opt1, 14d
+    功能迭代           :         opt3, after opt2, 28d
+    稳定运行           :milestone, stable, after opt3, 1d
+\`\`\`
+
+**说明**：
+- **done**：已完成的任务
+- **active**：当前进行中的任务
+- **crit**：关键路径任务
+- **milestone**：里程碑标记
+- **after**：任务依赖关系`
+    },
+    'mermaid-gantt-mixed': {
+      name: 'Mermaid 甘特图混合内容',
+      category: 'Mermaid图表',
+      content: `## 甘特图与其他内容混合示例
+
+### 项目概况
+
+本项目旨在构建一个完整的 AI 聊天系统，包含前端、后端和部署三个阶段。
+
+### 甘特图展示
+
+以下是详细的项目计划：
+
+\`\`\`mermaid
+gantt
+    title 系统开发时间线
+    dateFormat YYYY-MM-DD
+    section 设计
+    架构设计       :done, design1, 2024-01-01, 5d
+    UI/UX设计      :done, design2, 2024-01-06, 5d
+    
+    section 开发
+    前端开发       :active, dev1, 2024-01-11, 10d
+    后端开发       :active, dev2, 2024-01-11, 10d
+    接口联调       :         dev3, after dev1, after dev2, 3d
+    
+    section 测试
+    功能测试       :         test1, after dev3, 5d
+    性能测试       :         test2, after test1, 3d
+    上线部署       :milestone, deploy, after test2, 1d
+\`\`\`
+
+### 关键里程碑
+
+> [!info] 项目里程碑说明
+> - **架构设计完成**：系统整体架构和技术选型确定
+> - **开发完成**：前后端功能全部实现并通过单元测试
+> - **上线部署**：系统正式发布并对外提供服务
+
+### 风险管理
+
+> [!warning] 潜在风险
+> - 开发进度可能受到技术难点影响
+> - 接口联调需要前后端密切配合
+> - 性能测试需要充分的测试环境支持
+
+### 代码示例
+
+项目使用的技术栈：
+
+\`\`\`typescript
+// 项目配置文件
+{
+  "name": "ai-chat-system",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^19.2.0",
+    "mermaid": "^10.9.4",
+    "@ant-design/plots": "^2.2.8"
+  }
+}
+\`\`\`
+
+### 进度跟踪
+
+- [x] 架构设计完成
+- [x] UI/UX 设计完成
+- [ ] 前后端开发中
+- [ ] 接口联调待开始
+- [ ] 测试阶段待开始
+
+**说明**：甘特图与警告框、代码块、任务列表等多种 Markdown 元素混合使用，测试复杂场景下的渲染效果。`
+    },
     'map-basic': {
       name: '地图基础',
       category: '地图功能',
