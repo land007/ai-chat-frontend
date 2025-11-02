@@ -23,7 +23,84 @@ interface PDFViewerProps {
   useProxy?: boolean; // 是否使用代理（默认true，避免CORS）
 }
 
+interface DocumentViewProps {
+  fileUrl: string;
+  pageNumber: number;
+  isDarkMode: boolean;
+  options: {
+    cMapUrl: string;
+    cMapPacked: boolean;
+    standardFontDataUrl: string;
+  };
+  onLoadSuccess: ({ numPages }: { numPages: number }) => void;
+  onLoadError: (error: Error) => void;
+  onSourceError: (error: Error) => void;
+}
+
+const DocumentView: React.FC<DocumentViewProps> = ({
+  fileUrl,
+  pageNumber,
+  isDarkMode,
+  options,
+  onLoadSuccess,
+  onLoadError,
+  onSourceError,
+}) => (
+  <Document
+    file={fileUrl}
+    onLoadSuccess={onLoadSuccess}
+    onLoadError={onLoadError}
+    loading={
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '40px',
+          color: isDarkMode ? '#9ca3af' : '#6b7280',
+        }}
+      >
+        <div>加载 PDF...</div>
+        <div
+          style={{
+            marginTop: '10px',
+            fontSize: '12px',
+            opacity: 0.7,
+            wordBreak: 'break-all',
+            maxWidth: '80%',
+            textAlign: 'center',
+          }}
+        >
+          {fileUrl}
+        </div>
+      </div>
+    }
+    options={options}
+    externalLinkTarget="_blank"
+    onSourceError={onSourceError}
+  >
+    <Page
+      pageNumber={pageNumber}
+      scale={1}
+      renderTextLayer={true}
+      renderAnnotationLayer={true}
+      className="pdf-page"
+    />
+  </Document>
+);
+
+const MemoizedDocumentView = React.memo(
+  DocumentView,
+  (prev, next) =>
+    prev.fileUrl === next.fileUrl &&
+    prev.pageNumber === next.pageNumber &&
+    prev.isDarkMode === next.isDarkMode
+);
+
 const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy = true }) => {
+  console.log('[PDF查看器] 组件渲染, url:', url);
+  
   // 所有 hooks 必须在条件检查之前调用
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -31,10 +108,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [loading, setLoading] = useState(true);
+  
+  // 使用 ref 避免拖拽时频繁触发渲染
+  const positionRef = useRef({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const [pdfFileUrl, setPdfFileUrl] = useState<string>(url);
+  const [pdfFileUrl, setPdfFileUrl] = useState<string>('');
   
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
@@ -56,17 +136,34 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
   }, []);
 
   // PDF 加载成功回调
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    console.log('[PDF查看器] 加载成功, 总页数:', numPages, '原始URL:', url, '使用URL:', pdfFileUrl);
-    setNumPages(numPages);
-    setError(null);
-  };
+  const onDocumentLoadSuccess = React.useCallback(
+    ({ numPages }: { numPages: number }) => {
+      console.log('[PDF查看器] 加载成功, 总页数:', numPages, '原始URL:', url, '使用URL:', pdfFileUrl);
+      setNumPages(numPages);
+      setError(null);
+    },
+    [url, pdfFileUrl]
+  );
 
   // PDF 加载失败回调
-  const onDocumentLoadError = (error: Error) => {
-    console.error('[PDF查看器] 加载失败:', error, '原始URL:', url, '使用URL:', pdfFileUrl);
-    setError(`PDF加载失败: ${error.message || '未知错误'}`);
-  };
+  const onDocumentLoadError = React.useCallback(
+    (error: Error) => {
+      console.error('[PDF查看器] 加载失败:', error, '原始URL:', url, '使用URL:', pdfFileUrl);
+      setError(`PDF加载失败: ${error.message || '未知错误'}`);
+    },
+    [url, pdfFileUrl]
+  );
+
+  const documentOptions = React.useMemo(() => ({
+    cMapUrl: '/cmaps/',
+    cMapPacked: true,
+    standardFontDataUrl: '/standard_fonts/',
+  }), []);
+
+  const handleSourceError = React.useCallback((error: Error) => {
+    console.error('[PDF查看器] Source错误:', error);
+    setError(`PDF源错误: ${error.message || '未知错误'}`);
+  }, []);
 
   // 监听 URL 变化，重置状态并构建代理URL
   useEffect(() => {
@@ -92,6 +189,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
     setNumPages(null);
     setPageNumber(1);
     setScale(1.0);
+    positionRef.current = { x: 0, y: 0 };
     setPosition({ x: 0, y: 0 });
   }, [url, useProxy]);
 
@@ -113,6 +211,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
 
   const handleResetZoom = () => {
     setScale(1.0);
+    positionRef.current = { x: 0, y: 0 };
     setPosition({ x: 0, y: 0 });
   };
 
@@ -128,24 +227,32 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
   // 鼠标拖拽平移
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return; // 只处理左键
+    isDraggingRef.current = true;
     setIsDragging(true);
     setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
+      x: e.clientX - positionRef.current.x,
+      y: e.clientY - positionRef.current.y
     });
     e.preventDefault();
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPosition({
+    if (!isDraggingRef.current) return;
+    const newPosition = {
       x: e.clientX - dragStart.x,
       y: e.clientY - dragStart.y
+    };
+    positionRef.current = newPosition;
+    
+    // 使用 requestAnimationFrame 优化渲染
+    requestAnimationFrame(() => {
+      setPosition(newPosition);
     });
     e.preventDefault();
   };
 
   const handleMouseUp = () => {
+    isDraggingRef.current = false;
     setIsDragging(false);
   };
 
@@ -226,15 +333,22 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
   // 清理事件监听器
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (isDragging) {
-        setPosition({
+      if (isDraggingRef.current) {
+        const newPosition = {
           x: e.clientX - dragStart.x,
           y: e.clientY - dragStart.y
+        };
+        positionRef.current = newPosition;
+        
+        // 使用 requestAnimationFrame 优化渲染
+        requestAnimationFrame(() => {
+          setPosition(newPosition);
         });
       }
     };
 
     const handleGlobalMouseUp = () => {
+      isDraggingRef.current = false;
       setIsDragging(false);
     };
 
@@ -474,52 +588,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
               maxWidth: '100%',
               height: 'auto'
             }}>
-              <Document
-                key={pdfFileUrl} // 添加 key 确保每个 PDF 有独立实例
-                file={pdfFileUrl}
+              <MemoizedDocumentView
+                key={url}
+                fileUrl={pdfFileUrl}
+                pageNumber={pageNumber}
+                isDarkMode={isDarkMode}
+                options={documentOptions}
                 onLoadSuccess={onDocumentLoadSuccess}
                 onLoadError={onDocumentLoadError}
-                loading={
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: '40px',
-                    color: isDarkMode ? '#9ca3af' : '#6b7280'
-                  }}>
-                    <div>加载 PDF...</div>
-                    <div style={{ 
-                      marginTop: '10px', 
-                      fontSize: '12px', 
-                      opacity: 0.7,
-                      wordBreak: 'break-all',
-                      maxWidth: '80%',
-                      textAlign: 'center'
-                    }}>
-                      {pdfFileUrl}
-                    </div>
-                  </div>
-                }
-                options={{
-                  cMapUrl: '/cmaps/',
-                  cMapPacked: true,
-                  standardFontDataUrl: '/standard_fonts/',
-                }}
-                externalLinkTarget="_blank"
-                onSourceError={(error) => {
-                  console.error('[PDF查看器] Source错误:', error);
-                  setError(`PDF源错误: ${error.message || '未知错误'}`);
-                }}
-              >
-                <Page
-                  pageNumber={pageNumber}
-                  scale={1}
-                  renderTextLayer={true}
-                  renderAnnotationLayer={true}
-                  className="pdf-page"
-                />
-              </Document>
+                onSourceError={handleSourceError}
+              />
             </div>
           </div>
         )}
