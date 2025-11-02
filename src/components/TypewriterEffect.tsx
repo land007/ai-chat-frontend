@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { TypewriterEffectProps } from '@/types';
+import { TypewriterEffectProps, MapConfig } from '@/types';
 import MermaidChart from './MermaidChart';
 import ImageViewer from './ImageViewer';
+import MapViewer from './MapViewer';
 import 'highlight.js/styles/github.css';
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
@@ -106,6 +107,39 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                 <MermaidChart code={codeString} isDarkMode={isDarkMode} />
               </div>
             );
+          }
+          
+          // 如果是Map代码块，使用MapViewer组件渲染
+          if (!isInline && language === 'map') {
+            try {
+              // 解析JSON格式的地图配置
+              const mapConfig: MapConfig = JSON.parse(codeString);
+              return (
+                <div style={{ margin: '16px 0' }}>
+                  <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
+                </div>
+              );
+            } catch (error) {
+              // 解析失败时显示错误信息
+              console.error('[地图] JSON解析失败:', error);
+              return (
+                <div style={{ 
+                  margin: '16px 0',
+                  padding: '12px',
+                  backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
+                  borderRadius: '6px',
+                  border: `1px solid ${isDarkMode ? '#ef4444' : '#dc2626'}`
+                }}>
+                  <p style={{ 
+                    margin: 0, 
+                    color: isDarkMode ? '#ef4444' : '#dc2626',
+                    fontSize: '14px'
+                  }}>
+                    地图配置解析失败，请检查JSON格式是否正确
+                  </p>
+                </div>
+              );
+            }
           }
           
           // 普通代码块

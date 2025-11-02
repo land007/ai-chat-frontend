@@ -232,6 +232,43 @@ export interface ChatHistoryDeleteResponse {
   message: string;
 }
 
+// 地图相关类型
+// 标记点
+export interface MapMarker {
+  lat: number;
+  lng: number;
+  title?: string;
+  description?: string;
+  icon?: string; // 图标URL或名称
+}
+
+// 轨迹点
+export interface TrackPoint {
+  lat: number;
+  lng: number;
+  timestamp?: number; // 时间戳（可选）
+  description?: string; // 该点的描述信息
+}
+
+// 轨迹配置
+export interface MapTrack {
+  points: TrackPoint[]; // 轨迹点数组
+  color?: string; // 轨迹颜色，默认 '#3b82f6'
+  weight?: number; // 轨迹宽度，默认 3
+  opacity?: number; // 轨迹透明度，默认 0.7
+  dashArray?: string; // 虚线样式，如 '5, 5'，不设置则为实线
+  title?: string; // 轨迹标题
+  description?: string; // 轨迹描述
+}
+
+// 地图配置
+export interface MapConfig {
+  center: [number, number]; // [纬度, 经度]
+  zoom?: number; // 缩放级别，默认 13
+  markers?: MapMarker[]; // 标记点数组
+  tracks?: MapTrack[]; // 轨迹数组
+}
+
 // 窗口对象扩展
 declare global {
   interface Window {
