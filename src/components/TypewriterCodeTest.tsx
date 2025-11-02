@@ -2901,6 +2901,50 @@ https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
 \`\`\`
 
 **说明**：快速查看达成率与资源利用率。`
+    },
+    '3d-basic': {
+      name: '基础3D模型',
+      category: '3D模型',
+      content: `## 基础 3D 模型展示
+
+这是一个 GLB 格式的 3D 模型展示示例：
+
+\`\`\`3d
+https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb
+\`\`\`
+
+**说明**：支持 GLB/GLTF 格式的 3D 模型，可以使用鼠标拖拽旋转、滚轮缩放、右键平移查看。`
+    },
+    '3d-mixed': {
+      name: '3D模型与Markdown混合',
+      category: '3D模型',
+      content: `## 3D 模型与 Markdown 混合测试
+
+### 模型介绍
+
+以下是一个经典的 3D 模型示例：
+
+\`\`\`3d
+https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb
+\`\`\`
+
+### 交互说明
+
+> [!info] 操作提示
+> 3D 模型支持以下交互操作：
+> - **旋转**：鼠标左键拖拽
+> - **缩放**：滚轮缩放
+> - **平移**：鼠标右键拖拽
+> - **自动调整**：双击重置视角
+
+### 使用场景
+
+1. **产品展示**：展示产品 3D 模型
+2. **设计评审**：查看建筑或工业设计
+3. **教学演示**：展示立体图形和结构
+4. **虚拟博物馆**：展示文物和历史物品
+
+**说明**：3D 模型与警告框、列表等其他 Markdown 元素的混合显示效果。`
     }
   };
 

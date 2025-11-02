@@ -18,6 +18,7 @@ import ChecklistItem from './ChecklistItem';
 import TreeViewer from './TreeViewer';
 import PDFViewer from './PDFViewer';
 import ChartRenderer from './ChartRenderer';
+import Model3DViewer from './Model3DViewer';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 
@@ -608,6 +609,65 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 打字机完成且流式结束后，渲染PDF查看器
             return (
               <PDFViewer url={pdfUrl} isDarkMode={isDarkMode} />
+            );
+          }
+          
+          // 如果是3D模型代码块，使用Model3DViewer组件渲染
+          if (!isInline && language === '3d') {
+            // 只有在打字机完成且流式结束后才渲染模型，否则显示普通代码块（不触发加载）
+            if (isStreaming || !isTypingComplete) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
+                }}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 解析3D模型URL
+            const modelUrl = codeString.trim().split('\n')[0].trim();
+            if (!modelUrl || (!modelUrl.startsWith('http://') && !modelUrl.startsWith('https://'))) {
+              return (
+                <pre style={{ 
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa', 
+                  padding: '12px', 
+                  borderRadius: '6px', 
+                  overflow: 'auto',
+                  margin: '8px 0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
+                }}>
+                  <code 
+                    className={className} 
+                    style={{ 
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                </pre>
+              );
+            }
+            
+            // 打字机完成且流式结束后，渲染3D模型
+            return (
+              <Model3DViewer url={modelUrl} isDarkMode={isDarkMode} />
             );
           }
           
