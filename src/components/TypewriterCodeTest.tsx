@@ -1245,6 +1245,432 @@ const template = \`变量: \\\${special}\`;
 \`\`\`javascript
 const veryLongLine = "这是一个非常长的字符串，应该能够正确显示，即使它超出了正常的屏幕宽度，也不应该破坏布局或者导致显示问题。支持自动换行和水平滚动是很好的体验。".repeat(10);
 \`\`\``
+    },
+    'alert-info': {
+      name: '信息提示框',
+      category: '警告框',
+      content: `## 信息提示框测试
+
+> [!info] 信息提示
+> 这是一个信息提示框，用于显示一般性的信息。
+> 它使用蓝色主题，适合展示说明、提示或相关信息。
+
+### 多个提示框组合
+
+> [!info] 提示：登录状态
+> 您已经成功登录系统。
+
+> [!info] 系统通知
+> 新的功能更新已可用，请查看更新日志获取详细信息。
+
+> [!info]
+> 只有内容，没有标题的信息提示框。标题会自动使用类型名称。
+
+**说明**：信息提示框使用蓝色主题，适合展示一般性信息。`
+    },
+    'alert-warning': {
+      name: '警告提示框',
+      category: '警告框',
+      content: `## 警告提示框测试
+
+> [!warning] 注意事项
+> 这是一个警告提示框，用于显示需要注意的内容。
+> 它使用黄色/橙色主题，适合展示警告、注意事项或潜在问题。
+
+### 使用场景
+
+> [!warning] 数据备份
+> 在执行此操作之前，请确保已备份重要数据。
+
+> [!warning] 兼容性提醒
+> 此功能仅在最新版本的浏览器中可用。如果遇到问题，请更新您的浏览器。
+
+> [!caution] 另一个警告样式
+> 使用 \`caution\` 类型也会显示为警告框。
+
+**说明**：警告提示框使用黄色/橙色主题，适合展示需要用户注意的内容。`
+    },
+    'alert-success': {
+      name: '成功提示框',
+      category: '警告框',
+      content: `## 成功提示框测试
+
+> [!success] 操作成功
+> 这是一个成功提示框，用于显示成功完成的操作。
+> 它使用绿色主题，适合展示成功消息、完成状态或确认信息。
+
+### 示例场景
+
+> [!success] 保存成功
+> 您的更改已成功保存到数据库。
+
+> [!success] 验证通过
+> 所有测试用例已通过验证，代码质量良好。
+
+> [!check] 检查完成
+> 使用 \`check\` 类型也会显示为成功提示框。
+
+**说明**：成功提示框使用绿色主题，适合展示操作成功或完成状态。`
+    },
+    'alert-error': {
+      name: '错误提示框',
+      category: '警告框',
+      content: `## 错误提示框测试
+
+> [!error] 操作失败
+> 这是一个错误提示框，用于显示错误信息或失败的操作。
+> 它使用红色主题，适合展示错误消息、失败状态或需要立即关注的问题。
+
+### 错误场景
+
+> [!error] 连接失败
+> 无法连接到服务器，请检查您的网络连接。
+
+> [!error] 验证失败
+> 输入的数据格式不正确，请检查并重新提交。
+
+> [!danger] 危险操作
+> 使用 \`danger\` 类型也会显示为错误提示框，适合显示危险或需要立即处理的情况。
+
+**说明**：错误提示框使用红色主题，适合展示错误或需要立即关注的问题。`
+    },
+    'alert-mixed': {
+      name: '混合警告框',
+      category: '警告框',
+      content: `## 混合警告框测试
+
+### 组合使用
+
+> [!info] 信息提示
+> 这是一个信息提示，通常用于说明性内容。
+
+> [!warning] 警告提示
+> 这是一个警告提示，需要注意的内容。
+
+> [!success] 成功提示
+> 操作已成功完成！
+
+> [!error] 错误提示
+> 发生了一个错误，请检查并重试。
+
+### 与其他内容混合
+
+这是一个普通段落，用于测试警告框与常规内容的混合显示效果。
+
+> [!info] 提示：功能说明
+> 警告框可以包含 **粗体文本**、*斜体文本* 和 \`内联代码\`。
+> 
+> 甚至可以包含多段内容。
+
+#### 代码与警告框
+
+\`\`\`javascript
+// 代码块中的注释
+const message = "代码块与警告框可以同时使用";
+\`\`\`
+
+> [!warning] 代码审查提醒
+> 在提交代码之前，请确保：
+> 1. 所有测试用例通过
+> 2. 代码格式符合规范
+> 3. 已添加必要的注释
+
+**说明**：测试警告框与其他 Markdown 内容的混合显示效果。`
+    },
+    'diff-basic': {
+      name: '基础差异对比',
+      category: '代码差异',
+      content: `## 基础差异对比测试
+
+### 简单差异
+
+\`\`\`diff
+- const oldCode = "old version";
++ const newCode = "new version";
+\`\`\`
+
+### 函数修改
+
+\`\`\`diff
+ function greet(name) {
+-   return "Hello, " + name;
++   return \`Hello, \${name}!\`;
+ }
+\`\`\`
+
+### 变量变更
+
+\`\`\`diff
+- let count = 0;
++ let count = 1;
+  let total = 10;
+\`\`\`
+
+**说明**：基础差异对比测试，删除的行显示为红色，添加的行显示为绿色。`
+    },
+    'diff-complex': {
+      name: '复杂差异对比',
+      category: '代码差异',
+      content: `## 复杂差异对比测试
+
+### 文件修改示例
+
+\`\`\`diff
+--- a/src/utils/helpers.js
++++ b/src/utils/helpers.js
+@@ -1,5 +1,6 @@
+ import { format } from 'date-fns';
++import { validate } from 'validator';
+ 
+ export function formatDate(date) {
+-  if (!date) return '';
+-  return format(date, 'YYYY-MM-DD');
++  if (!date || !validate.isDate(date)) return '';
++  return format(date, 'yyyy-MM-dd');
+ }
+\`\`\`
+
+### 类方法修改
+
+\`\`\`diff
+ class UserService {
+   constructor() {
+     this.users = [];
++    this.cache = new Map();
+   }
+   
+   findUser(id) {
+-    return this.users.find(u => u.id === id);
++    const cached = this.cache.get(id);
++    if (cached) return cached;
++    
++    const user = this.users.find(u => u.id === id);
++    if (user) this.cache.set(id, user);
++    return user;
+   }
++ 
++   clearCache() {
++    this.cache.clear();
++   }
+ }
+\`\`\`
+
+**说明**：复杂差异对比，包含多个删除和添加的操作，以及上下文行的显示。`
+    },
+    'diff-mixed': {
+      name: '差异与Markdown混合',
+      category: '代码差异',
+      content: `## 差异对比与 Markdown 混合测试
+
+### 代码审查流程
+
+在代码审查过程中，我们通常会查看代码差异：
+
+\`\`\`diff
+- function oldImplementation() {
+-   console.log("旧实现");
+- }
++ function newImplementation() {
++   console.log("新实现");
++   // 添加了错误处理
++   try {
++     processData();
++   } catch (error) {
++     console.error("处理失败", error);
++   }
++ }
+\`\`\`
+
+### 注意事项
+
+> [!warning] 代码变更提醒
+> 在查看差异时，请注意：
+> - 删除的代码可能包含重要逻辑
+> - 新增的代码需要进行充分测试
+> - 确保不破坏现有功能
+
+### 测试用例
+
+修改后的代码应该通过以下测试：
+
+1. 单元测试
+2. 集成测试
+3. 性能测试
+
+\`\`\`diff
+ describe('newImplementation', () => {
+-  it('should process data', () => {
+-    expect(oldImplementation()).toBeUndefined();
++  it('should process data correctly', () => {
++    expect(newImplementation()).not.toThrow();
+   });
+ });
+\`\`\`
+
+**说明**：测试差异对比代码块与其他 Markdown 内容的混合显示效果。`
+    },
+    'file-basic': {
+      name: '基础文件下载',
+      category: '文件下载',
+      content: `## 基础文件下载测试
+
+### 简单文件下载
+
+\`\`\`file
+https://example.com/document.pdf
+\`\`\`
+
+### 带文件名的下载
+
+\`\`\`file
+https://example.com/report.pdf
+文件名：月度报告.pdf
+\`\`\`
+
+**说明**：基础文件下载链接测试。只有在打字机完成且流式结束后才会渲染为下载链接。`
+    },
+    'file-various': {
+      name: '多种文件类型',
+      category: '文件下载',
+      content: `## 多种文件类型测试
+
+### PDF 文档
+
+\`\`\`file
+https://example.com/docs/user-guide.pdf
+文件名：用户指南.pdf
+\`\`\`
+
+### 图片文件
+
+\`\`\`file
+https://example.com/images/banner.png
+文件名：宣传横幅.png
+\`\`\`
+
+### 压缩文件
+
+\`\`\`file
+https://example.com/downloads/data.zip
+文件名：数据集.zip
+\`\`\`
+
+### Excel 表格
+
+\`\`\`file
+https://example.com/reports/sales.xlsx
+文件名：销售数据.xlsx
+\`\`\`
+
+**说明**：测试不同类型的文件下载链接，系统会自动从 URL 中提取文件名（如果未指定）。`
+    },
+    'file-mixed': {
+      name: '文件与Markdown混合',
+      category: '文件下载',
+      content: `## 文件下载与 Markdown 混合测试
+
+### 文档说明
+
+以下是相关的文档文件，您可以下载查看：
+
+#### 1. 用户手册
+
+\`\`\`file
+https://example.com/docs/user-manual.pdf
+文件名：用户手册 v2.0.pdf
+\`\`\`
+
+> [!info] 提示
+> 文件下载链接只有在内容完整显示后才会激活，避免在流式传输过程中意外触发下载。
+
+#### 2. API 文档
+
+\`\`\`file
+https://example.com/docs/api-reference.pdf
+文件名：API 参考文档.pdf
+\`\`\`
+
+### 代码示例
+
+如果您需要查看源代码：
+
+\`\`\`typescript
+// 文件下载处理逻辑
+const handleDownload = (url: string) => {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'file.pdf';
+  link.click();
+};
+\`\`\`
+
+### 注意事项
+
+> [!warning] 安全提醒
+> 下载文件时请注意：
+> - 确保文件来源可信
+> - 检查文件类型和大小
+> - 使用 HTTPS 协议的链接
+
+**说明**：测试文件下载链接与其他 Markdown 内容的混合显示效果。`
+    },
+    'all-new-features': {
+      name: '所有新功能综合',
+      category: '综合测试',
+      content: `## 所有新功能综合测试
+
+### 警告框示例
+
+> [!info] 信息提示
+> 这是一个信息提示框。
+
+> [!warning] 警告提示
+> 这是一个警告提示框。
+
+> [!success] 成功提示
+> 操作已成功完成！
+
+> [!error] 错误提示
+> 发生了一个错误。
+
+### 代码差异对比
+
+\`\`\`diff
+- const oldValue = 10;
++ const newValue = 20;
+  const result = calculate();
+\`\`\`
+
+### 文件下载
+
+\`\`\`file
+https://example.com/comprehensive-test.pdf
+文件名：综合测试文档.pdf
+\`\`\`
+
+### 混合内容
+
+这是一个包含所有新功能的综合测试场景：
+
+1. **警告框**：使用 \`> [!type] 标题\n> 内容\` 格式
+2. **代码差异**：使用 \`\`\`diff 代码块
+3. **文件下载**：使用 \`\`\`file 代码块
+
+> [!info] 功能说明
+> 所有新功能都支持深色模式，并且与现有的 Markdown 格式完美兼容。
+
+\`\`\`diff
+- console.log("旧版本");
++ console.log("新版本");
++ console.log("支持新功能");
+\`\`\`
+
+\`\`\`file
+https://example.com/new-features-demo.zip
+文件名：新功能演示.zip
+\`\`\`
+
+**说明**：综合测试所有新功能，验证它们可以同时使用且不会相互干扰。`
     }
   };
 
