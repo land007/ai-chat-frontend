@@ -96,7 +96,7 @@ function AppContent() {
 
   return (
     <div className="App">
-      {debugMode && (
+      {debugMode && currentPage !== 'chat' && (
         <div style={{ 
           padding: '12px 20px', 
           backgroundColor: '#f9fafb', 
