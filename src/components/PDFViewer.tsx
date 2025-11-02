@@ -581,13 +581,18 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
               minHeight: isMobile ? '300px' : '400px'
             }}
           >
-            <div style={{
-              boxShadow: isDarkMode 
-                ? '0 4px 6px rgba(0, 0, 0, 0.3)' 
-                : '0 4px 6px rgba(0, 0, 0, 0.1)',
-              maxWidth: '100%',
-              height: 'auto'
-            }}>
+            <div 
+              style={{
+                boxShadow: isDarkMode 
+                  ? '0 4px 6px rgba(0, 0, 0, 0.3)' 
+                  : '0 4px 6px rgba(0, 0, 0, 0.1)',
+                maxWidth: '100%',
+                height: 'auto',
+                // 暗色模式滤镜：降低亮度并反转颜色，使 PDF 在暗色背景下更易读
+                filter: isDarkMode ? 'invert(1) hue-rotate(180deg) brightness(0.95)' : 'none',
+                transition: 'filter 0.2s ease'
+              }}
+            >
               <MemoizedDocumentView
                 key={url}
                 fileUrl={pdfFileUrl}
