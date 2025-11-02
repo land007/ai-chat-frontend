@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import { TypewriterEffectProps } from '@/types';
 import MermaidChart from './MermaidChart';
+import ImageViewer from './ImageViewer';
 import 'highlight.js/styles/github.css';
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
@@ -199,6 +200,13 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             borderTop: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`, 
             margin: '0' 
           }} />
+        ),
+        img: ({ src, alt, ...props }: any) => (
+          <ImageViewer
+            src={src || ''}
+            alt={alt || ''}
+            isDarkMode={isDarkMode}
+          />
         )
       }}
     >
