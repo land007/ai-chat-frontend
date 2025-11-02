@@ -984,6 +984,209 @@ https://example.com/video.mp4
 > - 建议使用HTTPS协议的URL
 > - 文件大小会影响加载速度`
     },
+    'katex-basic': {
+      name: 'KaTeX 基础公式',
+      category: 'KaTeX 数学公式',
+      content: `## KaTeX 数学公式基础测试
+
+### 行内公式
+
+这是爱因斯坦的质能方程：$E = mc^2$，其中 $E$ 表示能量，$m$ 表示质量，$c$ 表示光速。
+
+### 分数和根号
+
+分数公式：$\\frac{a}{b} + \\frac{c}{d} = \\frac{ad + bc}{bd}$
+
+二次方程的解：$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$
+
+### 上标和下标
+
+化学反应式：$H_2SO_4 + 2NaOH \\to Na_2SO_4 + 2H_2O$
+
+数学表达式：$x^2 + y^2 = z^2$ 和 $a^{n-1} + a^{n-2}$
+
+### 希腊字母
+
+常用希腊字母：$\\alpha, \\beta, \\gamma, \\delta, \\theta, \\lambda, \\mu, \\pi, \\sigma, \\phi$
+
+**说明**：测试行内数学公式的基本渲染功能。`
+    },
+    'katex-advanced': {
+      name: 'KaTeX 高级公式',
+      category: 'KaTeX 数学公式',
+      content: `## KaTeX 高级数学公式测试
+
+### 块级公式
+
+积分公式：
+
+$$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$
+
+傅里叶变换：
+
+$$F(\\omega) = \\int_{-\\infty}^{\\infty} f(t) e^{-i\\omega t} dt$$
+
+### 求和与连乘
+
+求和公式：
+
+$$\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$$
+
+连乘公式：
+
+$$\\prod_{k=1}^{n} k = n!$$
+
+### 矩阵和行列式
+
+3x3 矩阵：
+
+$$
+\\begin{pmatrix}
+a & b & c \\\\
+d & e & f \\\\
+g & h & i
+\\end{pmatrix}
+$$
+
+行列式：
+
+$$
+\\begin{vmatrix}
+a & b \\\\
+c & d
+\\end{vmatrix} = ad - bc
+$$
+
+**说明**：测试块级数学公式和复杂数学符号的渲染。`
+    },
+    'katex-mixed': {
+      name: 'KaTeX 混合内容',
+      category: 'KaTeX 数学公式',
+      content: `## KaTeX 与其他内容混合测试
+
+### 数学公式与文本
+
+在物理学中，**牛顿第二定律**表示为：
+
+$$F = ma$$
+
+其中：
+- $F$ 是力（牛顿）
+- $m$ 是质量（千克）
+- $a$ 是加速度（米每秒²）
+
+### 公式与代码块结合
+
+计算圆周率的程序：
+
+\`\`\`python
+import math
+
+# 使用莱布尼茨公式近似计算 π
+pi = 0
+for k in range(100000):
+    pi += (-1)**k / (2*k + 1)
+pi *= 4
+
+print(f"π ≈ {pi:.10f}")
+print(f"误差: {abs(pi - math.pi):.10f}")
+\`\`\`
+
+数学公式：$\\pi = \\sum_{k=0}^{\\infty} \\frac{(-1)^k}{2k+1}$
+
+### 多个公式组合
+
+**欧拉恒等式**：
+
+$$e^{i\\pi} + 1 = 0$$
+
+这个公式被称为"数学中最美丽的方程"，因为它将五个最重要的数学常数联系在一起。
+
+**高斯积分**：
+
+$$\\int_{-\\infty}^{\\infty} e^{-x^2} dx = \\sqrt{\\pi}$$
+
+**几何级数**：
+
+$$\\sum_{n=0}^{\\infty} ar^n = \\frac{a}{1-r}$$ （当 $|r| < 1$ 时）
+
+**说明**：测试数学公式与文本、代码块等其他内容的混合渲染效果。`
+    },
+    'katex-streaming': {
+      name: 'KaTeX 流式输出',
+      category: 'KaTeX 数学公式',
+      content: `## KaTeX 流式输出测试
+
+这个测试专门用于验证数学公式在流式输出过程中的显示效果。
+
+### 简单公式流式测试
+
+首先是一个简单的公式：$y = ax + b$
+
+然后是稍复杂的：$\\sin(x) = \\sum_{n=0}^{\\infty} \\frac{(-1)^n x^{2n+1}}{(2n+1)!}$
+
+### 块级公式流式测试
+
+积分：
+
+$$\\int e^x dx = e^x + C$$
+
+微分：
+
+$$\\frac{d}{dx}(x^n) = nx^{n-1}$$
+
+### 复杂公式流式测试
+
+施瓦茨不等式：
+
+$$\\left|\\sum_{i=1}^n x_i y_i\\right|^2 \\leq \\left(\\sum_{i=1}^n x_i^2\\right)\\left(\\sum_{i=1}^n y_i^2\\right)$$
+
+切比雪夫不等式：
+
+$$P(|X - \\mu| \\geq k\\sigma) \\leq \\frac{1}{k^2}$$
+
+**说明**：验证公式在打字机流式输出过程中的平滑渲染，不应该出现闪烁或渲染错误。`
+    },
+    'katex-edge': {
+      name: 'KaTeX 边界情况',
+      category: 'KaTeX 数学公式',
+      content: `## KaTeX 边界情况测试
+
+### 1. 特殊符号
+
+包含各种特殊符号：
+- 无穷大：$\\infty$
+- 空集：$\\emptyset$
+- 属于：$x \\in \\mathbb{R}$
+- 不等于：$a \\neq b$
+- 约等于：$\\pi \\approx 3.14159$
+- 大于等于：$x \\geq 0$
+- 小于等于：$y \\leq 1$
+
+### 2. 多个公式紧邻
+
+紧挨着的公式：
+$x = 1$ 和 $y = 2$ 然后 $z = x + y = 3$
+
+### 3. 公式与列表
+
+数学序列：
+1. 等差数列：$a_n = a_1 + (n-1)d$
+2. 等比数列：$a_n = a_1 \\cdot r^{n-1}$
+3. 斐波那契：$F_n = F_{n-1} + F_{n-2}$
+
+### 4. 公式与引用
+
+> 正如爱因斯坦所说，质能等价关系 $E = mc^2$ 揭示了质量与能量的关系。
+
+### 5. 长公式测试
+
+这是非常长的公式，测试换行和滚动：
+
+$\\sum_{i=1}^{n} \\left(\\frac{a_i}{b_i} + \\frac{c_i}{d_i}\\right) = \\sum_{i=1}^{n} \\frac{a_i d_i + b_i c_i}{b_i d_i} = \\prod_{j=1}^{n} \\left(\\sum_{k=1}^{m} x_{jk}\\right)$
+
+**说明**：测试各种边界情况和特殊场景下的公式渲染效果。`
+    },
     'edge-cases': {
       name: '边界情况',
       category: '边界测试',

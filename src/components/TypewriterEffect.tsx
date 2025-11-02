@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
 import { TypewriterEffectProps, MapConfig } from '@/types';
 import MermaidChart from './MermaidChart';
 import ImageViewer from './ImageViewer';
@@ -9,6 +11,7 @@ import MapViewer from './MapViewer';
 import AudioPlayer from './AudioPlayer';
 import VideoPlayer from './VideoPlayer';
 import 'highlight.js/styles/github.css';
+import 'katex/dist/katex.min.css';
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   text,
@@ -99,8 +102,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   // 渲染Markdown内容
   const renderMarkdown = (content: string) => (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeHighlight, rehypeKatex]}
       components={{
         code: ({ className, children, ...props }: any) => {
           const match = /language-(\w+)/.exec(className || '');
@@ -321,6 +324,24 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           .markdown-content li ol {
             margin: 0 !important;
           }
+          /* KaTeX 数学公式样式优化 */
+          .markdown-content .katex {
+            font-size: 1.1em;
+          }
+          .markdown-content .katex-display {
+            margin: 16px 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+          }
+          /* 深色模式下调整 KaTeX 颜色 */
+          ${isDarkMode ? `
+            .markdown-content .katex {
+              color: #f9fafb;
+            }
+            .markdown-content .katex .base {
+              color: #f9fafb;
+            }
+          ` : ''}
         `}
       </style>
       <div className="markdown-content">
