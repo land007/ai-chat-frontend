@@ -421,6 +421,13 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             );
           }
 
+          // 如果是Merge代码块（合并冲突），使用DiffViewer组件渲染
+          if (!isInline && language === 'merge') {
+            return (
+              <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+            );
+          }
+
           // 如果是Tree代码块，使用TreeViewer组件渲染
           if (!isInline && language === 'tree') {
             return (

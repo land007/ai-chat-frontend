@@ -9,12 +9,20 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ code, isDarkMode = false }) => 
   // 确保 code 是字符串
   const codeString = typeof code === 'string' ? code : String(code || '');
   
-  // 解析 diff 代码，识别添加和删除的行
+  // 解析 diff 代码或 merge conflict 代码
   const parseDiffLines = (diffCode: string) => {
     if (!diffCode || !diffCode.trim()) {
       return [];
     }
     
+    // 检查是否是 merge conflict 格式
+    const isMergeConflict = diffCode.includes('<<<<<<<') && diffCode.includes('=======') && diffCode.includes('>>>>>>>');
+    
+    if (isMergeConflict) {
+      return parseMergeConflict(diffCode);
+    }
+    
+    // 普通 diff 格式解析
     const lines = diffCode.split('\n');
     return lines.map((line, lineIndex) => {
       // 确保 line 是字符串
@@ -54,6 +62,72 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ code, isDarkMode = false }) => 
       return { type, content: contentStr, original: lineStr };
     });
   };
+  
+  // 解析 merge conflict 格式
+  const parseMergeConflict = (mergeCode: string) => {
+    const lines = mergeCode.split('\n');
+    const result: Array<{ type: 'addition' | 'deletion' | 'context' | 'header', content: string, original: string }> = [];
+    let currentSection: 'current' | 'incoming' | 'context' | null = null;
+    let headerBranch: string = '';
+    
+    lines.forEach((line) => {
+      const lineStr = typeof line === 'string' ? line : String(line || '');
+      const trimmedLine = lineStr.trim();
+      
+      // 检测冲突标记
+      if (trimmedLine.startsWith('<<<<<<<')) {
+        // 提取分支名（如果有）
+        const branchMatch = trimmedLine.match(/^<<<<<<<\s*(.+)$/);
+        headerBranch = branchMatch ? branchMatch[1] : 'HEAD';
+        currentSection = 'current';
+        result.push({
+          type: 'header',
+          content: lineStr,
+          original: lineStr
+        });
+      } else if (trimmedLine.startsWith('=======')) {
+        currentSection = 'incoming';
+        result.push({
+          type: 'header',
+          content: lineStr,
+          original: lineStr
+        });
+      } else if (trimmedLine.startsWith('>>>>>>>')) {
+        // 提取分支名（如果有）
+        const branchMatch = trimmedLine.match(/^>>>>>>>\s*(.+)$/);
+        const incomingBranch = branchMatch ? branchMatch[1] : 'incoming';
+        currentSection = null;
+        result.push({
+          type: 'header',
+          content: lineStr,
+          original: lineStr
+        });
+      } else if (currentSection === 'current') {
+        // 当前分支的代码（显示为删除，红色）
+        result.push({
+          type: 'deletion',
+          content: lineStr,
+          original: lineStr
+        });
+      } else if (currentSection === 'incoming') {
+        // 要合并的分支的代码（显示为添加，绿色）
+        result.push({
+          type: 'addition',
+          content: lineStr,
+          original: lineStr
+        });
+      } else {
+        // 上下文行
+        result.push({
+          type: 'context',
+          content: lineStr,
+          original: lineStr
+        });
+      }
+    });
+    
+    return result;
+  };
 
   const diffLines = parseDiffLines(codeString);
 
@@ -88,6 +162,8 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ code, isDarkMode = false }) => 
           ...baseStyle,
           color: isDarkMode ? '#9ca3af' : '#6b7280',
           fontStyle: 'italic',
+          backgroundColor: isDarkMode ? 'rgba(156, 163, 175, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+          fontWeight: 'bold',
         };
       default:
         return {

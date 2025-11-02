@@ -2046,6 +2046,242 @@ project/
 \`\`\`
 
 **说明**：测试文件树的各种格式和命名方式的显示效果。`
+    },
+    'merge-basic': {
+      name: '基础合并冲突',
+      category: '代码差异',
+      content: `## 基础合并冲突测试
+
+### 简单合并冲突
+
+\`\`\`merge
+<<<<<<< HEAD
+const version = "1.0.0";
+const author = "Alice";
+=======
+const version = "2.0.0";
+const author = "Bob";
+>>>>>>> feature/new-version
+\`\`\`
+
+### 多行合并冲突
+
+\`\`\`merge
+function calculate(x, y) {
+<<<<<<< HEAD
+  return x + y;
+  console.log("加法");
+=======
+  return x * y;
+  console.log("乘法");
+>>>>>>> feature/multiply
+}
+\`\`\`
+
+**说明**：基础合并冲突测试，当前分支代码显示为红色（删除），要合并的代码显示为绿色（添加）。`
+    },
+    'merge-complex': {
+      name: '复杂合并冲突',
+      category: '代码差异',
+      content: `## 复杂合并冲突测试
+
+### 多个冲突区域
+
+\`\`\`merge
+// 第一个冲突
+<<<<<<< HEAD
+import { useState } from 'react';
+import { useEffect } from 'react';
+=======
+import { useState, useEffect } from 'react';
+>>>>>>> feature/optimize-imports
+// 中间代码
+const value = 10;
+
+// 第二个冲突
+<<<<<<< HEAD
+function Component() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    console.log(count);
+  }, [count]);
+=======
+function Component() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    document.title = \`Count: \${count}\`;
+  }, [count]);
+>>>>>>> feature/update-title
+  return <div>{count}</div>;
+}
+\`\`\`
+
+### 包含注释的冲突
+
+\`\`\`merge
+class MyClass {
+<<<<<<< HEAD
+  // 旧实现
+  method() {
+    return "old";
+  }
+=======
+  // 新实现
+  method() {
+    return "new";
+  }
+>>>>>>> feature/new-implementation
+}
+\`\`\`
+
+**说明**：复杂合并冲突测试，包含多个冲突区域和注释。`
+    },
+    'merge-mixed': {
+      name: '混合合并冲突',
+      category: '代码差异',
+      content: `## 混合合并冲突测试
+
+### 合并冲突与普通 diff
+
+#### 普通 diff
+
+\`\`\`diff
+- const oldValue = 10;
++ const newValue = 20;
+  const result = calculate();
+\`\`\`
+
+#### 合并冲突
+
+\`\`\`merge
+function process(data) {
+<<<<<<< HEAD
+  return data.map(item => item.value);
+=======
+  return data.filter(item => item.active).map(item => item.value);
+>>>>>>> feature/filter-active
+}
+\`\`\`
+
+### 合并冲突与代码块
+
+普通代码：
+
+\`\`\`javascript
+// 这是普通代码
+const x = 1;
+const y = 2;
+\`\`\`
+
+合并冲突代码：
+
+\`\`\`merge
+<<<<<<< HEAD
+const result = x + y;
+=======
+const result = x * y;
+>>>>>>> feature/multiply
+\`\`\`
+
+### 合并冲突与警告框
+
+> [!warning] 合并冲突警告
+> 检测到以下文件存在合并冲突：
+
+\`\`\`merge
+<<<<<<< HEAD
+src/components/App.tsx
+=======
+src/components/Main.tsx
+>>>>>>> feature/rename-component
+\`\`\`
+
+**说明**：测试合并冲突与其他 Markdown 内容的混合显示效果。`
+    },
+    'merge-formatting': {
+      name: '格式化合并冲突',
+      category: '代码差异',
+      content: `## 格式化合并冲突测试
+
+### 不同语言的合并冲突
+
+#### JavaScript
+
+\`\`\`merge
+<<<<<<< HEAD
+const greeting = "Hello";
+=======
+const greeting = "Hi";
+>>>>>>> feature/casual-greeting
+console.log(greeting);
+\`\`\`
+
+#### Python
+
+\`\`\`merge
+def greet(name):
+<<<<<<< HEAD
+    return f"Hello, {name}!"
+=======
+    return f"Hi, {name}!"
+>>>>>>> feature/casual-greeting
+\`\`\`
+
+#### TypeScript
+
+\`\`\`merge
+interface User {
+<<<<<<< HEAD
+  name: string;
+  age: number;
+=======
+  name: string;
+  email: string;
+  age?: number;
+>>>>>>> feature/add-email
+}
+\`\`\`
+
+### 大块代码冲突
+
+\`\`\`merge
+class ApiClient {
+<<<<<<< HEAD
+  constructor(config) {
+    this.baseURL = config.baseURL;
+    this.timeout = 5000;
+  }
+  
+  async request(url, options) {
+    const response = await fetch(this.baseURL + url, {
+      ...options,
+      timeout: this.timeout
+    });
+    return response.json();
+  }
+=======
+  constructor(config) {
+    this.baseURL = config.baseURL;
+    this.timeout = config.timeout || 10000;
+    this.headers = config.headers || {};
+  }
+  
+  async request(url, options) {
+    const response = await fetch(this.baseURL + url, {
+      ...options,
+      headers: {
+        ...this.headers,
+        ...options?.headers
+      },
+      timeout: this.timeout
+    });
+    return response.json();
+  }
+>>>>>>> feature/improve-api-client
+}
+\`\`\`
+
+**说明**：测试合并冲突在不同语言和格式下的显示效果。`
     }
   };
 
