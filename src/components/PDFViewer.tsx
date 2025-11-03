@@ -62,18 +62,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({
         }}
       >
         <div>加载 PDF...</div>
-        <div
-          style={{
-            marginTop: '10px',
-            fontSize: '12px',
-            opacity: 0.7,
-            wordBreak: 'break-all',
-            maxWidth: '80%',
-            textAlign: 'center',
-          }}
-        >
-          {fileUrl}
-        </div>
       </div>
     }
     options={options}

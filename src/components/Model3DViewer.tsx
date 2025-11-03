@@ -85,18 +85,7 @@ const LoadingIndicator: React.FC<{ isDarkMode: boolean; url: string }> = ({ isDa
       color: isDarkMode ? '#94a3b8' : '#64748b',
     }}
   >
-    <div style={{ fontSize: '16px', marginBottom: '8px' }}>加载 3D 模型...</div>
-    <div
-      style={{
-        fontSize: '12px',
-        opacity: 0.7,
-        wordBreak: 'break-all',
-        maxWidth: '80%',
-        textAlign: 'center',
-      }}
-    >
-      {url}
-    </div>
+    <div style={{ fontSize: '16px' }}>加载 3D 模型...</div>
   </div>
 );
 
