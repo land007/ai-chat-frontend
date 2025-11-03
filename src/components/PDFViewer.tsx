@@ -72,7 +72,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({
       pageNumber={pageNumber}
       scale={1}
       renderTextLayer={true}
-      renderAnnotationLayer={true}
+      renderAnnotationLayer={false}
       className="pdf-page"
     />
   </Document>
@@ -544,6 +544,74 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+        {/* 确保 react-pdf 的所有层都不占布局空间 */}
+        <style>{`
+          /* 隐藏的 Canvas 元素不占空间 */
+          .react-pdf__Page__canvas {
+            position: relative !important;
+          }
+          /* 文本层（虽然已禁用，但可能还有残留）不占空间 */
+          .react-pdf__Page__textContent,
+          .react-pdf__Page__textContent.textLayer {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+          }
+          /* 注释层不占空间 */
+          .react-pdf__Page__annotations {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            opacity: 0 !important;
+          }
+          /* 隐藏的 Canvas 元素 */
+          .hiddenCanvasElement {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          /* PDF 页面容器 */
+          .react-pdf__Page {
+            position: relative !important;
+            display: inline-block !important;
+          }
+          /* 确保 PDF 页面不会有多余的空白 */
+          .react-pdf__Page__svg,
+          .react-pdf__Page__canvas {
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          /* Document 容器不占额外空间 */
+          .react-pdf__Document {
+            display: inline-block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          /* 确保页面容器紧凑 */
+          .pdf-page {
+            margin: 0 !important;
+            padding: 0 !important;
+            display: inline-block !important;
+          }
+        `}</style>
         {error && (
           <div style={{
             padding: '20px',
@@ -564,7 +632,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
               padding: isMobile ? '12px' : '20px',
               display: 'flex',
               justifyContent: 'center',
-              minHeight: isMobile ? '300px' : '400px'
+              minHeight: isMobile ? '300px' : '400px',
+              alignItems: 'flex-start'
             }}
           >
             <div 
