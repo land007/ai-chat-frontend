@@ -19,6 +19,7 @@ import TreeViewer from './TreeViewer';
 import PDFViewer from './PDFViewer';
 import ChartRenderer from './ChartRenderer';
 import Model3DViewer from './Model3DViewer';
+import CodeBlockWrapper from './CodeBlockWrapper';
 import { copyToClipboard } from '@/utils';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
@@ -491,9 +492,17 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染图表
             return (
-              <div style={{ margin: '16px 0' }}>
-                <MermaidChart code={codeString} isDarkMode={isDarkMode} />
-              </div>
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <div style={{ margin: '16px 0' }}>
+                    <MermaidChart code={codeString} isDarkMode={isDarkMode} />
+                  </div>
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
           
@@ -527,29 +536,45 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               // 解析JSON格式的地图配置
               const mapConfig: MapConfig = JSON.parse(codeString);
               return (
-                <div style={{ margin: '16px 0' }}>
-                  <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
-                </div>
+                <CodeBlockWrapper
+                  language={language}
+                  codeContent={codeString}
+                  renderView={
+                    <div style={{ margin: '16px 0' }}>
+                      <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
+                    </div>
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                />
               );
             } catch (error) {
               // 解析失败时显示错误信息
               console.error('[地图] JSON解析失败:', error);
               return (
-                <div style={{ 
-                  margin: '16px 0',
-                  padding: '12px',
-                  backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
-                  borderRadius: '6px',
-                  border: `1px solid ${isDarkMode ? '#ef4444' : '#dc2626'}`
-                }}>
-                  <p style={{ 
-                    margin: 0, 
-                    color: isDarkMode ? '#ef4444' : '#dc2626',
-                    fontSize: '14px'
-                  }}>
-                    地图配置解析失败，请检查JSON格式是否正确
-                  </p>
-                </div>
+                <CodeBlockWrapper
+                  language={language}
+                  codeContent={codeString}
+                  renderView={
+                    <div style={{ 
+                      margin: '16px 0',
+                      padding: '12px',
+                      backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
+                      borderRadius: '6px',
+                      border: `1px solid ${isDarkMode ? '#ef4444' : '#dc2626'}`
+                    }}>
+                      <p style={{ 
+                        margin: 0, 
+                        color: isDarkMode ? '#ef4444' : '#dc2626',
+                        fontSize: '14px'
+                      }}>
+                        地图配置解析失败，请检查JSON格式是否正确
+                      </p>
+                    </div>
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                />
               );
             }
           }
@@ -581,9 +606,17 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染播放器
             return (
-              <div style={{ margin: '16px 0' }}>
-                <AudioPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
-              </div>
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <div style={{ margin: '16px 0' }}>
+                    <AudioPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
+                  </div>
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
           
@@ -614,9 +647,17 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染播放器
             return (
-              <div style={{ margin: '16px 0' }}>
-                <VideoPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
-              </div>
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <div style={{ margin: '16px 0' }}>
+                    <VideoPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
+                  </div>
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
 
@@ -671,10 +712,18 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染下载链接
             return (
-              <FileDownloader
-                url={fileInfo.url}
-                fileName={fileInfo.fileName}
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <FileDownloader
+                    url={fileInfo.url}
+                    fileName={fileInfo.fileName}
+                    isDarkMode={isDarkMode}
+                  />
+                }
                 isDarkMode={isDarkMode}
+                showViewToggle={true}
               />
             );
           }
@@ -682,21 +731,45 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           // 如果是Diff代码块，使用DiffViewer组件渲染
           if (!isInline && language === 'diff') {
             return (
-              <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
 
           // 如果是Merge代码块（合并冲突），使用DiffViewer组件渲染
           if (!isInline && language === 'merge') {
             return (
-              <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
 
           // 如果是Tree代码块，使用TreeViewer组件渲染
           if (!isInline && language === 'tree') {
             return (
-              <TreeViewer code={codeString} isDarkMode={isDarkMode} />
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <TreeViewer code={codeString} isDarkMode={isDarkMode} />
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
 
@@ -725,7 +798,15 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             }
 
             return (
-              <ChartRenderer config={codeString} isDarkMode={isDarkMode} />
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <ChartRenderer config={codeString} isDarkMode={isDarkMode} />
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
 
@@ -780,7 +861,15 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染PDF查看器
             return (
-              <PDFViewer url={pdfUrl} isDarkMode={isDarkMode} />
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <PDFViewer url={pdfUrl} isDarkMode={isDarkMode} />
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
           
@@ -835,7 +924,15 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染3D模型
             return (
-              <Model3DViewer url={modelUrl} isDarkMode={isDarkMode} />
+              <CodeBlockWrapper
+                language={language}
+                codeContent={codeString}
+                renderView={
+                  <Model3DViewer url={modelUrl} isDarkMode={isDarkMode} />
+                }
+                isDarkMode={isDarkMode}
+                showViewToggle={true}
+              />
             );
           }
           
