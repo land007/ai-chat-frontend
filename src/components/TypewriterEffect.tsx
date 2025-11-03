@@ -141,11 +141,28 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     }
   };
 
-  // 生成代码块ID
-  const generateCodeBlockId = () => {
-    codeBlockCounterRef.current += 1;
-    return `code-block-${codeBlockCounterRef.current}`;
+  // 生成简单的哈希函数，用于基于代码内容生成稳定的ID
+  const simpleHash = (str: string): string => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(36);
   };
+
+  // 生成代码块ID（基于代码内容，确保同一代码块有相同ID）
+  const generateCodeBlockId = (codeContent: string, language?: string): string => {
+    // 使用代码内容的哈希和长度生成稳定的ID
+    const contentHash = simpleHash(codeContent);
+    const lengthHash = codeContent.length.toString(36);
+    const languagePart = language ? `-${language}` : '';
+    return `code-block-${contentHash}-${lengthHash}${languagePart}`;
+  };
+
+  // 使用 ref 存储代码块的 ID 映射，确保同一代码块有相同的 ID
+  const codeBlockIdMapRef = useRef<Map<string, string>>(new Map());
 
   // 渲染带有复制按钮的代码块
   const renderCodeBlockWithCopy = (
@@ -155,11 +172,20 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     codeProps: any,
     preStyle: React.CSSProperties,
     codeStyle: React.CSSProperties,
-    language?: string
+    language?: string,
+    codeComplete: boolean = true // 代码是否输出完毕，默认true（历史消息）
   ) => {
-    const codeId = generateCodeBlockId();
+    // 生成稳定的ID键
+    const idKey = `${codeContent}-${language || ''}`;
+    // 如果已存在ID则复用，否则生成新的
+    let codeId = codeBlockIdMapRef.current.get(idKey);
+    if (!codeId) {
+      codeId = generateCodeBlockId(codeContent, language);
+      codeBlockIdMapRef.current.set(idKey, codeId);
+    }
     const isCopied = copiedCodeId === codeId;
     const showLanguageLabel = language && language.trim().length > 0;
+    const showCopyButton = codeComplete; // 只有在输出完毕后才显示复制按钮
     const toolbarBgColor = isDarkMode ? '#374151' : '#f3f4f6';
     const toolbarBorderColor = isDarkMode ? '#4b5563' : '#e5e7eb';
 
@@ -174,20 +200,6 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           backgroundColor: preStyle.backgroundColor || (isDarkMode ? '#1e293b' : '#f6f8fa')
         }}
         className="code-block-wrapper"
-        onMouseEnter={(e) => {
-          const wrapper = e.currentTarget;
-          const copyButton = wrapper.querySelector('.code-copy-button') as HTMLElement;
-          if (copyButton) {
-            copyButton.style.opacity = '1';
-          }
-        }}
-        onMouseLeave={(e) => {
-          const wrapper = e.currentTarget;
-          const copyButton = wrapper.querySelector('.code-copy-button') as HTMLElement;
-          if (copyButton && !isCopied) {
-            copyButton.style.opacity = '0';
-          }
-        }}
       >
         {/* 顶部工具栏 */}
         <div
@@ -227,53 +239,55 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             )}
           </div>
           
-          {/* 复制按钮 */}
-          <button
-            className="code-copy-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              handleCopyCode(codeId, codeContent);
-            }}
-            style={{
-              padding: '6px 8px',
-              backgroundColor: isDarkMode ? '#374151' : '#ffffff',
-              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: isCopied ? 1 : 0,
-              transition: 'opacity 0.2s ease, background-color 0.2s ease',
-              color: isCopied
-                ? (isDarkMode ? '#10b981' : '#059669')
-                : (isDarkMode ? '#d1d5db' : '#6b7280'),
-              boxShadow: isDarkMode
-                ? '0 2px 4px rgba(0, 0, 0, 0.3)'
-                : '0 2px 4px rgba(0, 0, 0, 0.1)',
-              pointerEvents: 'auto'
-            }}
-            onMouseEnter={(e) => {
-              e.stopPropagation();
-              if (!isCopied) {
-                e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.stopPropagation();
-              if (!isCopied) {
-                e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
-              }
-            }}
-            title={isCopied ? '已复制' : '复制代码'}
-          >
-            {isCopied ? (
-              <Check size={16} style={{ transition: 'all 0.2s ease' }} />
-            ) : (
-              <Copy size={16} style={{ transition: 'all 0.2s ease' }} />
-            )}
-          </button>
+          {/* 复制按钮 - 只在代码输出完毕后显示 */}
+          {showCopyButton && (
+            <button
+              className="code-copy-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                handleCopyCode(codeId, codeContent);
+              }}
+              style={{
+                padding: '6px 8px',
+                backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+                border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: 1,
+                transition: 'background-color 0.2s ease, color 0.2s ease',
+                color: isCopied
+                  ? (isDarkMode ? '#10b981' : '#059669')
+                  : (isDarkMode ? '#d1d5db' : '#6b7280'),
+                boxShadow: isDarkMode
+                  ? '0 2px 4px rgba(0, 0, 0, 0.3)'
+                  : '0 2px 4px rgba(0, 0, 0, 0.1)',
+                pointerEvents: 'auto'
+              }}
+              onMouseEnter={(e) => {
+                e.stopPropagation();
+                if (!isCopied) {
+                  e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.stopPropagation();
+                if (!isCopied) {
+                  e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
+                }
+              }}
+              title={isCopied ? '已复制' : '复制代码'}
+            >
+              {isCopied ? (
+                <Check size={16} style={{ transition: 'all 0.2s ease' }} />
+              ) : (
+                <Copy size={16} style={{ transition: 'all 0.2s ease' }} />
+              )}
+            </button>
+          )}
         </div>
 
         {/* 代码内容区域 */}
@@ -453,8 +467,12 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   };
 
   // 渲染Markdown内容
-  const renderMarkdown = (content: string) => (
+  const renderMarkdown = (content: string) => {
+    // 确保当 copiedCodeId 变化时，ReactMarkdown 会重新渲染
+    // 通过在 key 中包含 copiedCodeId 来强制重新渲染
+    return (
     <ReactMarkdown
+      key={`markdown-${copiedCodeId || 'none'}`}
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeHighlight, rehypeKatex]}
       components={{
@@ -486,7 +504,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
             
@@ -527,7 +546,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
             
@@ -600,7 +620,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
             
@@ -641,7 +662,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
             
@@ -682,7 +704,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
             
@@ -706,7 +729,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                true // 代码已输出完毕
               );
             }
             
@@ -793,7 +817,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
 
@@ -831,7 +856,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
             
@@ -855,7 +881,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                true // 代码已输出完毕
               );
             }
             
@@ -894,7 +921,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                false // 流式传输期间，代码未输出完毕
               );
             }
             
@@ -918,7 +946,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   color: isDarkMode ? '#f1f5f9' : '#111827',
                   backgroundColor: 'transparent'
                 },
-                language
+                language,
+                true // 代码已输出完毕
               );
             }
             
@@ -955,7 +984,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                 color: isDarkMode ? '#f1f5f9' : '#111827',
                 backgroundColor: 'transparent'
               },
-              language || undefined
+              language || undefined,
+              !isStreaming && isTypingComplete // 代码输出完毕的判断
             )
           ) : (
             <code style={{ 
@@ -1195,7 +1225,8 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     >
       {displayedText}
     </ReactMarkdown>
-  );
+    );
+  };
 
   return (
     <div className={className} style={style}>
