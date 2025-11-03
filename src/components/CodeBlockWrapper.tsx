@@ -174,7 +174,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
           </span>
         </div>
 
-        {/* 右侧：操作区（切换 + 复制） */}
+        {/* 右侧：操作区（复制 + 切换） */}
         <div
           style={{
             display: 'flex',
@@ -182,6 +182,54 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
             gap: '6px'
           }}
         >
+          {/* 复制按钮 */}
+          <button
+            className="code-copy-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              handleCopyCode();
+            }}
+            style={{
+              padding: '6px 8px',
+              backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: viewMode === 'source' ? 1 : 0,
+              transition: 'opacity 0.2s ease, background-color 0.2s ease',
+              color: copied
+                ? (isDarkMode ? '#10b981' : '#059669')
+                : (isDarkMode ? '#d1d5db' : '#6b7280'),
+              boxShadow: isDarkMode
+                ? '0 2px 4px rgba(0, 0, 0, 0.3)'
+                : '0 2px 4px rgba(0, 0, 0, 0.1)',
+              pointerEvents: viewMode === 'source' ? 'auto' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              e.stopPropagation();
+              if (viewMode === 'source' && !copied) {
+                e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.stopPropagation();
+              if (viewMode === 'source' && !copied) {
+                e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
+              }
+            }}
+            title={copied ? '已复制' : '复制代码'}
+          >
+            {copied ? (
+              <Check size={16} style={{ transition: 'all 0.2s ease' }} />
+            ) : (
+              <Copy size={16} style={{ transition: 'all 0.2s ease' }} />
+            )}
+          </button>
+
           {showViewToggle && (
             viewMode === 'source' ? (
               <button
@@ -257,54 +305,6 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
               </button>
             )
           )}
-
-          {/* 复制按钮 */}
-          <button
-            className="code-copy-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              handleCopyCode();
-            }}
-            style={{
-              padding: '6px 8px',
-              backgroundColor: isDarkMode ? '#374151' : '#ffffff',
-              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
-              borderRadius: '6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: viewMode === 'source' ? 1 : 0,
-              transition: 'opacity 0.2s ease, background-color 0.2s ease',
-              color: copied
-                ? (isDarkMode ? '#10b981' : '#059669')
-                : (isDarkMode ? '#d1d5db' : '#6b7280'),
-              boxShadow: isDarkMode
-                ? '0 2px 4px rgba(0, 0, 0, 0.3)'
-                : '0 2px 4px rgba(0, 0, 0, 0.1)',
-              pointerEvents: viewMode === 'source' ? 'auto' : 'none'
-            }}
-            onMouseEnter={(e) => {
-              e.stopPropagation();
-              if (viewMode === 'source' && !copied) {
-                e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.stopPropagation();
-              if (viewMode === 'source' && !copied) {
-                e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
-              }
-            }}
-            title={copied ? '已复制' : '复制代码'}
-          >
-            {copied ? (
-              <Check size={16} style={{ transition: 'all 0.2s ease' }} />
-            ) : (
-              <Copy size={16} style={{ transition: 'all 0.2s ease' }} />
-            )}
-          </button>
         </div>
       </div>
 
