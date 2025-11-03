@@ -174,124 +174,138 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
           </span>
         </div>
 
-        {/* 中间：视图切换按钮 */}
-        {showViewToggle && (
-          <div style={{ 
-            flex: 1, 
-            display: 'flex', 
-            justifyContent: 'center', 
-            gap: '4px' 
-          }}>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setViewMode('view');
-              }}
-              style={{
-                padding: '4px 8px',
-                backgroundColor: viewMode === 'view' 
-                  ? (isDarkMode ? '#3b82f6' : '#2563eb')
-                  : (isDarkMode ? '#4b5563' : '#e5e7eb'),
-                border: `1px solid ${viewMode === 'view' 
-                  ? (isDarkMode ? '#60a5fa' : '#3b82f6')
-                  : (isDarkMode ? '#6b7280' : '#d1d5db')}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '12px',
-                color: viewMode === 'view' 
-                  ? '#ffffff'
-                  : (isDarkMode ? '#d1d5db' : '#6b7280'),
-                transition: 'all 0.2s ease'
-              }}
-              title="显示渲染视图"
-            >
-              <Eye size={14} />
-              <span>渲染</span>
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setViewMode('source');
-              }}
-              style={{
-                padding: '4px 8px',
-                backgroundColor: viewMode === 'source' 
-                  ? (isDarkMode ? '#3b82f6' : '#2563eb')
-                  : (isDarkMode ? '#4b5563' : '#e5e7eb'),
-                border: `1px solid ${viewMode === 'source' 
-                  ? (isDarkMode ? '#60a5fa' : '#3b82f6')
-                  : (isDarkMode ? '#6b7280' : '#d1d5db')}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                fontSize: '12px',
-                color: viewMode === 'source' 
-                  ? '#ffffff'
-                  : (isDarkMode ? '#d1d5db' : '#6b7280'),
-                transition: 'all 0.2s ease'
-              }}
-              title="显示源码"
-            >
-              <Code size={14} />
-              <span>源码</span>
-            </button>
-          </div>
-        )}
-
-        {/* 右侧：复制按钮 */}
-        <button
-          className="code-copy-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            handleCopyCode();
-          }}
+        {/* 右侧：操作区（切换 + 复制） */}
+        <div
           style={{
-            padding: '6px 8px',
-            backgroundColor: isDarkMode ? '#374151' : '#ffffff',
-            border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
-            borderRadius: '6px',
-            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            opacity: viewMode === 'source' ? 1 : 0,
-            transition: 'opacity 0.2s ease, background-color 0.2s ease',
-            color: copied
-              ? (isDarkMode ? '#10b981' : '#059669')
-              : (isDarkMode ? '#d1d5db' : '#6b7280'),
-            boxShadow: isDarkMode
-              ? '0 2px 4px rgba(0, 0, 0, 0.3)'
-              : '0 2px 4px rgba(0, 0, 0, 0.1)',
-            pointerEvents: viewMode === 'source' ? 'auto' : 'none'
+            gap: '6px'
           }}
-          onMouseEnter={(e) => {
-            e.stopPropagation();
-            if (viewMode === 'source' && !copied) {
-              e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.stopPropagation();
-            if (viewMode === 'source' && !copied) {
-              e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
-            }
-          }}
-          title={copied ? '已复制' : '复制代码'}
         >
-          {copied ? (
-            <Check size={16} style={{ transition: 'all 0.2s ease' }} />
-          ) : (
-            <Copy size={16} style={{ transition: 'all 0.2s ease' }} />
+          {showViewToggle && (
+            viewMode === 'source' ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setViewMode('view');
+                }}
+                style={{
+                  padding: '6px 8px',
+                  backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+                  border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '12px',
+                  color: isDarkMode ? '#d1d5db' : '#6b7280',
+                  transition: 'background-color 0.2s ease',
+                  boxShadow: isDarkMode
+                    ? '0 2px 4px rgba(0, 0, 0, 0.3)'
+                    : '0 2px 4px rgba(0, 0, 0, 0.1)'
+                }}
+                onMouseEnter={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
+                }}
+                onMouseLeave={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
+                }}
+                title="显示渲染视图"
+              >
+                <Eye size={16} />
+                <span>渲染</span>
+              </button>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setViewMode('source');
+                }}
+                style={{
+                  padding: '6px 8px',
+                  backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+                  border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '12px',
+                  color: isDarkMode ? '#d1d5db' : '#6b7280',
+                  transition: 'background-color 0.2s ease',
+                  boxShadow: isDarkMode
+                    ? '0 2px 4px rgba(0, 0, 0, 0.3)'
+                    : '0 2px 4px rgba(0, 0, 0, 0.1)'
+                }}
+                onMouseEnter={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
+                }}
+                onMouseLeave={(e) => {
+                  e.stopPropagation();
+                  e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
+                }}
+                title="显示源码"
+              >
+                <Code size={16} />
+                <span>源码</span>
+              </button>
+            )
           )}
-        </button>
+
+          {/* 复制按钮 */}
+          <button
+            className="code-copy-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              handleCopyCode();
+            }}
+            style={{
+              padding: '6px 8px',
+              backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+              border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: viewMode === 'source' ? 1 : 0,
+              transition: 'opacity 0.2s ease, background-color 0.2s ease',
+              color: copied
+                ? (isDarkMode ? '#10b981' : '#059669')
+                : (isDarkMode ? '#d1d5db' : '#6b7280'),
+              boxShadow: isDarkMode
+                ? '0 2px 4px rgba(0, 0, 0, 0.3)'
+                : '0 2px 4px rgba(0, 0, 0, 0.1)',
+              pointerEvents: viewMode === 'source' ? 'auto' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              e.stopPropagation();
+              if (viewMode === 'source' && !copied) {
+                e.currentTarget.style.backgroundColor = isDarkMode ? '#4b5563' : '#f3f4f6';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.stopPropagation();
+              if (viewMode === 'source' && !copied) {
+                e.currentTarget.style.backgroundColor = isDarkMode ? '#374151' : '#ffffff';
+              }
+            }}
+            title={copied ? '已复制' : '复制代码'}
+          >
+            {copied ? (
+              <Check size={16} style={{ transition: 'all 0.2s ease' }} />
+            ) : (
+              <Copy size={16} style={{ transition: 'all 0.2s ease' }} />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* 内容区域：根据视图模式显示渲染视图或源码 */}
