@@ -199,7 +199,7 @@ const ChartRenderer: React.FC<ChartRendererProps> = ({
   }
 
   return (
-    <div style={{ margin: '16px 0', width }}>
+    <div style={{ width }}>
       <ChartComponent {...resolvedConfig} />
     </div>
   );

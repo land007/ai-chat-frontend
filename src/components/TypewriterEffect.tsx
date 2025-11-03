@@ -313,9 +313,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                 language={language}
                 codeContent={codeString}
                 renderView={
-                  <div style={{ margin: '16px 0' }}>
-                    <MermaidChart code={codeString} isDarkMode={isDarkMode} />
-                  </div>
+                  <MermaidChart code={codeString} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
@@ -362,9 +360,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   language={language}
                   codeContent={codeString}
                   renderView={
-                    <div style={{ margin: '16px 0' }}>
-                      <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
-                    </div>
+                    <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
                   }
                   isDarkMode={isDarkMode}
                   showViewToggle={true}
@@ -379,7 +375,6 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   codeContent={codeString}
                   renderView={
                     <div style={{ 
-                      margin: '16px 0',
                       padding: '12px',
                       backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
                       borderRadius: '6px',
@@ -437,9 +432,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                 language={language}
                 codeContent={codeString}
                 renderView={
-                  <div style={{ margin: '16px 0' }}>
-                    <AudioPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
-                  </div>
+                  <AudioPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
@@ -483,9 +476,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                 language={language}
                 codeContent={codeString}
                 renderView={
-                  <div style={{ margin: '16px 0' }}>
-                    <VideoPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
-                  </div>
+                  <VideoPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}

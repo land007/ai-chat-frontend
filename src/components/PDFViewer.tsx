@@ -384,9 +384,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ url, isDarkMode = false, useProxy
 
   return (
     <div style={{
-      margin: '16px 0',
       backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa',
-      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       borderRadius: '8px',
       overflow: 'hidden'
     }}>

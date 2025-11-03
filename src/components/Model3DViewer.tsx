@@ -117,14 +117,12 @@ const Model3DViewer: React.FC<Model3DViewerProps> = ({ url, isDarkMode = false }
 
   return (
     <div style={{ 
-      margin: '16px 0',
       position: 'relative',
       height: '400px',
       width: '100%',
       backgroundColor: isDarkMode ? '#1e293b' : '#f8f9fa',
       borderRadius: '8px',
-      overflow: 'hidden',
-      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
+      overflow: 'hidden'
     }}>
       <ErrorBoundary onError={handleError} isDarkMode={isDarkMode} url={url}>
         <Suspense fallback={<LoadingIndicator isDarkMode={isDarkMode} url={url} />}>

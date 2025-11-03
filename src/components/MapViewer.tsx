@@ -141,13 +141,11 @@ const MapViewer: React.FC<MapViewerProps> = ({ config, isDarkMode = false }) => 
       ref={containerRef}
       style={{
         position: 'relative',
-        margin: '16px 0',
         height: '400px',
         width: '100%',
         borderRadius: '8px',
         overflow: 'hidden',
         backgroundColor: isDarkMode ? '#1e1e1e' : '#f8f9fa',
-        border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       }}
     >
       {/* 选中轨迹信息显示 */}

@@ -121,10 +121,8 @@ const TreeViewer: React.FC<TreeViewerProps> = ({ code, isDarkMode = false }) => 
 
   return (
     <div style={{
-      margin: '16px 0',
       padding: '12px 16px',
       backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa',
-      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
       borderRadius: '6px',
       overflowX: 'auto',
       fontFamily: 'Monaco, Menlo, "Ubuntu Mono", Consolas, "source-code-pro", monospace'

@@ -57,7 +57,7 @@ const FileDownloader: React.FC<FileDownloaderProps> = ({
   }
 
   return (
-    <div style={{ margin: '16px 0' }}>
+    <div>
       <a
         href={url}
         download={fileName}
@@ -69,7 +69,6 @@ const FileDownloader: React.FC<FileDownloaderProps> = ({
           gap: '12px',
           padding: '12px 16px',
           backgroundColor: isDarkMode ? '#374151' : '#f3f4f6',
-          border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
           borderRadius: '8px',
           textDecoration: 'none',
           color: isDarkMode ? '#f9fafb' : '#111827',

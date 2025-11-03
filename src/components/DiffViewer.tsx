@@ -202,11 +202,9 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ code, isDarkMode = false }) => 
 
   return (
     <div style={{ 
-      margin: '16px 0',
       borderRadius: '6px',
       overflow: 'auto',
       backgroundColor: isDarkMode ? '#2d3748' : '#f6f8fa',
-      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
     }}>
       <pre style={{
         margin: 0,

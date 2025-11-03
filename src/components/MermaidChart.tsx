@@ -374,7 +374,6 @@ const MermaidChart: React.FC<MermaidChartProps> = ({ code, isDarkMode = false })
       ref={containerRef}
       style={{
         position: 'relative',
-        margin: '16px 0',
         padding: '16px',
         backgroundColor: isDarkMode ? '#1e1e1e' : '#f8f9fa',
         borderRadius: '8px',

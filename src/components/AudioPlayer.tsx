@@ -34,11 +34,9 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ url, isDarkMode = false }) =>
 
   return (
     <div style={{ 
-      margin: '16px 0',
       padding: '12px',
       backgroundColor: isDarkMode ? '#1e1e1e' : '#f8f9fa',
-      borderRadius: '8px',
-      border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
+      borderRadius: '8px'
     }}>
       <audio
         ref={audioRef}
