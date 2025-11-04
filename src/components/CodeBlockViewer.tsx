@@ -138,7 +138,7 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
           borderBottom: `1px solid ${toolbarBorderColor}`,
           position: 'sticky',
           top: 0,
-          zIndex: 10
+          zIndex: 100
         }}
       >
         {/* 语言标签 */}

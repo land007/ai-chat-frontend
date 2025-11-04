@@ -84,8 +84,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
           border: 'none',
           borderTop: 'none',
           backgroundColor: codeBgColor,
-          padding: '12px',
-          overflow: 'auto'
+          padding: '12px'
         }}
       >
         <ReactMarkdown
@@ -101,8 +100,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
                   color: codeTextColor,
                   fontSize: '14px',
                   fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-                  lineHeight: '1.5',
-                  overflow: 'auto'
+                  lineHeight: '1.5'
                 }}>
                   <code
                     className={className}
@@ -149,7 +147,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
           borderBottom: `1px solid ${toolbarBorderColor}`,
           position: 'sticky',
           top: 0,
-          zIndex: 10,
+          zIndex: 100,
           gap: '8px'
         }}
       >
