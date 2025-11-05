@@ -71,8 +71,6 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   const codeBlockIdMapRef = useRef<Map<string, string>>(new Map());
   // 跟踪每个代码块的自动折叠状态（基于 codeId）
   const autoCollapsedMapRef = useRef<Map<string, boolean>>(new Map());
-  // 跟踪每个代码块的用户交互状态（基于 codeId）
-  const userInteractedMapRef = useRef<Map<string, boolean>>(new Map());
   // 跟踪上一次 codeComplete 的值，用于检测变化
   const prevCodeCompleteRef = useRef(codeComplete);
   
@@ -115,12 +113,11 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
     const codeCompleteChanged = prevCodeCompleteRef.current === false && codeComplete === true;
     prevCodeCompleteRef.current = codeComplete;
     
-    // 获取当前代码块的自动折叠和用户交互状态（使用当前的 safeCodeId）
+    // 获取当前代码块的自动折叠状态（使用当前的 safeCodeId）
     const hasAutoCollapsed = autoCollapsedMapRef.current.get(safeCodeId) || false;
-    const userHasInteracted = userInteractedMapRef.current.get(safeCodeId) || false;
     
-    // 如果打字机刚完成，且代码超过30行，且还未自动折叠过，且用户未手动操作过
-    if (codeCompleteChanged && isLongCode && !hasAutoCollapsed && !userHasInteracted) {
+    // 如果打字机刚完成，且代码超过30行，且还未自动折叠过
+    if (codeCompleteChanged && isLongCode && !hasAutoCollapsed) {
       // 自动折叠长代码块
       setIsCollapsed(true);
       autoCollapsedMapRef.current.set(safeCodeId, true);
@@ -215,8 +212,6 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
 
   // 切换折叠/展开状态
   const handleToggleCollapse = () => {
-    // 标记用户已手动操作，之后不再自动折叠（基于当前代码块ID）
-    userInteractedMapRef.current.set(safeCodeId, true);
     setIsCollapsed(prev => {
       const newState = !prev;
       console.log('[代码块折叠] 用户手动切换折叠状态', { isCollapsed: newState, codeId: safeCodeId });
