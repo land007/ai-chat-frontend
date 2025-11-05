@@ -38,6 +38,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTypingComplete, setIsTypingComplete] = useState(!enabled); // 如果打字机被禁用，则认为已完成
+  const [codeBlockContents, setCodeBlockContents] = useState<Map<string, string>>(new Map());
   const targetTextRef = useRef('');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -262,9 +263,38 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
     
     return { url, fileName };
   };
+  
+  // 处理代码块内容变化
+  const handleCodeBlockContentChange = (blockId: string, newContent: string) => {
+    setCodeBlockContents(prev => {
+      const newMap = new Map(prev);
+      newMap.set(blockId, newContent);
+      return newMap;
+    });
+    console.log('[代码块编辑] 内容已更新', blockId);
+  };
+  
+  // 获取代码块内容（优先使用映射中的内容）
+  const getCodeBlockContent = (blockId: string, originalContent: string): string => {
+    return codeBlockContents.get(blockId) || originalContent;
+  };
+  
+  // 生成代码块唯一ID（基于内容哈希，确保相同内容有相同ID）
+  const generateCodeBlockId = (codeString: string, language: string, index: number): string => {
+    // 使用语言、索引和内容的前50个字符生成一个稳定的ID
+    // 这样可以确保相同位置的代码块有相同的ID
+    const hash = codeString.substring(0, 50).replace(/\s/g, '');
+    return `code-block-${language}-${index}-${hash.length}-${hash.substring(0, 10)}`;
+  };
+  
+  // 代码块索引计数器（用于在渲染时跟踪代码块位置）
+  const codeBlockIndexRef = useRef(0);
 
   // 渲染Markdown内容
   const renderMarkdown = (content: string) => {
+    // 重置代码块计数器（每次渲染 markdown 时重置）
+    codeBlockIndexRef.current = 0;
+    
     return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
@@ -307,16 +337,22 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
             
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            
             // 打字机完成且流式结束后，渲染图表
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <MermaidChart code={codeString} isDarkMode={isDarkMode} />
+                  <MermaidChart code={actualContent} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
@@ -351,19 +387,25 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
             
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            
             // 打字机完成且流式结束后，解析并渲染地图
             try {
               // 解析JSON格式的地图配置
-              const mapConfig: MapConfig = JSON.parse(codeString);
+              const mapConfig: MapConfig = JSON.parse(actualContent);
               return (
                 <CodeBlockWrapper
+                  key={blockId}
                   language={language}
-                  codeContent={codeString}
+                  codeContent={actualContent}
                   renderView={
                     <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
                   }
                   isDarkMode={isDarkMode}
                   showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
                 />
               );
             } catch (error) {
@@ -371,8 +413,9 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               console.error('[地图] JSON解析失败:', error);
               return (
                 <CodeBlockWrapper
+                  key={blockId}
                   language={language}
-                  codeContent={codeString}
+                  codeContent={actualContent}
                   renderView={
                     <div style={{ 
                       padding: '12px',
@@ -391,6 +434,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   }
                   isDarkMode={isDarkMode}
                   showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
                 />
               );
             }
@@ -426,16 +470,22 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
             
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            
             // 打字机完成且流式结束后，渲染播放器
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <AudioPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
+                  <AudioPlayer url={actualContent.trim()} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
@@ -470,16 +520,22 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
             
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            
             // 打字机完成且流式结束后，渲染播放器
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <VideoPlayer url={codeString.trim()} isDarkMode={isDarkMode} />
+                  <VideoPlayer url={actualContent.trim()} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
@@ -543,65 +599,101 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
             
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            const updatedFileInfo = parseFileInfo(actualContent);
+            
             // 打字机完成且流式结束后，渲染下载链接
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <FileDownloader
-                    url={fileInfo.url}
-                    fileName={fileInfo.fileName}
-                    isDarkMode={isDarkMode}
-                  />
+                  updatedFileInfo ? (
+                    <FileDownloader
+                      url={updatedFileInfo.url}
+                      fileName={updatedFileInfo.fileName}
+                      isDarkMode={isDarkMode}
+                    />
+                  ) : (
+                    <div style={{ 
+                      padding: '12px',
+                      backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
+                      borderRadius: '6px',
+                      border: `1px solid ${isDarkMode ? '#ef4444' : '#dc2626'}`
+                    }}>
+                      <p style={{ 
+                        margin: 0, 
+                        color: isDarkMode ? '#ef4444' : '#dc2626',
+                        fontSize: '14px'
+                      }}>
+                        文件格式解析失败，请检查格式是否正确
+                      </p>
+                    </div>
+                  )
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
 
           // 如果是Diff代码块，使用DiffViewer组件渲染
           if (!isInline && language === 'diff') {
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+                  <DiffViewer code={actualContent} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
 
           // 如果是Merge代码块（合并冲突），使用DiffViewer组件渲染
           if (!isInline && language === 'merge') {
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <DiffViewer code={codeString} isDarkMode={isDarkMode} />
+                  <DiffViewer code={actualContent} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
 
           // 如果是Tree代码块，使用TreeViewer组件渲染
           if (!isInline && language === 'tree') {
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <TreeViewer code={codeString} isDarkMode={isDarkMode} />
+                  <TreeViewer code={actualContent} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
@@ -635,15 +727,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
 
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
-                  <ChartRenderer config={codeString} isDarkMode={isDarkMode} />
+                  <ChartRenderer config={actualContent} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
@@ -678,45 +776,53 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
             
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            
             // 解析PDF信息（类似 FileDownloader）
-            const pdfUrl = codeString.trim().split('\n')[0].trim();
+            const pdfUrl = actualContent.trim().split('\n')[0].trim();
             if (!pdfUrl || (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://'))) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
+                <CodeBlockWrapper
+                  key={blockId}
                   language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
+                  codeContent={actualContent}
+                  renderView={
+                    <div style={{ 
+                      padding: '12px',
+                      backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
+                      borderRadius: '6px',
+                      border: `1px solid ${isDarkMode ? '#ef4444' : '#dc2626'}`
+                    }}>
+                      <p style={{ 
+                        margin: 0, 
+                        color: isDarkMode ? '#ef4444' : '#dc2626',
+                        fontSize: '14px'
+                      }}>
+                        PDF URL格式不正确，必须以 http:// 或 https:// 开头
+                      </p>
+                    </div>
+                  }
                   isDarkMode={isDarkMode}
-                  codeComplete={true}
-                >
-                  {children}
-                </CodeBlockViewer>
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
               );
             }
             
             // 打字机完成且流式结束后，渲染PDF查看器
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
                   <PDFViewer url={pdfUrl} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }
@@ -751,45 +857,53 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               );
             }
             
+            // 生成代码块ID并获取内容
+            const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
+            const actualContent = getCodeBlockContent(blockId, codeString);
+            
             // 解析3D模型URL
-            const modelUrl = codeString.trim().split('\n')[0].trim();
+            const modelUrl = actualContent.trim().split('\n')[0].trim();
             if (!modelUrl || (!modelUrl.startsWith('http://') && !modelUrl.startsWith('https://'))) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
+                <CodeBlockWrapper
+                  key={blockId}
                   language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
+                  codeContent={actualContent}
+                  renderView={
+                    <div style={{ 
+                      padding: '12px',
+                      backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
+                      borderRadius: '6px',
+                      border: `1px solid ${isDarkMode ? '#ef4444' : '#dc2626'}`
+                    }}>
+                      <p style={{ 
+                        margin: 0, 
+                        color: isDarkMode ? '#ef4444' : '#dc2626',
+                        fontSize: '14px'
+                      }}>
+                        3D模型URL格式不正确，必须以 http:// 或 https:// 开头
+                      </p>
+                    </div>
+                  }
                   isDarkMode={isDarkMode}
-                  codeComplete={true}
-                >
-                  {children}
-                </CodeBlockViewer>
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
               );
             }
             
             // 打字机完成且流式结束后，渲染3D模型
             return (
               <CodeBlockWrapper
+                key={blockId}
                 language={language}
-                codeContent={codeString}
+                codeContent={actualContent}
                 renderView={
                   <Model3DViewer url={modelUrl} isDarkMode={isDarkMode} />
                 }
                 isDarkMode={isDarkMode}
                 showViewToggle={true}
+                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
             );
           }

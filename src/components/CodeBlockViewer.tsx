@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { copyToClipboard } from '@/utils';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github.css';
 
 interface CodeBlockViewerProps {
   /** 代码内容（必填） */
@@ -58,9 +60,58 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   onCopyChange
 }) => {
   const [copied, setCopied] = useState(false);
+  const [highlightedContent, setHighlightedContent] = useState<string | null>(null);
   const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const highlightTimerRef = useRef<NodeJS.Timeout | null>(null);
   // 使用 ref 存储代码块的 ID 映射，确保同一代码块有相同的 ID
   const codeBlockIdMapRef = useRef<Map<string, string>>(new Map());
+  
+  // 判断是否为JSON类型（需要代码高亮）
+  const isJsonType = language === 'map' || language === 'chart';
+  
+  // 实时高亮JSON内容（流式输出时）- 在useEffect中异步更新状态
+  useEffect(() => {
+    if (isJsonType && codeContent) {
+      const highlightNow = () => {
+        try {
+          const highlighted = hljs.highlight(codeContent, { language: 'json' });
+          // 使用函数式更新确保状态正确更新
+          setHighlightedContent(prev => {
+            // 如果内容相同，不更新（避免不必要的重新渲染）
+            if (prev === highlighted.value) {
+              return prev;
+            }
+            return highlighted.value;
+          });
+        } catch (error) {
+          // 如果高亮失败（可能是JSON格式不完整），使用原始内容
+          setHighlightedContent(null);
+        }
+      };
+      
+      // 清除之前的防抖定时器
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+      }
+      
+      // 立即执行一次高亮（不等待防抖），确保实时显示
+      highlightNow();
+      
+      // 然后设置防抖更新（用于后续优化）
+      highlightTimerRef.current = setTimeout(() => {
+        highlightNow();
+      }, 100);
+    } else {
+      setHighlightedContent(null);
+    }
+    
+    return () => {
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = null;
+      }
+    };
+  }, [codeContent, isJsonType, language]);
 
   // 生成稳定的ID键
   const idKey = `${codeContent}-${language || ''}`;
@@ -77,6 +128,10 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
       if (copyTimerRef.current) {
         clearTimeout(copyTimerRef.current);
         copyTimerRef.current = null;
+      }
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = null;
       }
     };
   }, []);
@@ -230,7 +285,27 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
           style={codeStyle}
           {...codeProps}
         >
-          {children}
+          {(() => {
+            // JSON类型，优先使用高亮内容
+            if (isJsonType && codeContent) {
+              // 如果高亮内容已准备好，使用高亮内容
+              if (highlightedContent) {
+                return <span dangerouslySetInnerHTML={{ __html: highlightedContent }} />;
+              }
+              // 如果高亮内容还没准备好，尝试实时高亮（同步方式，避免异步延迟）
+              // 注意：这里不更新状态，只是直接计算并渲染，避免在渲染中更新状态
+              try {
+                const highlighted = hljs.highlight(codeContent, { language: 'json' });
+                return <span dangerouslySetInnerHTML={{ __html: highlighted.value }} />;
+              } catch (error) {
+                // 如果高亮失败，显示原始内容
+                return <span>{codeContent}</span>;
+              }
+            }
+            
+            // 非JSON类型，使用children
+            return children;
+          })()}
         </code>
       </pre>
     </div>
