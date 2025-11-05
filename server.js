@@ -123,7 +123,13 @@ app.use(express.json());
 
 // 请求日志中间件
 app.use((req, res, next) => {
-  logger.debug('[HTTP]', req.method, req.path);
+  const fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
+  logger.warn('[HTTP]', req.method, fullUrl, {
+    path: req.path,
+    query: req.query,
+    originalUrl: req.originalUrl,
+    url: req.url
+  });
   next();
 });
 
@@ -149,10 +155,59 @@ class AIAdapter {
   }
 
   /**
+   * 检测是否为Dify API
+   * 优先使用provider配置，URL检测作为备用
+   */
+  isDifyApi() {
+    // 优先使用显式配置
+    if (this.provider === 'dify') {
+      return true;
+    }
+    // 备用：通过URL检测
+    return this.apiUrl && this.apiUrl.includes('/v1/chat-messages');
+  }
+
+  /**
+   * 从messages中提取用户消息内容
+   */
+  extractUserQuery(messages) {
+    // 找到最后一条用户消息
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        return messages[i].content;
+      }
+    }
+    return '';
+  }
+
+  /**
    * 构建请求体（根据不同provider适配格式）
    */
   buildRequestBody(messages, parameters = {}) {
-    if (this.provider === 'openai') {
+    // 显式检查provider配置，优先使用
+    if (this.provider === 'dify') {
+      // Dify格式
+      const query = this.extractUserQuery(messages);
+      const requestBody = {
+        inputs: parameters.inputs || {},
+        query: query,
+        response_mode: 'blocking',
+        // Dify要求user字段必须提供，使用默认值
+        user: parameters.user || 'default-user'
+      };
+      
+      // 只有当conversation_id不为空时才添加
+      if (parameters.conversation_id) {
+        requestBody.conversation_id = parameters.conversation_id;
+      }
+      
+      // 只有当files不为空时才添加
+      if (parameters.files && Array.isArray(parameters.files) && parameters.files.length > 0) {
+        requestBody.files = parameters.files;
+      }
+      
+      return requestBody;
+    } else if (this.provider === 'openai') {
       // OpenAI格式（包括转发API）
       return {
         model: OPENAI_MODEL,
@@ -169,6 +224,28 @@ class AIAdapter {
         parameters: parameters,
         debug: {}
       };
+    } else if (this.isDifyApi()) {
+      // 备用：通过URL自动检测Dify API
+      const query = this.extractUserQuery(messages);
+      const requestBody = {
+        inputs: parameters.inputs || {},
+        query: query,
+        response_mode: 'blocking',
+        // Dify要求user字段必须提供，使用默认值
+        user: parameters.user || 'default-user'
+      };
+      
+      // 只有当conversation_id不为空时才添加
+      if (parameters.conversation_id) {
+        requestBody.conversation_id = parameters.conversation_id;
+      }
+      
+      // 只有当files不为空时才添加
+      if (parameters.files && Array.isArray(parameters.files) && parameters.files.length > 0) {
+        requestBody.files = parameters.files;
+      }
+      
+      return requestBody;
     }
     throw new Error(`Unsupported AI provider: ${this.provider}`);
   }
@@ -214,7 +291,30 @@ class AIAdapter {
    * 构建流式请求体（根据不同provider适配格式）
    */
   buildStreamRequestBody(messages, parameters = {}) {
-    if (this.provider === 'openai') {
+    // 显式检查provider配置，优先使用
+    if (this.provider === 'dify') {
+      // Dify格式
+      const query = this.extractUserQuery(messages);
+      const requestBody = {
+        inputs: parameters.inputs || {},
+        query: query,
+        response_mode: 'streaming',
+        // Dify要求user字段必须提供，使用默认值
+        user: parameters.user || 'default-user'
+      };
+      
+      // 只有当conversation_id不为空时才添加
+      if (parameters.conversation_id) {
+        requestBody.conversation_id = parameters.conversation_id;
+      }
+      
+      // 只有当files不为空时才添加
+      if (parameters.files && Array.isArray(parameters.files) && parameters.files.length > 0) {
+        requestBody.files = parameters.files;
+      }
+      
+      return requestBody;
+    } else if (this.provider === 'openai') {
       // OpenAI格式（包括转发API）
       return {
         model: OPENAI_MODEL,
@@ -235,6 +335,28 @@ class AIAdapter {
         },
         debug: {}
       };
+    } else if (this.isDifyApi()) {
+      // 备用：通过URL自动检测Dify API
+      const query = this.extractUserQuery(messages);
+      const requestBody = {
+        inputs: parameters.inputs || {},
+        query: query,
+        response_mode: 'streaming',
+        // Dify要求user字段必须提供，使用默认值
+        user: parameters.user || 'default-user'
+      };
+      
+      // 只有当conversation_id不为空时才添加
+      if (parameters.conversation_id) {
+        requestBody.conversation_id = parameters.conversation_id;
+      }
+      
+      // 只有当files不为空时才添加
+      if (parameters.files && Array.isArray(parameters.files) && parameters.files.length > 0) {
+        requestBody.files = parameters.files;
+      }
+      
+      return requestBody;
     }
     throw new Error(`Unsupported AI provider: ${this.provider}`);
   }
@@ -243,7 +365,13 @@ class AIAdapter {
    * 解析响应（统一格式）
    */
   parseResponse(response) {
-    if (this.provider === 'openai') {
+    // 显式检查provider配置，优先使用
+    if (this.provider === 'dify') {
+      // Dify格式: response.answer
+      if (response.data && response.data.answer) {
+        return response.data.answer;
+      }
+    } else if (this.provider === 'openai') {
       // OpenAI格式: response.choices[0].message.content
       if (response.data.choices && response.data.choices[0] && response.data.choices[0].message) {
         return response.data.choices[0].message.content;
@@ -252,6 +380,11 @@ class AIAdapter {
       // DashScope格式: response.output.text
       if (response.data.output && response.data.output.text) {
         return response.data.output.text;
+      }
+    } else if (this.isDifyApi()) {
+      // 备用：通过URL自动检测Dify API
+      if (response.data && response.data.answer) {
+        return response.data.answer;
       }
     }
     throw new Error('Invalid API response format');
@@ -1733,7 +1866,11 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
 
       try {
         // 使用适配器构建流式请求
-        const requestBody = aiAdapter.buildStreamRequestBody(messages, {});
+        // 获取实际用户名用于Dify API
+        const currentUser = (req.user && (req.user.name || req.user.userId)) || 'default-user';
+        const requestBody = aiAdapter.buildStreamRequestBody(messages, {
+          user: currentUser
+        });
         const requestConfig = aiAdapter.getStreamRequestConfig();
         
         logger.debug('[AI-流式] 请求体:', JSON.stringify(requestBody, null, 2));
@@ -1866,9 +2003,97 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
               dataPreview: sseMessage.data.slice(0, 150)
             });
             
-            // 转换阿里云格式到OpenAI标准格式
+            // 转换不同格式到OpenAI标准格式
             try {
-              if (aiAdapter.getProvider() === 'dashscope') {
+              // 显式检查provider配置，优先使用
+              if (aiAdapter.getProvider() === 'dify' || aiAdapter.isDifyApi()) {
+                // 解析Dify格式
+                const parsed = JSON.parse(sseMessage.data);
+                const event = parsed.event;
+                
+                // Dify可能使用不同的字段名：answer, text, content
+                // 对于 agent_message 事件，可能使用 answer 字段
+                let answer = '';
+                if (parsed.answer !== undefined && parsed.answer !== null) {
+                  answer = String(parsed.answer);
+                } else if (parsed.text !== undefined && parsed.text !== null) {
+                  answer = String(parsed.text);
+                } else if (parsed.content !== undefined && parsed.content !== null) {
+                  answer = String(parsed.content);
+                }
+                
+                // Debug日志：打印解析结果
+                logger.debug(`[AI-流式-解析] Dify消息 #${chunkCount}`, {
+                  event: event,
+                  answerLength: answer.length,
+                  accumulatedLength: accumulatedText.length,
+                  hasAnswer: parsed.answer !== undefined,
+                  hasText: parsed.text !== undefined,
+                  hasContent: parsed.content !== undefined,
+                  answerType: typeof parsed.answer,
+                  answerValue: parsed.answer,
+                  parsedKeys: Object.keys(parsed),
+                  fullParsed: JSON.stringify(parsed).substring(0, 200)
+                });
+                
+                // Dify支持多种事件类型：message, agent_message, agent_thought, message_end
+                // agent_thought 是思考过程，不发送给前端
+                if (event === 'message' || event === 'agent_message') {
+                  // 消息事件，提取增量文本
+                  if (answer && answer.length > 0) {
+                    accumulatedText += answer;
+                    
+                    // 转换为OpenAI标准格式 - 发送增量文本
+                    const standardChunk = {
+                      content: answer, // 发送增量文本
+                      done: false,
+                      timestamp: new Date().toISOString()
+                    };
+                    
+                    const sseData = `data: ${JSON.stringify(standardChunk)}\n\n`;
+                    res.write(sseData);
+                    
+                    logger.warn(`[AI-流式-发送] Dify消息 #${chunkCount}`, {
+                      event: event,
+                      incrementalLength: answer.length,
+                      accumulatedLength: accumulatedText.length,
+                      answerPreview: answer.substring(0, 100)
+                    });
+                    
+                    isFirstMessage = false;
+                  } else {
+                    logger.debug(`[AI-流式-跳过] Dify消息 #${chunkCount} - answer为空`, {
+                      event: event,
+                      answer: answer,
+                      answerLength: answer.length,
+                      parsed: parsed
+                    });
+                  }
+                } else if (event === 'message_end' || event === 'agent_message_end') {
+                  // 消息结束事件
+                  const totalDuration = Date.now() - connectionStartTime;
+                  const dataDuration = firstDataReceivedTime 
+                    ? Date.now() - firstDataReceivedTime 
+                    : 0;
+                  
+                  logger.info('[AI-流式] Dify流式传输完成', {
+                    totalMessages: chunkCount,
+                    totalLength: accumulatedText.length,
+                    totalDuration: totalDuration + 'ms',
+                    dataDuration: dataDuration + 'ms'
+                  });
+                  
+                  // 清理心跳检测定时器
+                  if (dataTimeoutTimer) {
+                    clearInterval(dataTimeoutTimer);
+                    dataTimeoutTimer = null;
+                  }
+                  
+                  res.write('data: [DONE]\n\n');
+                  res.end();
+                  return;
+                }
+              } else if (aiAdapter.getProvider() === 'dashscope') {
                 // 解析阿里云JSON
                 const parsed = JSON.parse(sseMessage.data);
                 const incrementalText = parsed.output?.text || '';
@@ -2015,12 +2240,52 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         const totalDuration = Date.now() - connectionStartTime;
         const isTimeoutError = error.code === 'ECONNABORTED' || error.message.includes('timeout');
         
+        // 尝试读取错误响应的内容（如果是流）
+        let errorResponseData = null;
+        if (error.response && error.response.data) {
+          try {
+            // 如果是流对象，需要读取内容
+            if (error.response.data && typeof error.response.data.on === 'function' && !error.response.data.readableEnded) {
+              // 这是流对象，需要读取
+              const chunks = [];
+              
+              error.response.data.on('data', (chunk) => {
+                chunks.push(chunk);
+              });
+              
+              await new Promise((resolve) => {
+                error.response.data.on('end', resolve);
+                error.response.data.on('error', resolve);
+                // 设置超时，避免无限等待
+                setTimeout(resolve, 1000);
+              });
+              
+              if (chunks.length > 0) {
+                const errorText = Buffer.concat(chunks).toString('utf-8');
+                try {
+                  errorResponseData = JSON.parse(errorText);
+                } catch {
+                  errorResponseData = errorText;
+                }
+              }
+            } else if (error.response.data) {
+              // 如果不是流，直接使用
+              errorResponseData = error.response.data;
+            }
+          } catch (e) {
+            logger.debug('[AI-流式] 读取错误响应失败:', e.message);
+          }
+        }
+        
         logger.error('[AI-流式] 请求失败', {
           error: error.message,
           code: error.code,
           totalDuration: totalDuration + 'ms',
           isTimeoutError: isTimeoutError,
-          isConnectionEstablished: isConnectionEstablished || false
+          isConnectionEstablished: isConnectionEstablished || false,
+          responseStatus: error.response?.status,
+          responseData: errorResponseData || '无法读取错误响应',
+          responseHeaders: error.response?.headers
         });
         
         // 清理心跳检测定时器
@@ -2053,7 +2318,11 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
       }
     } else {
       // 非流式传输模式
-      const requestBody = aiAdapter.buildRequestBody(messages, {});
+      // 获取实际用户名用于Dify API
+      const currentUser = (req.user && (req.user.name || req.user.userId)) || 'default-user';
+      const requestBody = aiAdapter.buildRequestBody(messages, {
+        user: currentUser
+      });
       const requestConfig = aiAdapter.getRequestConfig();
       
       logger.debug('[AI] 非流式请求体:', JSON.stringify(requestBody, null, 2));
