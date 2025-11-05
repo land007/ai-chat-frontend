@@ -39,7 +39,7 @@ function AppContent() {
           }
           // 如果启用调试模式，默认显示测试页面
           if (config.enableDebugMode === true) {
-            setCurrentPage('tts');
+            setCurrentPage('typewriter-code');
           }
         }
       } catch (error) {
@@ -115,6 +115,12 @@ function AppContent() {
             💬 聊天界面
           </button>
           <button 
+            onClick={() => setCurrentPage('typewriter-code')}
+            style={buttonStyle('typewriter-code')}
+          >
+            📝 打字机代码测试
+          </button>
+          <button 
             onClick={() => setCurrentPage('stream-segment')}
             style={buttonStyle('stream-segment')}
           >
@@ -131,12 +137,6 @@ function AppContent() {
             style={buttonStyle('tts')}
           >
             🎙️ TTS集成测试
-          </button>
-          <button 
-            onClick={() => setCurrentPage('typewriter-code')}
-            style={buttonStyle('typewriter-code')}
-          >
-            📝 打字机代码测试
           </button>
           {isAdmin && (
             <button 
