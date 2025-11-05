@@ -902,7 +902,9 @@ app.get('/api/config', (req, res) => {
     adminUsers: ADMIN_USERS,
     // 输入框配置
     textareaMinRows: parseInt(process.env.TEXTAREA_MIN_ROWS || '2', 10),
-    textareaMaxRows: parseInt(process.env.TEXTAREA_MAX_ROWS || '5', 10)
+    textareaMaxRows: parseInt(process.env.TEXTAREA_MAX_ROWS || '5', 10),
+    // 语音输入功能开关
+    enableVoiceInput: process.env.ENABLE_VOICE_INPUT !== 'false'
   });
 });
 

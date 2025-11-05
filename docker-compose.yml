@@ -73,6 +73,7 @@ services:
       # UI功能控制
       - ENABLE_I18N_BUTTON=${ENABLE_I18N_BUTTON:-false}
       - ENABLE_DEBUG_MODE=${ENABLE_DEBUG_MODE:-false}
+      - ENABLE_VOICE_INPUT=${ENABLE_VOICE_INPUT:-true}
 
       # 日志级别控制 (error/warn/info/debug)
       # LOG_LEVEL=warn（默认）：生产环境，只看关键业务流程

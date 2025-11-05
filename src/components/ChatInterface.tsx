@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut, Settings, Menu } from 'lucide-react';
+import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, Copy, ThumbsUp, ThumbsDown, Sun, Moon, RefreshCw, Globe, LogOut, Settings, Menu, Mic, Keyboard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatAPI } from '@/services/api';
@@ -46,7 +46,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     enableFastSuggest: true as boolean,
     fastSuggestDefaultCount: 3 as number,
     textareaMinRows: 2 as number,
-    textareaMaxRows: 5 as number
+    textareaMaxRows: 5 as number,
+    enableVoiceInput: true as boolean
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
@@ -67,6 +68,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   // 复制反馈状态
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 语音输入相关状态
+  const [inputMode, setInputMode] = useState<'keyboard' | 'voice'>('keyboard');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [recognizedText, setRecognizedText] = useState<string | null>(null);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  
+  // 录音相关refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
   
   // 检查是否是管理员用户
   const isAdmin = user?.userId && adminUsers.includes(user.userId);
@@ -1272,6 +1292,425 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     }
   };
 
+  // ==================== 语音输入相关功能 ====================
+  
+  // 检查浏览器是否支持语音识别
+  const checkSpeechRecognitionSupport = useCallback(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    return !!SpeechRecognition;
+  }, []);
+
+  // 检查是否支持 getUserMedia（需要 HTTPS 或 localhost）
+  const checkMediaDevicesSupport = useCallback(() => {
+    // 检查 navigator.mediaDevices 是否存在
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      // 检查是否是 HTTP（非 HTTPS）环境
+      const isHttp = window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      if (isHttp) {
+        return {
+          supported: false,
+          reason: 'https',
+          message: '语音输入功能需要 HTTPS 环境，请使用 HTTPS 访问或使用 localhost'
+        };
+      }
+      return {
+        supported: false,
+        reason: 'not_supported',
+        message: '浏览器不支持语音输入功能'
+      };
+    }
+    return {
+      supported: true,
+      reason: null,
+      message: null
+    };
+  }, []);
+
+  // 检查浏览器是否支持录音
+  const checkMediaRecorderSupport = useCallback(() => {
+    const support = checkMediaDevicesSupport();
+    return support.supported && !!window.MediaRecorder;
+  }, [checkMediaDevicesSupport]);
+
+  // 请求麦克风权限
+  const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
+    // 先检查是否支持
+    const support = checkMediaDevicesSupport();
+    if (!support.supported) {
+      console.error('[语音输入] 不支持麦克风访问:', support.message);
+      setHasPermission(false);
+      setRecordingError(support.message);
+      return false;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop()); // 立即停止，只是测试权限
+      setHasPermission(true);
+      setRecordingError(null);
+      return true;
+    } catch (error: any) {
+      console.error('[语音输入] 麦克风权限请求失败:', error);
+      setHasPermission(false);
+      if (error.name === 'NotAllowedError') {
+        setRecordingError('需要麦克风权限才能使用语音输入，请在浏览器设置中允许麦克风权限');
+      } else if (error.name === 'NotFoundError') {
+        setRecordingError('未检测到麦克风设备，请检查设备连接');
+      } else if (error.name === 'NotSupportedError') {
+        setRecordingError('浏览器不支持麦克风访问，请使用 HTTPS 或 localhost');
+      } else {
+        setRecordingError('无法访问麦克风，请检查设备权限或使用 HTTPS 环境');
+      }
+      return false;
+    }
+  }, [checkMediaDevicesSupport]);
+
+  // 绘制音波效果
+  const drawWaveform = useCallback(() => {
+    if (!waveformCanvasRef.current || !analyserRef.current || !audioContextRef.current) {
+      return;
+    }
+
+    const canvas = waveformCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyser.getByteFrequencyData(dataArray);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const barWidth = (canvas.width / bufferLength) * 2.5;
+    let barHeight;
+    let x = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+      barHeight = (dataArray[i] / 255) * canvas.height;
+      
+      const gradient = ctx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height);
+      gradient.addColorStop(0, isDarkMode ? '#3b82f6' : '#2563eb');
+      gradient.addColorStop(1, isDarkMode ? '#60a5fa' : '#3b82f6');
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+      x += barWidth + 1;
+    }
+
+    if (isRecording) {
+      animationFrameRef.current = requestAnimationFrame(drawWaveform);
+    }
+  }, [isRecording, isDarkMode]);
+
+  // 开始录音
+  const startRecording = useCallback(async () => {
+    try {
+      console.log('[语音输入] 开始录音');
+      
+      // 先检查是否支持
+      const support = checkMediaDevicesSupport();
+      if (!support.supported) {
+        console.error('[语音输入] 不支持麦克风访问:', support.message);
+        setRecordingError(support.message);
+        setInputMode('keyboard');
+        return;
+      }
+      
+      // 请求权限
+      if (hasPermission === null || hasPermission === false) {
+        const granted = await requestMicrophonePermission();
+        if (!granted) {
+          setInputMode('keyboard');
+          return;
+        }
+      }
+
+      // 获取音频流（再次检查确保支持）
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('浏览器不支持麦克风访问，请使用 HTTPS 或 localhost');
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // 创建MediaRecorder
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      // 创建AudioContext用于音波效果
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+
+      // 初始化canvas并开始绘制音波
+      if (waveformCanvasRef.current) {
+        const canvas = waveformCanvasRef.current;
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 40;
+        drawWaveform();
+      }
+
+      // 录音数据收集
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      // 录音结束处理
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        audioContext.close();
+        
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+        analyserRef.current = null;
+
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+
+        // 开始语音识别
+        await handleRecordingEnd();
+      };
+
+      // 开始录音
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      setRecordingError(null);
+
+      // 启动录音时长计时器
+      const startTime = Date.now();
+      recordingTimerRef.current = setInterval(() => {
+        const duration = Math.floor((Date.now() - startTime) / 1000);
+        setRecordingDuration(duration);
+        
+        // 最长60秒
+        if (duration >= 60) {
+          stopRecording();
+        }
+      }, 1000);
+
+    } catch (error: any) {
+      console.error('[语音输入] 录音失败:', error);
+      setRecordingError('录音失败，请重试');
+      setIsRecording(false);
+      setInputMode('keyboard');
+    }
+  }, [hasPermission, requestMicrophonePermission, drawWaveform, checkMediaDevicesSupport]);
+
+  // 停止录音
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      console.log('[语音输入] 停止录音');
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  }, [isRecording]);
+
+  // 录音结束，开始识别
+  const handleRecordingEnd = useCallback(async () => {
+    setIsRecognizing(true);
+    setRecognizedText(null);
+    setRecordingError(null);
+
+    try {
+      // 使用Web Speech API进行识别（需要在录音时就开始识别）
+      // 由于Web Speech API需要实时音频流，我们在这里使用一个模拟的识别过程
+      // 实际应用中，应该在录音开始时就开始识别，或者使用后端API
+      
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (SpeechRecognition) {
+        // 使用Web Speech API进行实时识别
+        // 注意：这需要在录音时就开始识别，但我们的需求是录音结束后识别
+        // 这里我们使用一个替代方案：提示用户使用浏览器内置的语音识别
+        
+        // 临时方案：显示提示，说明需要后端API支持
+        // 实际应用中可以：
+        // 1. 在录音时就开始识别（使用Web Speech API）
+        // 2. 使用后端API进行识别（上传音频文件）
+        
+        // 模拟识别过程（实际应该调用后端API）
+        setTimeout(() => {
+          // 这里应该调用后端API进行语音识别
+          // 暂时显示提示
+          setRecordingError('语音识别功能需要后端API支持，请等待集成');
+          setIsRecognizing(false);
+        }, 1000);
+        
+      } else {
+        // 不支持Web Speech API，需要后端API
+        setRecordingError('浏览器不支持语音识别，请等待后端API集成');
+        setIsRecognizing(false);
+      }
+    } catch (error: any) {
+      console.error('[语音输入] 识别失败:', error);
+      setRecordingError('识别失败，请重试');
+      setIsRecognizing(false);
+    }
+  }, []);
+
+  // 切换输入模式
+  const handleToggleInputMode = useCallback(() => {
+    // 如果配置关闭了语音输入，不允许切换
+    if (!appConfig.enableVoiceInput) {
+      return;
+    }
+    
+    if (inputMode === 'voice') {
+      // 如果正在录音，先停止
+      if (isRecording) {
+        stopRecording();
+      }
+      setInputMode('keyboard');
+    } else {
+      // 切换到语音模式前，先检查是否支持
+      const support = checkMediaDevicesSupport();
+      if (!support.supported) {
+        console.error('[语音输入] 不支持语音输入:', support.message);
+        setRecordingError(support.message);
+        // 不切换模式，保持键盘模式
+        return;
+      }
+      // 切换到语音模式
+      setInputMode('voice');
+      setRecordingError(null);
+    }
+  }, [inputMode, isRecording, stopRecording, checkMediaDevicesSupport, appConfig.enableVoiceInput]);
+
+  // 发送识别结果
+  const handleSendRecognizedText = useCallback(() => {
+    const textToSend = recognizedText || inputValue.trim();
+    if (textToSend && !isLoading) {
+      // 设置输入值并发送
+      setInputValue(textToSend);
+      setRecognizedText(null);
+      setInputMode('keyboard');
+      setIsRecognizing(false);
+      
+      // 使用现有的发送消息函数
+      // 需要等待状态更新
+      setTimeout(() => {
+        handleSendMessage();
+      }, 0);
+    }
+  }, [recognizedText, inputValue, isLoading, handleSendMessage]);
+
+  // 取消识别结果
+  const handleCancelRecognizedText = useCallback(() => {
+    setRecognizedText(null);
+    setInputValue('');
+    setIsRecognizing(false);
+    setRecordingError(null);
+    // 保持语音模式，等待下次录音
+  }, []);
+
+  // 处理输入框的鼠标按下事件（语音模式）
+  const handleInputMouseDown = useCallback((e: React.MouseEvent) => {
+    if (inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // 开始录音
+      startRecording();
+      
+      // 在document上添加mouseup监听，确保鼠标移出输入框也能停止录音
+      const handleDocumentMouseUp = (event: MouseEvent) => {
+        event.preventDefault();
+        stopRecording();
+        document.removeEventListener('mouseup', handleDocumentMouseUp);
+        document.removeEventListener('mouseleave', handleDocumentMouseUp);
+      };
+      
+      // 监听鼠标松开和鼠标离开
+      document.addEventListener('mouseup', handleDocumentMouseUp);
+      document.addEventListener('mouseleave', handleDocumentMouseUp);
+    }
+  }, [inputMode, isRecording, isRecognizing, recognizedText, startRecording, stopRecording]);
+
+  // 处理输入框的鼠标松开事件（语音模式）
+  const handleInputMouseUp = useCallback((e: React.MouseEvent) => {
+    if (inputMode === 'voice' && isRecording) {
+      e.preventDefault();
+      e.stopPropagation();
+      stopRecording();
+    }
+  }, [inputMode, isRecording, stopRecording]);
+
+  // 处理输入框的触摸事件（移动端）
+  const handleInputTouchStart = useCallback((e: React.TouchEvent) => {
+    if (inputMode === 'voice' && !isRecording && !isRecognizing) {
+      e.preventDefault();
+      startRecording();
+    }
+  }, [inputMode, isRecording, isRecognizing, startRecording]);
+
+  const handleInputTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (inputMode === 'voice' && isRecording) {
+      e.preventDefault();
+      stopRecording();
+    }
+  }, [inputMode, isRecording, stopRecording]);
+
+  // 清理录音资源
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [isRecording]);
+
+  // 检查浏览器支持，如果不支持则隐藏切换按钮或显示提示
+  useEffect(() => {
+    // 如果配置关闭了语音输入，强制使用键盘模式
+    if (!appConfig.enableVoiceInput) {
+      if (inputMode === 'voice') {
+        setInputMode('keyboard');
+      }
+      return;
+    }
+    
+    const support = checkMediaDevicesSupport();
+    if (!support.supported) {
+      console.log('[语音输入] 浏览器不支持语音功能:', support.message);
+      // 如果当前是语音模式，自动切换回键盘模式
+      if (inputMode === 'voice') {
+        setInputMode('keyboard');
+        setRecordingError(support.message);
+      }
+    }
+  }, [checkMediaDevicesSupport, inputMode, appConfig.enableVoiceInput]);
+
   // 动态样式，支持深色主题
   const getStyles = () => {
     const isDark = isDarkMode;
@@ -1726,6 +2165,83 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     stopButton: {
       backgroundColor: '#ef4444',
       color: 'white'
+    },
+    // 语音输入相关样式
+    waveformArea: {
+      height: '60px',
+      backgroundColor: isDark ? '#2d3748' : '#f8fafc',
+      borderBottom: `1px solid ${borderColor}`,
+      padding: '8px 24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '16px'
+    },
+    waveformCanvas: {
+      width: '100%',
+      height: '40px',
+      maxWidth: '600px'
+    },
+    recordingDuration: {
+      fontSize: '14px',
+      color: mutedColor,
+      minWidth: '50px',
+      textAlign: 'center' as const
+    },
+    modeToggleButton: {
+      width: '48px',
+      height: '48px',
+      backgroundColor: inputMode === 'voice' ? '#3b82f6' : (isDark ? '#4b5563' : '#f3f4f6'),
+      color: inputMode === 'voice' ? 'white' : mutedColor,
+      borderRadius: '16px',
+      border: 'none',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      opacity: 0.7
+    },
+    modeToggleButtonHover: {
+      opacity: 1,
+      backgroundColor: inputMode === 'voice' ? '#2563eb' : (isDark ? '#6b7280' : '#e5e7eb')
+    },
+    voiceTextarea: {
+      flex: 1,
+      padding: '12px 16px',
+      border: `1px solid ${isRecording ? '#ef4444' : (isDarkMode ? '#4b5563' : '#e5e7eb')}`,
+      borderRadius: '16px',
+      resize: 'none' as const,
+      outline: 'none',
+      fontSize: '16px',
+      lineHeight: '1.5',
+      fontFamily: 'inherit',
+      backgroundColor: isRecording ? (isDark ? '#4b1f1f' : '#fef2f2') : surfaceColor,
+      color: inputMode === 'voice' && !isRecording && !isRecognizing ? mutedColor : textColor,
+      boxSizing: 'border-box' as const,
+      textAlign: inputMode === 'voice' && !isRecording && !isRecognizing ? 'center' as const : 'left' as const,
+      cursor: inputMode === 'voice' ? 'pointer' : 'text',
+      userSelect: 'none' as const,
+      transition: 'all 0.3s ease',
+      animation: isRecording ? 'pulse 1s infinite' : 'none'
+    },
+    voiceCancelButton: {
+      width: '48px',
+      height: '48px',
+      backgroundColor: isDark ? '#4b5563' : '#f3f4f6',
+      color: mutedColor,
+      borderRadius: '16px',
+      border: 'none',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      opacity: 0.7
+    },
+    voiceCancelButtonHover: {
+      opacity: 1,
+      backgroundColor: isDark ? '#6b7280' : '#e5e7eb'
     }
   };
 };
@@ -1752,6 +2268,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+          }
+          
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
           }
           
           /* 移动端主题切换按钮样式修复 */
@@ -2158,47 +2679,186 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         </div>
       )}
 
+      {/* 音波效果显示区域（仅录音时显示） */}
+      {isRecording && (
+        <div style={getStyles().waveformArea}>
+          <canvas
+            ref={waveformCanvasRef}
+            width={600}
+            height={40}
+            style={getStyles().waveformCanvas}
+          />
+          <div style={getStyles().recordingDuration}>
+            {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
+            {String(recordingDuration % 60).padStart(2, '0')}
+          </div>
+        </div>
+      )}
+
       {/* 输入区域 */}
       <div style={getStyles().inputArea}>
         <div style={getStyles().inputContainer}>
           <textarea
             ref={mainTextareaRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            value={
+              isRecognizing 
+                ? '识别中...' 
+                : inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText
+                  ? '按住说话'
+                  : inputValue
+            }
+            onChange={(e) => {
+              if (inputMode !== 'voice' || isRecognizing || recognizedText) {
+                setInputValue(e.target.value);
+              }
+            }}
             onKeyPress={handleKeyPress}
-            placeholder={t('ui.inputPlaceholder')}
-            style={{
-              ...getStyles().textarea,
-              ...(inputValue.trim() ? getStyles().textareaFocus : {})
+            placeholder={
+              inputMode === 'voice' && !isRecording && !isRecognizing
+                ? '按住说话'
+                : t('ui.inputPlaceholder')
+            }
+            readOnly={inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText}
+            onMouseDown={handleInputMouseDown}
+            onMouseUp={handleInputMouseUp}
+            onTouchStart={handleInputTouchStart}
+            onTouchEnd={handleInputTouchEnd}
+            onKeyDown={(e) => {
+              // 语音模式下阻止键盘输入
+              if (inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText) {
+                e.preventDefault();
+              }
             }}
+            style={
+              inputMode === 'voice'
+                ? getStyles().voiceTextarea
+                : {
+                    ...getStyles().textarea,
+                    ...(inputValue.trim() ? getStyles().textareaFocus : {})
+                  }
+            }
           />
-          <button
-            onClick={isLoading ? handleStopRequest : handleSendMessage}
-            disabled={!isLoading && !inputValue.trim()}
-            style={{
-              ...getStyles().sendButton,
-              ...(isLoading ? getStyles().stopButton : {}),
-              ...(!isLoading && !inputValue.trim() ? getStyles().sendButtonDisabled : {})
-            }}
-            onMouseEnter={(e) => {
-              if (isLoading) {
-                e.currentTarget.style.backgroundColor = '#dc2626';
-              } else if (inputValue.trim()) {
-                e.currentTarget.style.backgroundColor = '#2563eb';
+          {/* 发送按钮（键盘模式或识别结果时显示） */}
+          {(inputMode === 'keyboard' || recognizedText || isRecognizing) && (
+            <button
+              onClick={
+                isRecognizing
+                  ? handleCancelRecognizedText
+                  : recognizedText
+                    ? handleSendRecognizedText
+                    : isLoading
+                      ? handleStopRequest
+                      : handleSendMessage
               }
-            }}
-            onMouseLeave={(e) => {
-              if (isLoading) {
-                e.currentTarget.style.backgroundColor = '#ef4444';
-              } else if (inputValue.trim()) {
-                e.currentTarget.style.backgroundColor = '#3b82f6';
+              disabled={
+                isRecognizing
+                  ? false
+                  : recognizedText
+                    ? !recognizedText.trim() && !inputValue.trim()
+                    : !isLoading && !inputValue.trim()
               }
-            }}
-            title={isLoading ? t('ui.stop') : t('ui.send')}
-          >
-            {isLoading ? <Square size={20} /> : <Send size={20} />}
-          </button>
+              style={{
+                ...getStyles().sendButton,
+                ...(isLoading ? getStyles().stopButton : {}),
+                ...(!isLoading && !inputValue.trim() && !recognizedText ? getStyles().sendButtonDisabled : {})
+              }}
+              onMouseEnter={(e) => {
+                if (isLoading) {
+                  e.currentTarget.style.backgroundColor = '#dc2626';
+                } else if (inputValue.trim() || recognizedText) {
+                  e.currentTarget.style.backgroundColor = '#2563eb';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (isLoading) {
+                  e.currentTarget.style.backgroundColor = '#ef4444';
+                } else if (inputValue.trim() || recognizedText) {
+                  e.currentTarget.style.backgroundColor = '#3b82f6';
+                }
+              }}
+              title={
+                isRecognizing
+                  ? '取消'
+                  : recognizedText
+                    ? '发送'
+                    : isLoading
+                      ? t('ui.stop')
+                      : t('ui.send')
+              }
+            >
+              {isRecognizing ? (
+                <X size={20} />
+              ) : isLoading ? (
+                <Square size={20} />
+              ) : (
+                <Send size={20} />
+              )}
+            </button>
+          )}
+          {/* 取消按钮（识别结果时显示） */}
+          {recognizedText && !isRecognizing && (
+            <button
+              onClick={handleCancelRecognizedText}
+              style={getStyles().voiceCancelButton}
+              onMouseEnter={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().voiceCancelButtonHover);
+              }}
+              onMouseLeave={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().voiceCancelButton);
+              }}
+              title="取消"
+            >
+              <X size={20} />
+            </button>
+          )}
+          {/* 模式切换按钮（右下角）- 仅在启用语音输入时显示 */}
+          {appConfig.enableVoiceInput && (
+            <button
+              onClick={handleToggleInputMode}
+              style={getStyles().modeToggleButton}
+              onMouseEnter={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().modeToggleButtonHover);
+              }}
+              onMouseLeave={(e) => {
+                Object.assign(e.currentTarget.style, getStyles().modeToggleButton);
+              }}
+              title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
+            >
+              {inputMode === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
+            </button>
+          )}
         </div>
+        {/* 错误提示 */}
+        {recordingError && (
+          <div style={{
+            marginTop: '8px',
+            padding: '8px 12px',
+            backgroundColor: isDarkMode ? '#4b1f1f' : '#fef2f2',
+            border: `1px solid ${isDarkMode ? '#7f1d1d' : '#fecaca'}`,
+            borderRadius: '8px',
+            color: isDarkMode ? '#fca5a5' : '#dc2626',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <X size={16} />
+            <span>{recordingError}</span>
+            <button
+              onClick={() => setRecordingError(null)}
+              style={{
+                marginLeft: 'auto',
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+                padding: '4px'
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 反馈管理面板 */}
