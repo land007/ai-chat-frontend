@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>认知语音服务</title>
+<!--   <title>Microsoft Cognitive Services Speech SDK JavaScript Quickstart</title> -->
+<meta charset="utf-8" />
+</head>
+<body
+	style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 13px;">
+	<!-- <uidiv> -->
+	<div id="warning">
+		<h1 style="font-weight: 500;">Speech Recognition Speech SDK not
+			found (microsoft.cognitiveservices.speech.sdk.bundle.js missing).</h1>
+	</div>
+
+	<div id="content" style="display: none">
+		<table width="100%">
+			<tr style="display: none">
+				<td></td>
+				<td><h1 style="font-weight: 500;">Microsoft Cognitive
+						Services Speech SDK JavaScript Quickstart</h1></td>
+			</tr>
+			<tr style="display: none">
+				<td align="right"><a
+					href="https://docs.microsoft.com/azure/cognitive-services/speech-service/get-started"
+					target="_blank">Subscription</a>:</td>
+				<td><input id="subscriptionKey" type="text" size="40"
+					value="6e83631f53fb4a07b0cde7cf8fab0b26"></td>
+			</tr>
+			<tr style="display: none">
+				<td align="right">Region</td>
+				<td><input id="serviceRegion" type="text" size="40"
+					value="westus"></td>
+			</tr>
+			<tr>
+				<td></td>
+				<td>语言
+                    <input type="radio" name="language" value="zh-CN" checked onclick="translateDiv.style.display='none';translateSpan.style.display='none';">中文
+                    <input type="radio" name="language" value="en-US" onclick="translateDiv.style.display='';translateSpan.style.display='';">英文
+                    <!-- <select id="language">
+						<option value="zh-CN">中文</option>
+						<option value="en-US">英文</option>
+				    </select> -->
+					&nbsp;<button id="startRecognizeOnceAsyncButton">开始识别</button>
+				</td>
+				<td></td>
+				<td></td>
+			</tr>
+			<tr>
+				<td align="right" valign="top">结果</td>
+				<td><textarea id="phraseDiv"
+						style="display: inline-block; width: 500px; height: 200px"></textarea></td>
+				<td align="right" valign="top"><span id="translateSpan" style="display: none;">翻译</span></td>
+				<td><textarea id="translateDiv"
+						style="display: inline-block; width: 500px; height: 200px; display: none;"></textarea></td>
+			</tr>
+		</table>
+	</div>
+	<!-- </uidiv> -->
+
+	<!-- <speechsdkref> -->
+	<!-- Speech SDK reference sdk. -->
+	<script src="microsoft.cognitiveservices.speech.sdk.bundle.js"></script>
+	<!-- </speechsdkref> -->
+
+	<!-- <quickstartcode> -->
+	<!-- Speech SDK USAGE -->
+	<script>
+    // status fields and start button in UI
+    var phraseDiv;
+    var translateDiv;
+    var startRecognizeOnceAsyncButton;
+
+    // subscription key and region for speech services.
+    var subscriptionKey, serviceRegion;
+    var authorizationToken;
+    var SpeechSDK;
+    var recognizer;
+    var jianting = function() {
+        startRecognizeOnceAsyncButton.disabled = true;
+        phraseDiv.innerHTML = "";
+
+        // if we got an authorization token, use the token. Otherwise use the provided subscription key
+        var speechConfig;
+        if (authorizationToken) {
+          speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(authorizationToken, serviceRegion.value);
+        } else {
+          if (subscriptionKey.value === "" || subscriptionKey.value === "subscription") {
+            alert("Please enter your Microsoft Cognitive Services Speech subscription key!");
+            return;
+          }
+          speechConfig = SpeechSDK.SpeechConfig.fromSubscription(subscriptionKey.value, serviceRegion.value);
+        }
+
+        let language = document.getElementsByName('language')[0].value;
+        //speechConfig.speechRecognitionLanguage = "en-US";
+        //speechConfig.speechRecognitionLanguage = "zh-CN";
+        speechConfig.speechRecognitionLanguage = language;
+//         Exports_3.PropertyId.SpeechServiceConnection_Host, "ws://127.0.0.1"
+        console.log(speechConfig);
+        var audioConfig  = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+        console.log(audioConfig);
+        recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+
+        recognizer.recognizing = (r, event) => {
+		  console.log('event.privResult.privText', event.privResult.privText);
+		};
+
+		recognizer.recognized = (r, event) => {
+          console.log('event.privResult.privText =', event.privResult.privText);
+		  if(event.privResult.privText) {
+			phraseDiv.innerHTML += event.privResult.privText;
+            if(phraseDiv.scrollHeight - phraseDiv.offsetHeight - phraseDiv.scrollTop < 20) {
+                phraseDiv.scrollTop = phraseDiv.scrollHeight - phraseDiv.offsetHeight;
+            }
+		  }
+		};
+
+		var pingTimeout;
+		recognizer.wake = (r, event) => {
+		  if(event.privResult.privText) {
+		   if(event.privResult.privText == 'ping') {
+	            startRecognizeOnceAsyncButton.style.color='green';
+	            if(pingTimeout) {
+	                clearTimeout(pingTimeout);
+	            }
+	            pingTimeout = setTimeout(function() {
+	                startRecognizeOnceAsyncButton.style.color='black';
+	                pingTimeout = undefined;
+	            }, 500);
+	            return;
+	        }
+			phraseDiv.innerHTML += event.privResult.privText;
+		  }
+		};
+
+		recognizer.translate = (r, event) => {
+		  if(event.privResult.privText) {
+			translateDiv.innerHTML += event.privResult.privText;
+            if(translateDiv.scrollHeight - translateDiv.offsetHeight - translateDiv.scrollTop < 20) {
+                translateDiv.scrollTop = translateDiv.scrollHeight - translateDiv.offsetHeight;
+            }
+		  }
+		};
+
+		recognizer.startContinuousRecognitionAsync(
+          function () {
+            },
+          function (err) {
+            startRecognizeOnceAsyncButton.disabled = false;
+            //phraseDiv.innerHTML += err;
+            window.console.log(err);
+            //recognizer.stopContinuousRecognitionAsync();
+            recognizer.close();
+            recognizer = undefined;
+            setTimeout(jianting, 1000);
+          });
+		return;
+        recognizer.recognizeOnceAsync(
+          function (result) {
+            startRecognizeOnceAsyncButton.disabled = false;
+            phraseDiv.innerHTML += result.text;
+            window.console.log(result);
+
+            recognizer.close();
+            recognizer = undefined;
+          },
+          function (err) {
+            startRecognizeOnceAsyncButton.disabled = false;
+            phraseDiv.innerHTML += err;
+            window.console.log(err);
+
+            recognizer.close();
+            recognizer = undefined;
+          });
+    };
+
+    document.addEventListener("DOMContentLoaded", function () {
+      startRecognizeOnceAsyncButton = document.getElementById("startRecognizeOnceAsyncButton");
+      subscriptionKey = document.getElementById("subscriptionKey");
+      serviceRegion = document.getElementById("serviceRegion");
+      phraseDiv = document.getElementById("phraseDiv");
+      translateDiv = document.getElementById("translateDiv");
+
+      startRecognizeOnceAsyncButton.addEventListener("click", jianting);
+      if (!!window.SpeechSDK) {
+        SpeechSDK = window.SpeechSDK;
+        startRecognizeOnceAsyncButton.disabled = false;
+
+        document.getElementById('content').style.display = 'block';
+        document.getElementById('warning').style.display = 'none';
+
+        // in case we have a function for getting an authorization token, call it.
+        if (typeof RequestAuthorizationToken === "function") {
+            RequestAuthorizationToken();
+        }
+      }
+    });
+  </script>
+	<!-- </quickstartcode> -->
+</body>
+</html>

@@ -94,6 +94,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const currentTranscriptRef = useRef<string>(''); // 当前累积的识别文本
   const voiceInputModeRef = useRef<'vad' | 'manual'>('vad'); // 当前使用的模式
+  const isRecordingRef = useRef<boolean>(false); // 录音状态ref（用于闭包中访问）
+  const isInitializingRef = useRef<boolean>(false); // 初始化状态ref（防止过早清理）
+  const recordingStartTimeRef = useRef<number>(0); // 录音开始时间（用于最小录音时长保护）
   
   // 检查是否是管理员用户
   const isAdmin = user?.userId && adminUsers.includes(user.userId);
@@ -1376,24 +1379,79 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const cleanupAudioResources = useCallback(() => {
     console.log('[语音输入] 清理音频资源');
     
+    // 检查是否正在初始化，如果是则延迟清理
+    if (isInitializingRef.current) {
+      console.log('[语音输入] ⚠️ 正在初始化，延迟清理资源');
+      setTimeout(() => {
+        cleanupAudioResources();
+      }, 100);
+      return;
+    }
+    
+    // 检查录音状态，如果仍在录音则不允许清理
+    if (isRecordingRef.current) {
+      console.log('[语音输入] ⚠️ 仍在录音中，不允许清理资源');
+      return;
+    }
+    
     // 停止音频流
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current.getTracks().forEach(track => {
+        if (track.readyState !== 'ended') {
+          track.stop();
+        }
+      });
       mediaStreamRef.current = null;
     }
 
-    // 断开ScriptProcessorNode
-    if (scriptProcessorRef.current) {
-      scriptProcessorRef.current.disconnect();
+    // 参考微软SDK：严格按照 ScriptProcessorNode -> MediaStream -> AudioContext 的顺序清理
+    
+    // 1. 先断开ScriptProcessorNode（必须在AudioContext关闭前）
+    if (scriptProcessorRef.current && audioContextRef.current) {
+      try {
+        scriptProcessorRef.current.disconnect(audioContextRef.current.destination);
+        console.log('[语音输入] ScriptProcessorNode已断开');
+      } catch (err) {
+        // 忽略已经断开的错误
+        console.debug('[语音输入] ScriptProcessorNode断开失败（可能已断开）:', err);
+      }
       scriptProcessorRef.current = null;
     }
 
-    // 关闭AudioContext
+    // 2. 停止MediaStream tracks（参考微软SDK：在断开ScriptProcessorNode之后）
+    // 注意：这已经在上面做了，但确保顺序正确
+
+    // 3. 最后关闭或暂停AudioContext（参考微软SDK）
     if (audioContextRef.current) {
-      audioContextRef.current.close().catch(err => {
-        console.error('[语音输入] 关闭AudioContext失败:', err);
-      });
-      audioContextRef.current = null;
+      try {
+        // 参考微软SDK：检查是否有close方法，有则关闭，否则暂停
+        const hasClose = 'close' in audioContextRef.current;
+        if (hasClose) {
+          if (audioContextRef.current.state !== 'closed') {
+            console.log('[语音输入] 关闭AudioContext，当前状态:', audioContextRef.current.state);
+            audioContextRef.current.close().then(() => {
+              console.log('[语音输入] AudioContext已关闭');
+            }).catch(err => {
+              // 忽略已经关闭的错误
+              if (err.name !== 'InvalidStateError') {
+                console.error('[语音输入] 关闭AudioContext失败:', err);
+              }
+            });
+          } else {
+            console.log('[语音输入] AudioContext已经是关闭状态，跳过关闭');
+          }
+          audioContextRef.current = null;
+        } else if (audioContextRef.current.state === 'running') {
+          // 如果没有close方法，尝试暂停（参考微软SDK）
+          console.log('[语音输入] AudioContext不支持close，尝试暂停');
+          audioContextRef.current.suspend();
+          audioContextRef.current = null;
+        }
+      } catch (err) {
+        // 忽略错误
+        console.debug('[语音输入] AudioContext关闭检查失败:', err);
+        audioContextRef.current = null;
+      }
     }
     
     analyserRef.current = null;
@@ -1408,6 +1466,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     speechRecognitionService.close().catch(err => {
       console.error('[语音输入] 关闭语音识别服务失败:', err);
     });
+    
+    // 清除初始化标志（如果还在设置中）
+    isInitializingRef.current = false;
   }, []);
 
   // 绘制音波效果
@@ -1451,8 +1512,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
   // 开始录音
   const startRecording = useCallback(async () => {
+    // 设置初始化标志，防止过早清理
+    isInitializingRef.current = true;
+    recordingStartTimeRef.current = Date.now();
+    
     try {
-      console.log('[语音输入] 开始录音');
+      console.log('[语音输入] 开始录音（初始化中...）');
       
       // 先检查是否支持
       const support = checkMediaDevicesSupport();
@@ -1460,6 +1525,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         console.error('[语音输入] 不支持麦克风访问:', support.message);
         setRecordingError(support.message);
         setInputMode('keyboard');
+        isInitializingRef.current = false;
         return;
       }
       
@@ -1468,13 +1534,107 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         const granted = await requestMicrophonePermission();
         if (!granted) {
           setInputMode('keyboard');
+          isInitializingRef.current = false;
           return;
         }
       }
 
+      // 确定使用的模式（从配置读取）
+      voiceInputModeRef.current = appConfig.voiceInputVadMode !== false ? 'vad' : 'manual';
+
+      // 重置识别状态
+      currentTranscriptRef.current = '';
+      setRecognizedText(null);
+      setIsRecognizing(true);
+      setRecordingError(null);
+
+      // 先连接WebSocket，等待通路完全打通
+      console.log('[语音输入] 先连接WebSocket，等待通路完全打通...');
+      try {
+        await speechRecognitionService.start({
+          mode: voiceInputModeRef.current,
+          language: appConfig.voiceInputLanguage || 'zh'
+        });
+        console.log('[语音输入] ✅ WebSocket连接成功，通路完全打通，可以开始录音');
+      } catch (error: any) {
+        console.error('[语音输入] ❌ WebSocket连接失败:', error);
+        setRecordingError(`连接失败: ${error.message}`);
+        setIsRecognizing(false);
+        setInputMode('keyboard');
+        isInitializingRef.current = false;
+        return;
+      }
+
+      // 注册语音识别服务回调
+      speechRecognitionService.removeCallbacks();
+      
+      speechRecognitionService.onTranscript((text, isFinal) => {
+        console.log('[语音输入] 识别结果:', text, 'isFinal:', isFinal);
+        
+        // 实时更新识别结果（最佳实践：同时更新recognizedText和inputValue，让用户看到结果）
+        currentTranscriptRef.current = text;
+        setRecognizedText(text);
+        setInputValue(text); // 同步到inputValue，让用户看到识别结果
+        
+        if (isFinal) {
+          // 最终结果
+          console.log('[语音输入] ✅ 最终识别结果:', text);
+          setIsRecognizing(false);
+          setIsRecording(false);
+          isRecordingRef.current = false; // 更新ref
+          
+          // 停止录音
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+          }
+          
+          // 清理资源
+          cleanupAudioResources();
+        } else {
+          // 实时增量结果
+          console.log('[语音输入] 📝 实时识别结果:', text);
+        }
+      });
+
+      speechRecognitionService.onError((error) => {
+        console.error('[语音输入] 识别错误:', error);
+        setRecordingError(`识别失败: ${error}`);
+        setIsRecognizing(false);
+        setIsRecording(false);
+        isRecordingRef.current = false; // 更新ref
+        cleanupAudioResources();
+      });
+
+      speechRecognitionService.onComplete(() => {
+        console.log('[语音输入] 识别完成');
+        setIsRecognizing(false);
+        setIsRecording(false);
+        isRecordingRef.current = false; // 更新ref
+      });
+
       // 获取音频流（再次检查确保支持）
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('浏览器不支持麦克风访问，请使用 HTTPS 或 localhost');
+      }
+
+      // 创建AudioContext用于实时音频处理（参考微软SDK：在getUserMedia之前创建）
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 16000
+      });
+      
+      console.log('[语音输入] AudioContext已创建，状态:', audioContext.state, '采样率:', audioContext.sampleRate);
+      
+      // 如果音频上下文的采样率不是16000，需要重采样
+      if (audioContext.sampleRate !== 16000) {
+        console.warn('[语音输入] 音频上下文采样率不是16000Hz，将进行重采样:', audioContext.sampleRate);
+      }
+
+      // 参考微软SDK：在getUserMedia之前检查并恢复AudioContext状态
+      if (audioContext.state === 'suspended' || audioContext.state === 'interrupted') {
+        console.log('[语音输入] AudioContext状态不是running，当前状态:', audioContext.state);
+        await audioContext.resume();
+        console.log('[语音输入] AudioContext已恢复，新状态:', audioContext.state);
       }
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -1489,20 +1649,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
 
-      // 创建AudioContext用于实时音频处理
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-        sampleRate: 16000
-      });
-      
-      // 如果音频上下文的采样率不是16000，需要重采样
-      if (audioContext.sampleRate !== 16000) {
-        console.warn('[语音输入] 音频上下文采样率不是16000Hz，将进行重采样:', audioContext.sampleRate);
-      }
-
       const source = audioContext.createMediaStreamSource(stream);
+      console.log('[语音输入] MediaStreamSource已创建');
+      
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
+      console.log('[语音输入] Analyser已连接');
 
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
@@ -1515,115 +1668,180 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         drawWaveform();
       }
 
-      // 重置识别状态
-      currentTranscriptRef.current = '';
-      setRecognizedText(null);
-      setIsRecognizing(true);
-      setRecordingError(null);
+      // 先设置录音状态，确保音频处理立即开始
+      setIsRecording(true);
+      isRecordingRef.current = true; // 更新ref（必须在audioProcess之前设置）
 
-      // 确定使用的模式（从配置读取）
-      voiceInputModeRef.current = appConfig.voiceInputVadMode !== false ? 'vad' : 'manual';
-
-      // 注册语音识别服务回调
-      speechRecognitionService.removeCallbacks();
-      
-      speechRecognitionService.onTranscript((text, isFinal) => {
-        console.log('[语音输入] 识别结果:', text, 'isFinal:', isFinal);
-        
-        if (isFinal) {
-          // 最终结果
-          currentTranscriptRef.current = text;
-          setRecognizedText(text);
-          setIsRecognizing(false);
-          setIsRecording(false);
-          
-          // 停止录音
-          if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            mediaStreamRef.current = null;
-          }
-          
-          // 清理资源
-          cleanupAudioResources();
-        } else {
-          // 实时增量结果
-          currentTranscriptRef.current = text;
-          setRecognizedText(text);
-        }
-      });
-
-      speechRecognitionService.onError((error) => {
-        console.error('[语音输入] 识别错误:', error);
-        setRecordingError(`识别失败: ${error}`);
-        setIsRecognizing(false);
-        setIsRecording(false);
-        cleanupAudioResources();
-      });
-
-      speechRecognitionService.onComplete(() => {
-        console.log('[语音输入] 识别完成');
-        setIsRecognizing(false);
-        setIsRecording(false);
-      });
-
-      // 启动语音识别会话
-      try {
-        await speechRecognitionService.start({
-          mode: voiceInputModeRef.current,
-          language: appConfig.voiceInputLanguage || 'zh'
-        });
-        console.log('[语音输入] 语音识别会话已启动');
-      } catch (error: any) {
-        console.error('[语音输入] 启动语音识别失败:', error);
-        setRecordingError(`启动语音识别失败: ${error.message}`);
-        setIsRecording(false);
-        setIsRecognizing(false);
-        cleanupAudioResources();
-        return;
+      // 确保AudioContext处于运行状态（再次检查，防止状态变化）
+      // AudioContext.state 可能是: 'suspended' | 'running' | 'closed' | 'interrupted'
+      if (audioContext.state === 'suspended' || audioContext.state === 'interrupted') {
+        console.log('[语音输入] AudioContext状态不是running，当前状态:', audioContext.state);
+        await audioContext.resume();
+        console.log('[语音输入] AudioContext已恢复，新状态:', audioContext.state);
+      } else if (audioContext.state === 'closed') {
+        console.error('[语音输入] ❌ AudioContext已被关闭，无法继续录音');
+        throw new Error('AudioContext已被关闭');
       }
 
       // 创建ScriptProcessorNode用于实时音频处理
       // ScriptProcessorNode已废弃，但为了兼容性仍使用
       // 未来可以改用AudioWorklet
-      const bufferSize = 4096;
-      const scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      // 参考微软SDK：先尝试bufferSize=0（让浏览器自动决定），失败后使用默认值
+      let scriptProcessor: ScriptProcessorNode;
+      let bufferSize = 0;
+      try {
+        scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+        console.log('[语音输入] ScriptProcessor已创建，bufferSize:', bufferSize, '(浏览器自动决定)');
+      } catch (error) {
+        // 如果bufferSize=0失败，使用默认值4096或根据采样率动态调整
+        bufferSize = 4096;
+        const audioSampleRate = audioContext.sampleRate;
+        // 参考微软SDK：根据采样率动态调整bufferSize
+        while (bufferSize < 16384 && audioSampleRate >= (2 * 16000)) {
+          bufferSize <<= 1;
+        }
+        scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+        console.log('[语音输入] ScriptProcessor已创建，bufferSize:', bufferSize, '(使用默认值)');
+      }
+      
+      // 音频块计数器（用于调试）- 使用 ref 以便在外部访问
+      const audioChunkCountRef = { current: 0 };
       
       scriptProcessor.onaudioprocess = async (event) => {
-        // 使用ref检查录音状态，避免闭包问题
-        if (!isRecording) {
+        // 每次音频处理都记录（调试用）
+        audioChunkCountRef.current++;
+        
+        // 每10次输出一次日志，确保能看到所有处理过程
+        if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
+          console.log('[语音输入] ✅ onaudioprocess触发 #', audioChunkCountRef.current, 'isRecordingRef:', isRecordingRef.current, 'isReady:', speechRecognitionService.isReady(), 'audioContext.state:', audioContext.state);
+        }
+        
+        // 检查AudioContext状态（关键：如果被关闭，停止处理）
+        if (audioContext.state === 'closed') {
+          if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
+            console.warn('[语音输入] ⚠️ AudioContext已关闭，停止音频处理 #', audioChunkCountRef.current);
+          }
+          return;
+        }
+        
+        // 检查录音状态（使用ref检查，避免闭包问题）
+        // 注意：即使用户停止录音，如果 WebSocket 已就绪，仍然发送音频数据
+        // 这样可以确保所有音频数据都被发送，直到 AudioContext 被关闭
+        if (!isRecordingRef.current && !speechRecognitionService.isReady()) {
+          if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
+            console.log('[语音输入] 录音已停止且WebSocket未就绪，跳过音频处理 #', audioChunkCountRef.current);
+          }
+          return;
+        }
+        
+        if (!mediaStreamRef.current) {
+          if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
+            console.log('[语音输入] 媒体流不存在，跳过音频处理 #', audioChunkCountRef.current);
+          }
           return;
         }
 
         const inputBuffer = event.inputBuffer;
         const inputData = inputBuffer.getChannelData(0);
         
+        // 计算最大振幅（用于调试）
+        let maxAmplitude = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          const abs = Math.abs(inputData[i]);
+          if (abs > maxAmplitude) {
+            maxAmplitude = abs;
+          }
+        }
+        
+        // 注释掉静音检测，确保所有音频数据都发送（由服务器端VAD处理）
+        // if (maxAmplitude < 0.001) {
+        //   return;
+        // }
+        
         // 将Float32Array转换为Int16Array (PCM16)
+        // 标准PCM16转换：将-1.0到1.0的浮点数转换为-32768到32767的整数
         const pcm16Data = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
-          // 将-1.0到1.0的浮点数转换为-32768到32767的整数
+          // 限制范围到[-1, 1]
           const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          // 转换为16位整数：s * 32768，然后限制到Int16范围
+          pcm16Data[i] = Math.max(-32768, Math.min(32767, Math.round(s * 32768)));
         }
 
         // 将Int16Array转换为ArrayBuffer
         const audioBuffer = pcm16Data.buffer;
 
-        // 发送音频数据到语音识别服务
+        // 发送音频数据到语音识别服务（连接确认后才开始录音，所以一定已就绪）
         try {
           await speechRecognitionService.sendAudio(audioBuffer);
+          
+          // 每100次发送一次调试日志（避免日志过多）
+          if (audioChunkCountRef.current % 100 === 0) {
+            console.log('[语音输入] 已发送音频块:', audioChunkCountRef.current, '大小:', audioBuffer.byteLength, 'bytes', '最大振幅:', maxAmplitude.toFixed(4), 'isRecordingRef:', isRecordingRef.current);
+          }
+          
+          // 前10次和每10次也输出日志，确保发送正常
+          if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0 || audioChunkCountRef.current <= 50) {
+            console.log('[语音输入] ✅ 发送音频块:', audioChunkCountRef.current, '大小:', audioBuffer.byteLength, 'bytes', '最大振幅:', maxAmplitude.toFixed(4), 'isRecordingRef:', isRecordingRef.current);
+          }
         } catch (error) {
-          console.error('[语音输入] 发送音频数据失败:', error);
+          // 关键：记录所有发送错误，确保能看到问题
+          console.error('[语音输入] ❌ 发送音频数据失败 #', audioChunkCountRef.current, ':', error, 'isRecordingRef:', isRecordingRef.current, 'isReady:', speechRecognitionService.isReady());
           // 不中断录音，继续发送
         }
       };
 
+      // 连接音频处理节点（参考微软SDK：直接连接到destination）
+      // 关键：ScriptProcessorNode 必须直接连接到 audioContext.destination 才能触发 onaudioprocess
+      // 注意：这会导致音频输出（可能听到回音），但这是触发onaudioprocess的必要条件
       source.connect(scriptProcessor);
-      scriptProcessor.connect(audioContext.destination);
+      scriptProcessor.connect(audioContext.destination); // 直接连接到 destination
       
       scriptProcessorRef.current = scriptProcessor;
+      
+      console.log('[语音输入] ScriptProcessor已直接连接到audioContext.destination');
+      
+      console.log('[语音输入] ScriptProcessor已连接，开始处理音频');
+      console.log('[语音输入] 音频上下文状态:', audioContext.state);
+      console.log('[语音输入] 音频上下文采样率:', audioContext.sampleRate);
+      console.log('[语音输入] 音频流活动状态:', stream.active);
+      console.log('[语音输入] 音频流轨道数:', stream.getAudioTracks().length);
+      
+      // 检查音频轨道状态
+      stream.getAudioTracks().forEach((track, index) => {
+        console.log(`[语音输入] 音频轨道 ${index}:`, {
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+          label: track.label
+        });
+      });
+      
+      // 初始化完成，清除初始化标志
+      isInitializingRef.current = false;
+      console.log('[语音输入] ✅ 初始化完成，可以开始处理音频');
+      
+      // 添加一个测试：等待一小段时间后检查是否触发
+      setTimeout(() => {
+        console.log('[语音输入] 🔍 3秒后检查：isRecordingRef.current =', isRecordingRef.current);
+        console.log('[语音输入] 🔍 3秒后检查：isInitializingRef.current =', isInitializingRef.current);
+        console.log('[语音输入] 🔍 3秒后检查：audioChunkCount =', audioChunkCountRef.current);
+        console.log('[语音输入] 🔍 3秒后检查：audioContext.state =', audioContext.state);
+        console.log('[语音输入] 🔍 3秒后检查：stream.active =', stream.active);
+        if (audioChunkCountRef.current === 0) {
+          console.error('[语音输入] ❌ 错误：3秒内没有触发 onaudioprocess！');
+          console.error('[语音输入] ❌ 可能的原因：');
+          console.error('[语音输入] ❌ 1. ScriptProcessorNode 未正确连接');
+          console.error('[语音输入] ❌ 2. 音频流没有数据');
+          console.error('[语音输入] ❌ 3. 浏览器不支持 ScriptProcessorNode');
+          console.error('[语音输入] ❌ 4. 音频上下文被暂停');
+        } else {
+          console.log('[语音输入] ✅ 音频处理正常，已处理', audioChunkCountRef.current, '个音频块');
+        }
+      }, 3000);
 
-      // 开始录音
-      setIsRecording(true);
+
+      // 开始录音时长计时
       setRecordingDuration(0);
 
       // 启动录音时长计时器
@@ -1638,26 +1856,48 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         }
       }, 1000);
 
-    } catch (error: any) {
-      console.error('[语音输入] 录音失败:', error);
-      setRecordingError(`录音失败: ${error.message}`);
-      setIsRecording(false);
-      setIsRecognizing(false);
-      setInputMode('keyboard');
-      cleanupAudioResources();
-    }
+      } catch (error: any) {
+        console.error('[语音输入] 录音失败:', error);
+        setRecordingError(`录音失败: ${error.message}`);
+        setIsRecording(false);
+        isRecordingRef.current = false; // 更新ref
+        isInitializingRef.current = false; // 清除初始化标志
+        setIsRecognizing(false);
+        setInputMode('keyboard');
+        cleanupAudioResources();
+      }
   }, [hasPermission, requestMicrophonePermission, drawWaveform, checkMediaDevicesSupport, cleanupAudioResources]);
 
   // 停止录音
   const stopRecording = useCallback(() => {
     console.log('[语音输入] 停止录音');
     
+    // 检查最小录音时长（100ms），防止快速点击导致问题
+    const recordingDuration = Date.now() - recordingStartTimeRef.current;
+    const minRecordingDuration = 100; // 最小录音时长100ms
+    if (recordingDuration < minRecordingDuration) {
+      console.log(`[语音输入] 录音时长过短（${recordingDuration}ms），等待最小时长...`);
+      setTimeout(() => {
+        stopRecording();
+      }, minRecordingDuration - recordingDuration);
+      return;
+    }
+    
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
 
+    // 先不立即设置 isRecordingRef.current = false
+    // 让音频处理继续一段时间，确保所有音频块都被处理
+    // 注意：即使用户停止录音，如果 WebSocket 已就绪，仍然继续发送音频数据
     setIsRecording(false);
+    // 延迟设置 isRecordingRef，给音频处理时间完成
+    // 增加延迟时间，确保所有音频块都被处理（特别是 WebSocket 连接建立前的音频块）
+    setTimeout(() => {
+      isRecordingRef.current = false;
+      console.log('[语音输入] isRecordingRef已设置为false（延迟设置）');
+    }, 2000); // 延迟2秒，确保所有音频块都被处理（包括 WebSocket 连接建立前的音频块）
 
     // 如果是Manual模式，需要提交音频
     if (voiceInputModeRef.current === 'manual') {
@@ -1667,8 +1907,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       });
     }
 
-    // 清理音频资源
-    cleanupAudioResources();
+    // 延迟清理资源，确保音频处理完成
+    // 如果正在初始化，等待初始化完成
+    if (isInitializingRef.current) {
+      console.log('[语音输入] 正在初始化，等待初始化完成后再清理...');
+      const checkInterval = setInterval(() => {
+        if (!isInitializingRef.current) {
+          clearInterval(checkInterval);
+          // 等待更长时间，确保音频处理完成
+          setTimeout(() => {
+            cleanupAudioResources();
+          }, 1000); // 增加到1秒，确保音频处理完成
+        }
+      }, 50);
+    } else {
+      // 延迟清理，给音频处理时间完成（至少等待一个音频块的处理时间）
+      setTimeout(() => {
+        cleanupAudioResources();
+      }, 1000); // 增加到1秒，确保音频处理完成
+    }
   }, [cleanupAudioResources]);
 
   // 切换输入模式
@@ -1773,23 +2030,35 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     }
   }, [inputMode, isRecording, stopRecording]);
 
-  // 清理录音资源
+  // 清理录音资源（组件卸载时）
   useEffect(() => {
     return () => {
+      // 组件卸载时的清理
+      console.log('[语音输入] 组件卸载，清理资源');
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
-      if (mediaRecorderRef.current && isRecording) {
-        mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current) {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (err) {
+          // 忽略错误
+        }
+        mediaRecorderRef.current = null;
       }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
+      // 注意：AudioContext 的关闭应该由 cleanupAudioResources 处理
+      // 如果组件卸载时仍在录音，调用 cleanupAudioResources
+      if (isRecordingRef.current || audioContextRef.current) {
+        console.log('[语音输入] 组件卸载时仍在录音，调用cleanupAudioResources');
+        cleanupAudioResources();
       }
     };
-  }, [isRecording]);
+  }, []); // 只在组件卸载时执行，不依赖 isRecording
 
   // 检查浏览器支持，如果不支持则隐藏切换按钮或显示提示
   useEffect(() => {
@@ -2320,7 +2589,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       backgroundColor: isRecording ? (isDark ? '#4b1f1f' : '#fef2f2') : surfaceColor,
       color: inputMode === 'voice' && !isRecording && !isRecognizing ? mutedColor : textColor,
       boxSizing: 'border-box' as const,
-      textAlign: inputMode === 'voice' && !isRecording && !isRecognizing ? 'center' as const : 'left' as const,
+      textAlign: inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText ? 'center' as const : 'left' as const,
       cursor: inputMode === 'voice' ? 'pointer' : 'text',
       userSelect: 'none' as const,
       transition: 'all 0.3s ease',
@@ -2806,11 +3075,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
                 ? '识别中...' 
                 : inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText
                   ? '按住说话'
-                  : inputValue
+                  : recognizedText || inputValue // 优先显示识别结果
             }
             onChange={(e) => {
               if (inputMode !== 'voice' || isRecognizing || recognizedText) {
-                setInputValue(e.target.value);
+                const newValue = e.target.value;
+                setInputValue(newValue);
+                // 如果用户开始编辑，清除recognizedText，让用户看到自己编辑的内容
+                if (recognizedText && newValue !== recognizedText) {
+                  setRecognizedText(null);
+                }
               }
             }}
             onKeyPress={handleKeyPress}

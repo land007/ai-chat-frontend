@@ -278,7 +278,7 @@ export interface SpeechRecognitionConfig {
 }
 
 export interface SpeechRecognitionEvent {
-  type: 'transcript' | 'error' | 'complete';
+  type: 'ready' | 'transcript' | 'error' | 'complete';
   text?: string;
   isFinal?: boolean;
   message?: string;
