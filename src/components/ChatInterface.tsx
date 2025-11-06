@@ -97,6 +97,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const isRecordingRef = useRef<boolean>(false); // 录音状态ref（用于闭包中访问）
   const isInitializingRef = useRef<boolean>(false); // 初始化状态ref（防止过早清理）
   const recordingStartTimeRef = useRef<number>(0); // 录音开始时间（用于最小录音时长保护）
+  const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 识别超时定时器ref
   
   // 检查是否是管理员用户
   const isAdmin = user?.userId && adminUsers.includes(user.userId);
@@ -1469,6 +1470,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     
     // 清除初始化标志（如果还在设置中）
     isInitializingRef.current = false;
+    
+    // 清理识别超时定时器
+    if (recognitionTimeoutRef.current) {
+      clearTimeout(recognitionTimeoutRef.current);
+      recognitionTimeoutRef.current = null;
+    }
+
+    // 如果还在识别状态，立即重置它（防止识别无结果时一直显示"识别中..."）
+    // 先清空输入值和识别文本，再重置识别状态，确保输入框立即显示"按住说话"
+    setIsRecognizing(prev => {
+      if (prev) {
+        console.log('[语音输入] 清理资源时检测到仍在识别状态，立即重置');
+        // 使用函数式更新获取最新的 recognizedText
+        setRecognizedText(prevText => {
+          if (!prevText || prevText.trim() === '') {
+            // 如果没有识别结果，清空输入值，以便在语音模式下显示"按住说话"
+            setInputValue('');
+            return null;
+          }
+          return prevText;
+        });
+        return false;
+      }
+      return prev;
+    });
   }, []);
 
   // 绘制音波效果
@@ -1579,6 +1605,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         if (isFinal) {
           // 最终结果
           console.log('[语音输入] ✅ 最终识别结果:', text);
+          // 清理识别超时定时器
+          if (recognitionTimeoutRef.current) {
+            clearTimeout(recognitionTimeoutRef.current);
+            recognitionTimeoutRef.current = null;
+          }
           setIsRecognizing(false);
           setIsRecording(false);
           isRecordingRef.current = false; // 更新ref
@@ -1599,6 +1630,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
       speechRecognitionService.onError((error) => {
         console.error('[语音输入] 识别错误:', error);
+        // 清理识别超时定时器
+        if (recognitionTimeoutRef.current) {
+          clearTimeout(recognitionTimeoutRef.current);
+          recognitionTimeoutRef.current = null;
+        }
         setRecordingError(`识别失败: ${error}`);
         setIsRecognizing(false);
         setIsRecording(false);
@@ -1608,9 +1644,29 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
       speechRecognitionService.onComplete(() => {
         console.log('[语音输入] 识别完成');
+        // 清理识别超时定时器
+        if (recognitionTimeoutRef.current) {
+          clearTimeout(recognitionTimeoutRef.current);
+          recognitionTimeoutRef.current = null;
+        }
         setIsRecognizing(false);
         setIsRecording(false);
         isRecordingRef.current = false; // 更新ref
+        
+        // 如果识别完成但没有识别结果，清空输入值，以便在语音模式下显示"按住说话"
+        setRecognizedText(prevText => {
+          if (!prevText || prevText.trim() === '') {
+            // 使用函数式更新确保获取最新的 inputMode
+            setInputValue(prevValue => {
+              // 如果当前是语音模式且没有识别结果，清空输入值
+              // 注意：这里无法直接访问 inputMode，需要通过其他方式判断
+              // 实际上，如果 recognizedText 为空，说明没有识别结果，应该清空
+              return '';
+            });
+            return null;
+          }
+          return prevText;
+        });
       });
 
       // 获取音频流（再次检查确保支持）
@@ -1907,6 +1963,34 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       });
     }
 
+    // 清理之前的超时定时器（如果存在）
+    if (recognitionTimeoutRef.current) {
+      clearTimeout(recognitionTimeoutRef.current);
+      recognitionTimeoutRef.current = null;
+    }
+
+    // 设置超时检查：如果3秒内没有收到识别结果，自动重置识别状态
+    // 防止识别无结果时一直显示"识别中..."
+    recognitionTimeoutRef.current = setTimeout(() => {
+      setIsRecognizing(prev => {
+        if (prev) {
+          console.log('[语音输入] 识别超时（3秒未收到结果），自动重置识别状态');
+          // 如果没有识别结果，清空当前识别文本和输入值
+          setRecognizedText(prevText => {
+            if (!prevText || prevText.trim() === '') {
+              // 如果没有识别结果，清空输入值，以便在语音模式下显示"按住说话"
+              setInputValue('');
+              return null;
+            }
+            return prevText;
+          });
+          recognitionTimeoutRef.current = null; // 清理ref
+          return false;
+        }
+        return prev;
+      });
+    }, 3000); // 3秒超时
+
     // 延迟清理资源，确保音频处理完成
     // 如果正在初始化，等待初始化完成
     if (isInitializingRef.current) {
@@ -2038,6 +2122,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
+      }
+      if (recognitionTimeoutRef.current) {
+        clearTimeout(recognitionTimeoutRef.current);
+        recognitionTimeoutRef.current = null;
       }
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -2579,21 +2667,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     voiceTextarea: {
       flex: 1,
       padding: '12px 16px',
-      border: `1px solid ${isRecording ? '#ef4444' : (isDarkMode ? '#4b5563' : '#e5e7eb')}`,
+      border: `1px solid ${(isRecording || isRecognizing) ? '#3b82f6' : (isDarkMode ? '#4b5563' : '#e5e7eb')}`,
       borderRadius: '16px',
       resize: 'none' as const,
       outline: 'none',
       fontSize: '16px',
       lineHeight: '1.5',
       fontFamily: 'inherit',
-      backgroundColor: isRecording ? (isDark ? '#4b1f1f' : '#fef2f2') : surfaceColor,
+      backgroundColor: (isRecording || isRecognizing) ? (isDark ? '#1e3a5f' : '#eff6ff') : surfaceColor,
       color: inputMode === 'voice' && !isRecording && !isRecognizing ? mutedColor : textColor,
       boxSizing: 'border-box' as const,
       textAlign: inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText ? 'center' as const : 'left' as const,
       cursor: inputMode === 'voice' ? 'pointer' : 'text',
       userSelect: 'none' as const,
       transition: 'all 0.3s ease',
-      animation: isRecording ? 'pulse 1s infinite' : 'none'
+      animation: (isRecording || isRecognizing) ? 'pulse 1s infinite' : 'none'
     },
     voiceCancelButton: {
       width: '48px',
@@ -3073,7 +3161,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             value={
               isRecognizing 
                 ? '识别中...' 
-                : inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText
+                : inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !inputValue.trim()
                   ? '按住说话'
                   : recognizedText || inputValue // 优先显示识别结果
             }
