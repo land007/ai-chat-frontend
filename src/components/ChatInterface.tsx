@@ -3186,8 +3186,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               <X size={20} />
             </button>
           )}
-          {/* 模式切换按钮（右下角）- 仅在启用语音输入时显示 */}
-          {appConfig.enableVoiceInput && (
+          {/* 模式切换按钮（右下角）- 仅在启用语音输入时显示，识别结束后隐藏 */}
+          {appConfig.enableVoiceInput && !recognizedText && (
             <button
               onClick={handleToggleInputMode}
               style={getStyles().modeToggleButton}
