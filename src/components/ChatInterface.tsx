@@ -99,6 +99,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const recordingStartTimeRef = useRef<number>(0); // 录音开始时间（用于最小录音时长保护）
   const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 识别超时定时器ref
   
+  // 检测是否为触摸设备
+  const isTouchDevice = useCallback(() => {
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }, []);
+  
   // 检查是否是管理员用户
   const isAdmin = user?.userId && adminUsers.includes(user.userId);
   
@@ -1565,8 +1570,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         }
       }
 
-      // 确定使用的模式（从配置读取）
-      voiceInputModeRef.current = appConfig.voiceInputVadMode !== false ? 'vad' : 'manual';
+      // 根据设备类型确定使用的模式
+      // 触摸设备（手机）：使用Manual模式，按住时持续识别，松开时commit
+      // 鼠标设备（电脑）：使用VAD模式，点击后自动检测结束
+      const touchDevice = isTouchDevice();
+      voiceInputModeRef.current = touchDevice ? 'manual' : 'vad';
+      console.log('[语音输入] 设备类型:', touchDevice ? '触摸设备（手机）' : '鼠标设备（电脑）', '使用模式:', voiceInputModeRef.current);
 
       // 重置识别状态
       currentTranscriptRef.current = '';
@@ -1781,13 +1790,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         }
         
         // 检查录音状态（使用ref检查，避免闭包问题）
-        // 注意：即使用户停止录音，如果 WebSocket 已就绪，仍然发送音频数据
-        // 这样可以确保所有音频数据都被发送，直到 AudioContext 被关闭
-        if (!isRecordingRef.current && !speechRecognitionService.isReady()) {
-          if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
-            console.log('[语音输入] 录音已停止且WebSocket未就绪，跳过音频处理 #', audioChunkCountRef.current);
+        // Manual模式：如果录音已停止，立即停止发送音频
+        // VAD模式：即使录音已停止，如果 WebSocket 已就绪，仍然发送音频数据，直到 VAD 检测结束
+        if (!isRecordingRef.current) {
+          // 如果是Manual模式，立即停止发送音频
+          if (voiceInputModeRef.current === 'manual') {
+            if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
+              console.log('[语音输入] Manual模式：录音已停止，停止发送音频 #', audioChunkCountRef.current);
+            }
+            return;
           }
-          return;
+          // VAD模式：如果WebSocket未就绪，跳过音频处理
+          if (!speechRecognitionService.isReady()) {
+            if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
+              console.log('[语音输入] VAD模式：录音已停止且WebSocket未就绪，跳过音频处理 #', audioChunkCountRef.current);
+            }
+            return;
+          }
+          // VAD模式：WebSocket已就绪，继续发送音频数据，等待VAD检测结束
         }
         
         if (!mediaStreamRef.current) {
@@ -1922,7 +1942,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         setInputMode('keyboard');
         cleanupAudioResources();
       }
-  }, [hasPermission, requestMicrophonePermission, drawWaveform, checkMediaDevicesSupport, cleanupAudioResources]);
+  }, [hasPermission, requestMicrophonePermission, drawWaveform, checkMediaDevicesSupport, cleanupAudioResources, isTouchDevice]);
 
   // 停止录音
   const stopRecording = useCallback(() => {
@@ -1944,23 +1964,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       recordingTimerRef.current = null;
     }
 
-    // 先不立即设置 isRecordingRef.current = false
-    // 让音频处理继续一段时间，确保所有音频块都被处理
-    // 注意：即使用户停止录音，如果 WebSocket 已就绪，仍然继续发送音频数据
     setIsRecording(false);
-    // 延迟设置 isRecordingRef，给音频处理时间完成
-    // 增加延迟时间，确保所有音频块都被处理（特别是 WebSocket 连接建立前的音频块）
-    setTimeout(() => {
-      isRecordingRef.current = false;
-      console.log('[语音输入] isRecordingRef已设置为false（延迟设置）');
-    }, 2000); // 延迟2秒，确保所有音频块都被处理（包括 WebSocket 连接建立前的音频块）
-
-    // 如果是Manual模式，需要提交音频
+    
+    // 根据模式决定是否提交音频和何时停止发送音频
+    // Manual模式（触摸设备）：松开时调用commit，立即停止发送音频
+    // VAD模式（鼠标设备）：不调用commit，延迟停止发送音频，等待VAD自动检测结束
     if (voiceInputModeRef.current === 'manual') {
+      // Manual模式：调用commit后立即停止发送音频数据
+      console.log('[语音输入] Manual模式，主动提交音频并立即停止发送');
+      isRecordingRef.current = false; // 立即停止发送音频
       speechRecognitionService.commit().catch(err => {
         console.error('[语音输入] 提交音频失败:', err);
         setRecordingError(`提交音频失败: ${err.message}`);
       });
+    } else {
+      // VAD模式：延迟停止发送音频，给音频处理时间完成
+      console.log('[语音输入] VAD模式，等待服务器自动检测结束');
+      // 延迟设置 isRecordingRef，给音频处理时间完成
+      // 增加延迟时间，确保所有音频块都被处理（特别是 WebSocket 连接建立前的音频块）
+      setTimeout(() => {
+        isRecordingRef.current = false;
+        console.log('[语音输入] isRecordingRef已设置为false（延迟设置）');
+      }, 2000); // 延迟2秒，确保所有音频块都被处理（包括 WebSocket 连接建立前的音频块）
     }
 
     // 清理之前的超时定时器（如果存在）
@@ -2060,49 +2085,68 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
   // 取消识别结果
   const handleCancelRecognizedText = useCallback(() => {
+    console.log('[语音输入] 用户取消识别');
+    
+    // 清理识别超时定时器
+    if (recognitionTimeoutRef.current) {
+      clearTimeout(recognitionTimeoutRef.current);
+      recognitionTimeoutRef.current = null;
+    }
+    
+    // 停止录音计时器
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    
+    // 如果正在录音，停止录音（但不提交，直接关闭）
+    if (isRecording) {
+      console.log('[语音输入] 取消时检测到正在录音，停止录音并关闭连接');
+      setIsRecording(false);
+      isRecordingRef.current = false;
+    }
+    
+    // 关闭语音识别服务连接（不提交，直接关闭）
+    speechRecognitionService.close().catch(err => {
+      console.error('[语音输入] 关闭语音识别服务失败:', err);
+    });
+    
+    // 清理音频资源
+    cleanupAudioResources();
+    
+    // 重置状态
     setRecognizedText(null);
     setInputValue('');
     setIsRecognizing(false);
     setRecordingError(null);
+    
     // 保持语音模式，等待下次录音
-  }, []);
+  }, [isRecording, cleanupAudioResources]);
 
-  // 处理输入框的鼠标按下事件（语音模式）
+  // 处理输入框的鼠标按下事件（语音模式 - 电脑使用VAD模式）
   const handleInputMouseDown = useCallback((e: React.MouseEvent) => {
     if (inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText) {
       e.preventDefault();
       e.stopPropagation();
       
-      // 开始录音
+      // 电脑使用VAD模式，点击后开始录音，VAD会自动检测结束
+      // 不需要监听mouseup，因为VAD会自动结束
+      console.log('[语音输入] 鼠标设备，点击开始录音（VAD模式）');
       startRecording();
-      
-      // 在document上添加mouseup监听，确保鼠标移出输入框也能停止录音
-      const handleDocumentMouseUp = (event: MouseEvent) => {
-        event.preventDefault();
-        stopRecording();
-        document.removeEventListener('mouseup', handleDocumentMouseUp);
-        document.removeEventListener('mouseleave', handleDocumentMouseUp);
-      };
-      
-      // 监听鼠标松开和鼠标离开
-      document.addEventListener('mouseup', handleDocumentMouseUp);
-      document.addEventListener('mouseleave', handleDocumentMouseUp);
     }
-  }, [inputMode, isRecording, isRecognizing, recognizedText, startRecording, stopRecording]);
+  }, [inputMode, isRecording, isRecognizing, recognizedText, startRecording]);
 
-  // 处理输入框的鼠标松开事件（语音模式）
+  // 处理输入框的鼠标松开事件（语音模式 - 电脑VAD模式不需要处理）
   const handleInputMouseUp = useCallback((e: React.MouseEvent) => {
-    if (inputMode === 'voice' && isRecording) {
-      e.preventDefault();
-      e.stopPropagation();
-      stopRecording();
-    }
-  }, [inputMode, isRecording, stopRecording]);
+    // VAD模式不需要在mouseup时停止，让VAD自动检测结束
+    // 这里可以留空或移除，但为了兼容性保留
+  }, []);
 
-  // 处理输入框的触摸事件（移动端）
+  // 处理输入框的触摸事件（移动端 - 使用Manual模式）
   const handleInputTouchStart = useCallback((e: React.TouchEvent) => {
     if (inputMode === 'voice' && !isRecording && !isRecognizing) {
       e.preventDefault();
+      console.log('[语音输入] 触摸设备，按住开始录音（Manual模式）');
       startRecording();
     }
   }, [inputMode, isRecording, isRecognizing, startRecording]);
@@ -2110,6 +2154,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const handleInputTouchEnd = useCallback((e: React.TouchEvent) => {
     if (inputMode === 'voice' && isRecording) {
       e.preventDefault();
+      console.log('[语音输入] 触摸设备，松开结束录音（Manual模式，将提交音频）');
       stopRecording();
     }
   }, [inputMode, isRecording, stopRecording]);
@@ -3162,7 +3207,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               isRecognizing 
                 ? '识别中...' 
                 : inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !inputValue.trim()
-                  ? '按住说话'
+                  ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
                   : recognizedText || inputValue // 优先显示识别结果
             }
             onChange={(e) => {
@@ -3178,7 +3223,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             onKeyPress={handleKeyPress}
             placeholder={
               inputMode === 'voice' && !isRecording && !isRecognizing
-                ? '按住说话'
+                ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
                 : t('ui.inputPlaceholder')
             }
             readOnly={inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText}
@@ -3202,7 +3247,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             }
           />
           {/* 发送按钮（键盘模式或识别结果时显示） */}
-          {(inputMode === 'keyboard' || recognizedText || isRecognizing) && (
+          {/* 识别中时，只有电脑（VAD模式）才显示X按钮，手机（Manual模式）不显示 */}
+          {(inputMode === 'keyboard' || recognizedText || (isRecognizing && !isTouchDevice())) && (
             <button
               onClick={
                 isRecognizing
@@ -3222,18 +3268,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               }
               style={{
                 ...getStyles().sendButton,
-                ...(isLoading ? getStyles().stopButton : {}),
-                ...(!isLoading && !inputValue.trim() && !recognizedText ? getStyles().sendButtonDisabled : {})
+                ...(isLoading || isRecognizing ? getStyles().stopButton : {}),
+                ...(!isLoading && !isRecognizing && !inputValue.trim() && !recognizedText ? getStyles().sendButtonDisabled : {})
               }}
               onMouseEnter={(e) => {
-                if (isLoading) {
+                if (isLoading || isRecognizing) {
                   e.currentTarget.style.backgroundColor = '#dc2626';
                 } else if (inputValue.trim() || recognizedText) {
                   e.currentTarget.style.backgroundColor = '#2563eb';
                 }
               }}
               onMouseLeave={(e) => {
-                if (isLoading) {
+                if (isLoading || isRecognizing) {
                   e.currentTarget.style.backgroundColor = '#ef4444';
                 } else if (inputValue.trim() || recognizedText) {
                   e.currentTarget.style.backgroundColor = '#3b82f6';
