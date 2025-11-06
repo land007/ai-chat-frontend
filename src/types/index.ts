@@ -269,6 +269,31 @@ export interface MapConfig {
   tracks?: MapTrack[]; // 轨迹数组
 }
 
+// 语音识别相关类型
+export type VoiceInputMode = 'vad' | 'manual';
+
+export interface SpeechRecognitionConfig {
+  mode: VoiceInputMode;
+  language: string;
+}
+
+export interface SpeechRecognitionEvent {
+  type: 'transcript' | 'error' | 'complete';
+  text?: string;
+  isFinal?: boolean;
+  message?: string;
+}
+
+export interface SpeechRecognitionService {
+  start: (config: SpeechRecognitionConfig) => Promise<void>;
+  sendAudio: (audioData: ArrayBuffer) => Promise<void>;
+  commit: () => Promise<void>;
+  close: () => Promise<void>;
+  onTranscript: (callback: (text: string, isFinal: boolean) => void) => void;
+  onError: (callback: (error: string) => void) => void;
+  onComplete: (callback: () => void) => void;
+}
+
 // 窗口对象扩展
 declare global {
   interface Window {

@@ -42,14 +42,15 @@
     "remark-math": "^6.0.0",
     "three": "^0.181.0",
     "typescript": "^5.9.3",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "ws": "^8.18.3"
   },
   "scripts": {
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
     "eject": "react-scripts eject",
-    "postinstall": "node -e \"const fs = require('fs'); const path = require('path'); function copyDir(src, dest) { if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true }); const files = fs.readdirSync(src); files.forEach(file => { const srcPath = path.join(src, file); const destPath = path.join(dest, file); const stat = fs.statSync(srcPath); if (stat.isDirectory()) { copyDir(srcPath, destPath); } else { fs.copyFileSync(srcPath, destPath); } }); } fs.copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'public/pdf.worker.min.mjs'); copyDir('node_modules/pdfjs-dist/cmaps', 'public/cmaps'); copyDir('node_modules/pdfjs-dist/standard_fonts', 'public/standard_fonts');\"",
+    "postinstall": "node scripts/postinstall.js",
     "watch": "nodemon --signal SIGTERM --watch server.js --watch src --ext js,ts,tsx,jsx --ignore build --exec node server.js",
     "watch:server": "nodemon --signal SIGTERM --watch server.js --exec node server.js",
     "server:dev": "pm2 start ecosystem.config.js --env development --watch",

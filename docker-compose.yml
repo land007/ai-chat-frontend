@@ -75,6 +75,14 @@ services:
       - ENABLE_DEBUG_MODE=${ENABLE_DEBUG_MODE:-false}
       - ENABLE_VOICE_INPUT=${ENABLE_VOICE_INPUT:-true}
 
+      # 语音输入配置
+      - VOICE_INPUT_MODEL=${VOICE_INPUT_MODEL:-qwen3-asr-flash-realtime}
+      - VOICE_INPUT_BASE_URL=${VOICE_INPUT_BASE_URL:-wss://dashscope.aliyuncs.com/api-ws/v1/realtime}
+      - VOICE_INPUT_LANGUAGE=${VOICE_INPUT_LANGUAGE:-zh}
+      - VOICE_INPUT_VAD_MODE=${VOICE_INPUT_VAD_MODE:-true}
+      - VOICE_INPUT_SILENCE_DURATION_MS=${VOICE_INPUT_SILENCE_DURATION_MS:-800}
+      - VOICE_INPUT_THRESHOLD=${VOICE_INPUT_THRESHOLD:-0.2}
+
       # 日志级别控制 (error/warn/info/debug)
       # LOG_LEVEL=warn（默认）：生产环境，只看关键业务流程
       # LOG_LEVEL=info：开发调试，看到详细请求响应

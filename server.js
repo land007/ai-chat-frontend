@@ -79,6 +79,15 @@ const CHAT_HISTORY_DIR = process.env.CHAT_HISTORY_DIR || './chat-history';
 const CHAT_HISTORY_PAGE_SIZE = parseInt(process.env.CHAT_HISTORY_PAGE_SIZE || '20', 10);
 const CHAT_HISTORY_AUTO_SAVE = process.env.CHAT_HISTORY_AUTO_SAVE !== 'false';
 
+// 语音识别配置
+const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY || process.env.AI_API_KEY || '';
+const VOICE_INPUT_VAD_MODE = process.env.VOICE_INPUT_VAD_MODE !== 'false'; // 默认true（VAD模式）
+const VOICE_INPUT_SILENCE_DURATION_MS = parseInt(process.env.VOICE_INPUT_SILENCE_DURATION_MS || '800', 10);
+const VOICE_INPUT_THRESHOLD = parseFloat(process.env.VOICE_INPUT_THRESHOLD || '0.2');
+const VOICE_INPUT_MODEL = process.env.VOICE_INPUT_MODEL || 'qwen3-asr-flash-realtime';
+const VOICE_INPUT_BASE_URL = process.env.VOICE_INPUT_BASE_URL || 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime';
+const VOICE_INPUT_LANGUAGE = process.env.VOICE_INPUT_LANGUAGE || 'zh'; // 默认中文
+
 // 统一日志工具
 const logger = {
   error: (...args) => {
@@ -421,6 +430,318 @@ try {
   }
 } catch (error) {
   logger.error('[AI配置] 初始化失败:', error.message);
+}
+
+// ==================== 语音识别服务 ====================
+
+/**
+ * 语音识别服务抽象基类
+ * 定义统一的接口，支持多种语音识别服务提供商
+ */
+class SpeechRecognitionService {
+  constructor() {
+    this.onTranscriptCallbacks = [];
+    this.onErrorCallbacks = [];
+    this.onCompleteCallbacks = [];
+  }
+
+  /**
+   * 开始识别会话
+   * @param {Object} config - 配置对象
+   * @param {string} config.mode - 模式：'vad' 或 'manual'
+   * @param {string} config.language - 语言代码，如 'zh'
+   */
+  async start(config) {
+    throw new Error('start() method must be implemented by subclass');
+  }
+
+  /**
+   * 发送音频数据
+   * @param {Buffer} audioData - PCM音频数据
+   */
+  async sendAudio(audioData) {
+    throw new Error('sendAudio() method must be implemented by subclass');
+  }
+
+  /**
+   * 提交音频（Manual模式）
+   */
+  async commit() {
+    throw new Error('commit() method must be implemented by subclass');
+  }
+
+  /**
+   * 关闭连接
+   */
+  async close() {
+    throw new Error('close() method must be implemented by subclass');
+  }
+
+  /**
+   * 注册识别结果回调
+   * @param {Function} callback - 回调函数 (text: string, isFinal: boolean) => void
+   */
+  onTranscript(callback) {
+    this.onTranscriptCallbacks.push(callback);
+  }
+
+  /**
+   * 注册错误回调
+   * @param {Function} callback - 回调函数 (error: string) => void
+   */
+  onError(callback) {
+    this.onErrorCallbacks.push(callback);
+  }
+
+  /**
+   * 注册完成回调
+   * @param {Function} callback - 回调函数 () => void
+   */
+  onComplete(callback) {
+    this.onCompleteCallbacks.push(callback);
+  }
+
+  /**
+   * 触发识别结果事件
+   */
+  _emitTranscript(text, isFinal) {
+    this.onTranscriptCallbacks.forEach(cb => cb(text, isFinal));
+  }
+
+  /**
+   * 触发错误事件
+   */
+  _emitError(error) {
+    this.onErrorCallbacks.forEach(cb => cb(error));
+  }
+
+  /**
+   * 触发完成事件
+   */
+  _emitComplete() {
+    this.onCompleteCallbacks.forEach(cb => cb());
+  }
+}
+
+/**
+ * 阿里语音识别适配器
+ * 实现阿里云DashScope Qwen-ASR Realtime WebSocket API
+ */
+class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
+  constructor(apiKey, baseUrl, model) {
+    super();
+    this.apiKey = apiKey;
+    this.baseUrl = baseUrl;
+    this.model = model;
+    this.ws = null;
+    this.isRunning = false;
+    this.eventIdCounter = 0;
+  }
+
+  /**
+   * 生成唯一事件ID
+   */
+  _generateEventId() {
+    return `event_${Date.now()}_${++this.eventIdCounter}`;
+  }
+
+  /**
+   * 开始识别会话
+   */
+  async start(config) {
+    if (this.ws && this.ws.readyState === 1) { // WebSocket.OPEN
+      logger.warn('[语音识别] WebSocket已连接，先关闭旧连接');
+      await this.close();
+    }
+
+    const url = `${this.baseUrl}?model=${this.model}`;
+    const WebSocket = require('ws');
+    
+    return new Promise((resolve, reject) => {
+      try {
+        logger.info('[语音识别] 连接到阿里语音识别服务:', url);
+        
+        this.ws = new WebSocket(url, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'OpenAI-Beta': 'realtime=v1'
+          }
+        });
+
+        this.ws.on('open', () => {
+          logger.info('[语音识别] WebSocket连接已建立');
+          this.isRunning = true;
+          this._sendSessionUpdate(config);
+          resolve();
+        });
+
+        this.ws.on('message', (message) => {
+          try {
+            const data = JSON.parse(message.toString());
+            this._handleMessage(data);
+          } catch (error) {
+            logger.error('[语音识别] 解析消息失败:', error.message);
+          }
+        });
+
+        this.ws.on('close', (code, reason) => {
+          logger.info('[语音识别] WebSocket连接已关闭:', code, reason.toString());
+          this.isRunning = false;
+          this.ws = null;
+        });
+
+        this.ws.on('error', (error) => {
+          logger.error('[语音识别] WebSocket错误:', error.message);
+          this.isRunning = false;
+          this._emitError(error.message);
+          reject(error);
+        });
+
+        // 连接超时
+        setTimeout(() => {
+          if (!this.isRunning) {
+            reject(new Error('连接超时'));
+          }
+        }, 10000);
+      } catch (error) {
+        logger.error('[语音识别] 创建WebSocket连接失败:', error.message);
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * 发送会话更新事件
+   */
+  _sendSessionUpdate(config) {
+    const eventId = this._generateEventId();
+    const mode = config.mode || 'vad';
+    const language = config.language || 'zh';
+
+    const sessionConfig = {
+      event_id: eventId,
+      type: 'session.update',
+      session: {
+        modalities: ['text'],
+        input_audio_format: 'pcm',
+        sample_rate: 16000,
+        input_audio_transcription: {
+          language: language
+        }
+      }
+    };
+
+    if (mode === 'vad') {
+      // VAD模式：启用服务器端语音活动检测
+      sessionConfig.session.turn_detection = {
+        type: 'server_vad',
+        threshold: VOICE_INPUT_THRESHOLD,
+        silence_duration_ms: VOICE_INPUT_SILENCE_DURATION_MS
+      };
+      logger.info('[语音识别] 使用VAD模式，阈值:', VOICE_INPUT_THRESHOLD, '静音时长:', VOICE_INPUT_SILENCE_DURATION_MS);
+    } else {
+      // Manual模式：关闭VAD，需要手动提交
+      sessionConfig.session.turn_detection = null;
+      logger.info('[语音识别] 使用Manual模式');
+    }
+
+    if (this.ws && this.ws.readyState === 1) {
+      this.ws.send(JSON.stringify(sessionConfig));
+      logger.debug('[语音识别] 发送session.update:', JSON.stringify(sessionConfig, null, 2));
+    }
+  }
+
+  /**
+   * 发送音频数据
+   */
+  async sendAudio(audioData) {
+    if (!this.ws || this.ws.readyState !== 1) {
+      throw new Error('WebSocket未连接');
+    }
+
+    if (!this.isRunning) {
+      return;
+    }
+
+    const eventId = this._generateEventId();
+    const encoded = audioData.toString('base64');
+    
+    const appendEvent = {
+      event_id: eventId,
+      type: 'input_audio_buffer.append',
+      audio: encoded
+    };
+
+    this.ws.send(JSON.stringify(appendEvent));
+    logger.debug('[语音识别] 发送音频块:', eventId);
+  }
+
+  /**
+   * 提交音频（Manual模式）
+   */
+  async commit() {
+    if (!this.ws || this.ws.readyState !== 1) {
+      throw new Error('WebSocket未连接');
+    }
+
+    const eventId = this._generateEventId();
+    const commitEvent = {
+      event_id: eventId,
+      type: 'input_audio_buffer.commit'
+    };
+
+    this.ws.send(JSON.stringify(commitEvent));
+    logger.info('[语音识别] 发送commit事件');
+  }
+
+  /**
+   * 关闭连接
+   */
+  async close() {
+    this.isRunning = false;
+    
+    if (this.ws) {
+      if (this.ws.readyState === 1) {
+        this.ws.close(1000, 'ASR completed');
+      }
+      this.ws = null;
+    }
+  }
+
+  /**
+   * 处理接收到的消息
+   */
+  _handleMessage(data) {
+    logger.debug('[语音识别] 收到事件:', JSON.stringify(data, null, 2));
+
+    // 处理识别结果事件
+    if (data.type === 'conversation.item.input_audio_transcription.completed') {
+      const transcript = data.transcript || '';
+      logger.info('[语音识别] 最终识别结果:', transcript);
+      this._emitTranscript(transcript, true);
+      this._emitComplete();
+      this.isRunning = false;
+      // 自动关闭连接
+      if (this.ws && this.ws.readyState === 1) {
+        this.ws.close(1000, 'ASR completed');
+      }
+    } else if (data.type === 'conversation.item.input_audio_transcription.delta') {
+      // 增量识别结果（实时转录）
+      const transcript = data.delta || '';
+      if (transcript) {
+        logger.debug('[语音识别] 增量识别结果:', transcript);
+        this._emitTranscript(transcript, false);
+      }
+    } else if (data.type === 'error') {
+      // 错误事件
+      const errorMessage = data.error?.message || data.error?.code || '未知错误';
+      logger.error('[语音识别] 错误事件:', errorMessage);
+      this._emitError(errorMessage);
+    } else if (data.type === 'session.updated') {
+      // 会话更新确认
+      logger.info('[语音识别] 会话已更新');
+    }
+  }
 }
 
 // ==================== 企业微信API服务 ====================
@@ -903,8 +1224,10 @@ app.get('/api/config', (req, res) => {
     // 输入框配置
     textareaMinRows: parseInt(process.env.TEXTAREA_MIN_ROWS || '2', 10),
     textareaMaxRows: parseInt(process.env.TEXTAREA_MAX_ROWS || '5', 10),
-    // 语音输入功能开关
-    enableVoiceInput: process.env.ENABLE_VOICE_INPUT !== 'false'
+    // 语音输入功能配置
+    enableVoiceInput: process.env.ENABLE_VOICE_INPUT !== 'false',
+    voiceInputLanguage: VOICE_INPUT_LANGUAGE,
+    voiceInputVadMode: VOICE_INPUT_VAD_MODE
   });
 });
 
@@ -2425,11 +2748,168 @@ app.use((err, req, res, next) => {
   });
 });
 
+// ==================== WebSocket服务器（语音识别代理）====================
+
+const http = require('http');
+const server = http.createServer(app);
+
+// 创建WebSocket服务器
+const { WebSocketServer } = require('ws');
+const wss = new WebSocketServer({ 
+  server: server,
+  path: '/api/ws/speech-recognition'
+});
+
+// 存储客户端连接及其对应的语音识别适配器
+const clientAdapters = new Map();
+
+wss.on('connection', (ws, req) => {
+  const clientId = `${req.socket.remoteAddress}_${Date.now()}`;
+  logger.info('[语音识别WS] 新客户端连接:', clientId);
+  
+  let adapter = null;
+  let mode = 'vad'; // 默认VAD模式
+
+  // 处理客户端消息
+  ws.on('message', async (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      logger.debug('[语音识别WS] 收到客户端消息:', data.type);
+
+      if (data.type === 'start') {
+        // 开始识别会话
+        mode = data.mode || (VOICE_INPUT_VAD_MODE ? 'vad' : 'manual');
+        const language = data.language || VOICE_INPUT_LANGUAGE;
+
+        if (!DASHSCOPE_API_KEY) {
+          logger.error('[语音识别WS] API密钥未配置');
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: '语音识别服务未配置API密钥'
+          }));
+          return;
+        }
+
+        // 创建语音识别适配器
+        adapter = new AliSpeechRecognitionAdapter(
+          DASHSCOPE_API_KEY,
+          VOICE_INPUT_BASE_URL,
+          VOICE_INPUT_MODEL
+        );
+
+        // 注册回调
+        adapter.onTranscript((text, isFinal) => {
+          ws.send(JSON.stringify({
+            type: 'transcript',
+            text: text,
+            isFinal: isFinal
+          }));
+        });
+
+        adapter.onError((error) => {
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: error
+          }));
+        });
+
+        adapter.onComplete(() => {
+          ws.send(JSON.stringify({
+            type: 'complete'
+          }));
+        });
+
+        // 保存适配器
+        clientAdapters.set(ws, adapter);
+
+        // 开始会话
+        try {
+          await adapter.start({ mode, language });
+          logger.info('[语音识别WS] 会话已启动，模式:', mode);
+        } catch (error) {
+          logger.error('[语音识别WS] 启动会话失败:', error.message);
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: `启动会话失败: ${error.message}`
+          }));
+        }
+
+      } else if (data.type === 'audio') {
+        // 发送音频数据
+        if (!adapter) {
+          logger.warn('[语音识别WS] 适配器未初始化，忽略音频数据');
+          return;
+        }
+
+        try {
+          // 将base64编码的音频数据转换为Buffer
+          const audioBuffer = Buffer.from(data.data, 'base64');
+          await adapter.sendAudio(audioBuffer);
+        } catch (error) {
+          logger.error('[语音识别WS] 发送音频失败:', error.message);
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: `发送音频失败: ${error.message}`
+          }));
+        }
+
+      } else if (data.type === 'commit') {
+        // 提交音频（Manual模式）
+        if (!adapter) {
+          logger.warn('[语音识别WS] 适配器未初始化，无法提交');
+          return;
+        }
+
+        try {
+          await adapter.commit();
+          logger.info('[语音识别WS] 音频已提交');
+        } catch (error) {
+          logger.error('[语音识别WS] 提交音频失败:', error.message);
+          ws.send(JSON.stringify({
+            type: 'error',
+            message: `提交音频失败: ${error.message}`
+          }));
+        }
+
+      } else {
+        logger.warn('[语音识别WS] 未知消息类型:', data.type);
+      }
+    } catch (error) {
+      logger.error('[语音识别WS] 处理消息失败:', error.message);
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: `处理消息失败: ${error.message}`
+      }));
+    }
+  });
+
+  // 处理连接关闭
+  ws.on('close', async () => {
+    logger.info('[语音识别WS] 客户端断开连接:', clientId);
+    
+    // 清理适配器
+    if (adapter) {
+      try {
+        await adapter.close();
+      } catch (error) {
+        logger.error('[语音识别WS] 关闭适配器失败:', error.message);
+      }
+      clientAdapters.delete(ws);
+    }
+  });
+
+  // 处理错误
+  ws.on('error', (error) => {
+    logger.error('[语音识别WS] WebSocket错误:', error.message);
+  });
+});
+
 // 启动服务器
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 AI聊天应用已启动`);
   console.log(`📡 服务地址: http://localhost:${PORT}`);
   console.log(`🔗 API端点: http://localhost:${PORT}/api/chat`);
+  console.log(`🔊 语音识别WebSocket: ws://localhost:${PORT}/api/ws/speech-recognition`);
   console.log(`❤️  健康检查: http://localhost:${PORT}/api/health`);
   console.log(`📊 日志级别: ${LOG_LEVEL}`);
 });

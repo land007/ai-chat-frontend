@@ -8,6 +8,12 @@ WORKDIR /app
 # 复制package.json和package-lock.json
 COPY package*.json ./
 
+# 复制scripts目录（postinstall需要）
+COPY scripts ./scripts
+
+# 创建public目录（postinstall脚本需要）
+RUN mkdir -p public
+
 # 安装所有依赖（包括开发依赖）
 RUN npm ci --legacy-peer-deps
 
@@ -31,6 +37,9 @@ RUN npm install -g pm2
 
 # 复制package.json和package-lock.json
 COPY package*.json ./
+
+# 复制scripts目录（postinstall需要）
+COPY scripts ./scripts
 
 # 只安装生产依赖
 RUN npm ci --only=production --legacy-peer-deps

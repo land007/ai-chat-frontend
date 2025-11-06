@@ -3,6 +3,7 @@ import { Send, Square, Bot, User, Loader2, RotateCcw, Edit3, Check, X, Trash2, C
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatAPI } from '@/services/api';
+import { speechRecognitionService } from '@/services/speechRecognition';
 import TypewriterEffect from './TypewriterEffect';
 import FeedbackAdmin from './FeedbackAdmin';
 import ChatHistorySidebar from './ChatHistorySidebar';
@@ -47,7 +48,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     fastSuggestDefaultCount: 3 as number,
     textareaMinRows: 2 as number,
     textareaMaxRows: 5 as number,
-    enableVoiceInput: true as boolean
+    enableVoiceInput: true as boolean,
+    voiceInputLanguage: 'zh' as string,
+    voiceInputVadMode: true as boolean
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesAreaRef = useRef<HTMLDivElement>(null);
@@ -87,6 +90,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const currentTranscriptRef = useRef<string>(''); // 当前累积的识别文本
+  const voiceInputModeRef = useRef<'vad' | 'manual'>('vad'); // 当前使用的模式
   
   // 检查是否是管理员用户
   const isAdmin = user?.userId && adminUsers.includes(user.userId);
@@ -1365,6 +1372,44 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     }
   }, [checkMediaDevicesSupport]);
 
+  // 清理音频资源
+  const cleanupAudioResources = useCallback(() => {
+    console.log('[语音输入] 清理音频资源');
+    
+    // 停止音频流
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+
+    // 断开ScriptProcessorNode
+    if (scriptProcessorRef.current) {
+      scriptProcessorRef.current.disconnect();
+      scriptProcessorRef.current = null;
+    }
+
+    // 关闭AudioContext
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(err => {
+        console.error('[语音输入] 关闭AudioContext失败:', err);
+      });
+      audioContextRef.current = null;
+    }
+    
+    analyserRef.current = null;
+
+    // 取消动画帧
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    // 关闭语音识别服务
+    speechRecognitionService.close().catch(err => {
+      console.error('[语音输入] 关闭语音识别服务失败:', err);
+    });
+  }, []);
+
   // 绘制音波效果
   const drawWaveform = useCallback(() => {
     if (!waveformCanvasRef.current || !analyserRef.current || !audioContextRef.current) {
@@ -1432,18 +1477,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         throw new Error('浏览器不支持麦克风访问，请使用 HTTPS 或 localhost');
       }
       
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // 创建MediaRecorder
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
       });
       
-      mediaRecorderRef.current = mediaRecorder;
+      mediaStreamRef.current = stream;
       audioChunksRef.current = [];
 
-      // 创建AudioContext用于音波效果
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // 创建AudioContext用于实时音频处理
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 16000
+      });
+      
+      // 如果音频上下文的采样率不是16000，需要重采样
+      if (audioContext.sampleRate !== 16000) {
+        console.warn('[语音输入] 音频上下文采样率不是16000Hz，将进行重采样:', audioContext.sampleRate);
+      }
+
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
@@ -1460,38 +1515,116 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         drawWaveform();
       }
 
-      // 录音数据收集
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
+      // 重置识别状态
+      currentTranscriptRef.current = '';
+      setRecognizedText(null);
+      setIsRecognizing(true);
+      setRecordingError(null);
 
-      // 录音结束处理
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(track => track.stop());
-        audioContext.close();
+      // 确定使用的模式（从配置读取）
+      voiceInputModeRef.current = appConfig.voiceInputVadMode !== false ? 'vad' : 'manual';
+
+      // 注册语音识别服务回调
+      speechRecognitionService.removeCallbacks();
+      
+      speechRecognitionService.onTranscript((text, isFinal) => {
+        console.log('[语音输入] 识别结果:', text, 'isFinal:', isFinal);
         
-        if (audioContextRef.current) {
-          audioContextRef.current.close();
-          audioContextRef.current = null;
+        if (isFinal) {
+          // 最终结果
+          currentTranscriptRef.current = text;
+          setRecognizedText(text);
+          setIsRecognizing(false);
+          setIsRecording(false);
+          
+          // 停止录音
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => track.stop());
+            mediaStreamRef.current = null;
+          }
+          
+          // 清理资源
+          cleanupAudioResources();
+        } else {
+          // 实时增量结果
+          currentTranscriptRef.current = text;
+          setRecognizedText(text);
         }
-        analyserRef.current = null;
+      });
 
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
+      speechRecognitionService.onError((error) => {
+        console.error('[语音输入] 识别错误:', error);
+        setRecordingError(`识别失败: ${error}`);
+        setIsRecognizing(false);
+        setIsRecording(false);
+        cleanupAudioResources();
+      });
+
+      speechRecognitionService.onComplete(() => {
+        console.log('[语音输入] 识别完成');
+        setIsRecognizing(false);
+        setIsRecording(false);
+      });
+
+      // 启动语音识别会话
+      try {
+        await speechRecognitionService.start({
+          mode: voiceInputModeRef.current,
+          language: appConfig.voiceInputLanguage || 'zh'
+        });
+        console.log('[语音输入] 语音识别会话已启动');
+      } catch (error: any) {
+        console.error('[语音输入] 启动语音识别失败:', error);
+        setRecordingError(`启动语音识别失败: ${error.message}`);
+        setIsRecording(false);
+        setIsRecognizing(false);
+        cleanupAudioResources();
+        return;
+      }
+
+      // 创建ScriptProcessorNode用于实时音频处理
+      // ScriptProcessorNode已废弃，但为了兼容性仍使用
+      // 未来可以改用AudioWorklet
+      const bufferSize = 4096;
+      const scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      
+      scriptProcessor.onaudioprocess = async (event) => {
+        // 使用ref检查录音状态，避免闭包问题
+        if (!isRecording) {
+          return;
         }
 
-        // 开始语音识别
-        await handleRecordingEnd();
+        const inputBuffer = event.inputBuffer;
+        const inputData = inputBuffer.getChannelData(0);
+        
+        // 将Float32Array转换为Int16Array (PCM16)
+        const pcm16Data = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          // 将-1.0到1.0的浮点数转换为-32768到32767的整数
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcm16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        // 将Int16Array转换为ArrayBuffer
+        const audioBuffer = pcm16Data.buffer;
+
+        // 发送音频数据到语音识别服务
+        try {
+          await speechRecognitionService.sendAudio(audioBuffer);
+        } catch (error) {
+          console.error('[语音输入] 发送音频数据失败:', error);
+          // 不中断录音，继续发送
+        }
       };
+
+      source.connect(scriptProcessor);
+      scriptProcessor.connect(audioContext.destination);
+      
+      scriptProcessorRef.current = scriptProcessor;
 
       // 开始录音
-      mediaRecorder.start();
       setIsRecording(true);
       setRecordingDuration(0);
-      setRecordingError(null);
 
       // 启动录音时长计时器
       const startTime = Date.now();
@@ -1499,7 +1632,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
         const duration = Math.floor((Date.now() - startTime) / 1000);
         setRecordingDuration(duration);
         
-        // 最长60秒
+        // 最长60秒（VAD模式会自动结束，Manual模式需要手动停止）
         if (duration >= 60) {
           stopRecording();
         }
@@ -1507,68 +1640,36 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
 
     } catch (error: any) {
       console.error('[语音输入] 录音失败:', error);
-      setRecordingError('录音失败，请重试');
+      setRecordingError(`录音失败: ${error.message}`);
       setIsRecording(false);
+      setIsRecognizing(false);
       setInputMode('keyboard');
+      cleanupAudioResources();
     }
-  }, [hasPermission, requestMicrophonePermission, drawWaveform, checkMediaDevicesSupport]);
+  }, [hasPermission, requestMicrophonePermission, drawWaveform, checkMediaDevicesSupport, cleanupAudioResources]);
 
   // 停止录音
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      console.log('[语音输入] 停止录音');
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
+    console.log('[语音输入] 停止录音');
+    
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
     }
-  }, [isRecording]);
 
-  // 录音结束，开始识别
-  const handleRecordingEnd = useCallback(async () => {
-    setIsRecognizing(true);
-    setRecognizedText(null);
-    setRecordingError(null);
+    setIsRecording(false);
 
-    try {
-      // 使用Web Speech API进行识别（需要在录音时就开始识别）
-      // 由于Web Speech API需要实时音频流，我们在这里使用一个模拟的识别过程
-      // 实际应用中，应该在录音开始时就开始识别，或者使用后端API
-      
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      
-      if (SpeechRecognition) {
-        // 使用Web Speech API进行实时识别
-        // 注意：这需要在录音时就开始识别，但我们的需求是录音结束后识别
-        // 这里我们使用一个替代方案：提示用户使用浏览器内置的语音识别
-        
-        // 临时方案：显示提示，说明需要后端API支持
-        // 实际应用中可以：
-        // 1. 在录音时就开始识别（使用Web Speech API）
-        // 2. 使用后端API进行识别（上传音频文件）
-        
-        // 模拟识别过程（实际应该调用后端API）
-        setTimeout(() => {
-          // 这里应该调用后端API进行语音识别
-          // 暂时显示提示
-          setRecordingError('语音识别功能需要后端API支持，请等待集成');
-          setIsRecognizing(false);
-        }, 1000);
-        
-      } else {
-        // 不支持Web Speech API，需要后端API
-        setRecordingError('浏览器不支持语音识别，请等待后端API集成');
-        setIsRecognizing(false);
-      }
-    } catch (error: any) {
-      console.error('[语音输入] 识别失败:', error);
-      setRecordingError('识别失败，请重试');
-      setIsRecognizing(false);
+    // 如果是Manual模式，需要提交音频
+    if (voiceInputModeRef.current === 'manual') {
+      speechRecognitionService.commit().catch(err => {
+        console.error('[语音输入] 提交音频失败:', err);
+        setRecordingError(`提交音频失败: ${err.message}`);
+      });
     }
-  }, []);
+
+    // 清理音频资源
+    cleanupAudioResources();
+  }, [cleanupAudioResources]);
 
   // 切换输入模式
   const handleToggleInputMode = useCallback(() => {
