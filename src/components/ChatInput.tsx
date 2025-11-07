@@ -928,6 +928,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             minRadius={8}
             maxRadius={24}
             spacing={24}
+            sampleRate={audioContextRef.current?.sampleRate || 16000}
           />
           <div style={getStyles().recordingDuration}>
             {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:

@@ -7,6 +7,7 @@ export interface FourDotWaveformProps {
   minRadius?: number;
   maxRadius?: number;
   spacing?: number;
+  sampleRate?: number; // AudioContext 的采样率
   className?: string;
 }
 
@@ -17,11 +18,13 @@ const FourDotWaveform: React.FC<FourDotWaveformProps> = ({
   minRadius = 8,
   maxRadius = 24,
   spacing = 24,
+  sampleRate = 16000, // 默认采样率，通常录音时是 16000 Hz
   className
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | null>(null);
   const previousRadiiRef = useRef<number[]>([minRadius, minRadius, minRadius, minRadius]); // 用于时间平滑
+  const previousEnergyRef = useRef<number>(0); // 用于跟踪总能量，实现衰减
   const dotCount = 4;
 
   // 绘制4个点的波形
@@ -53,88 +56,160 @@ const FourDotWaveform: React.FC<FourDotWaveformProps> = ({
 
     const centerY = displayHeight / 2;
 
-    // 将频率数据分成4个频段，使用更智能的分段策略
-    // 使用对数分布，让低频和高频段的采样更合理
+    // 计算人声频段范围（300-3400 Hz）
+    // 使用传入的采样率（通常录音时是 16000 Hz）
+    const nyquistFreq = sampleRate / 2; // Nyquist 频率
+    const freqPerBin = nyquistFreq / bufferLength; // 每个 bin 代表的频率
+    
+    // 人声频段：300-3400 Hz
+    const voiceMinFreq = 300;  // 最低人声频率
+    const voiceMaxFreq = 3400; // 最高人声频率
+    
+    // 计算对应的 bin 范围
+    const voiceMinBin = Math.floor(voiceMinFreq / freqPerBin); // bin 5
+    const voiceMaxBin = Math.floor(voiceMaxFreq / freqPerBin); // bin 54
+    const voiceBinRange = voiceMaxBin - voiceMinBin; // 约 50 个 bins
+    
+    // 第一步：计算整体能量和更严格的阈值
+    // 计算人声频段的总能量和平均能量
+    let totalEnergy = 0;
+    let energyCount = 0;
+    for (let i = voiceMinBin; i <= voiceMaxBin && i < bufferLength; i++) {
+      totalEnergy += dataArray[i];
+      energyCount++;
+    }
+    const avgEnergy = energyCount > 0 ? totalEnergy / energyCount : 0;
+    
+    // 使用更严格的相对阈值：平均能量的50%（之前是30%）
+    // 只有当整体能量明显超过环境噪音时，才认为是有效人声
+    const relativeThreshold = Math.max(15, avgEnergy * 0.5); // 提高阈值到50%
+    const absoluteThreshold = 20; // 绝对阈值，至少20
+    
+    // 总能量阈值：只有当总能量超过这个值时，才显示明显放大
+    // 这样可以避免单个频段的持续噪音
+    const totalEnergyThreshold = Math.max(30, avgEnergy * 0.8);
+    const hasSignificantEnergy = totalEnergy > totalEnergyThreshold;
+    
+    // 将人声频段分成4个相等的子频段
     const frequencies: number[] = [];
-    // 不同频段的敏感度增益，让每个频段独立响应
-    const frequencySensitivity = [1.0, 1.15, 1.3, 1.45]; // 高频段更敏感
-
+    const segmentSize = Math.floor(voiceBinRange / dotCount);
+    
     for (let i = 0; i < dotCount; i++) {
-      // 使用对数分布计算频段范围
-      // 低频段采样更多数据点，高频段采样更少但更敏感
-      const logStart = Math.pow(i / dotCount, 0.65) * bufferLength;
-      const logEnd = Math.pow((i + 1) / dotCount, 0.65) * bufferLength;
+      // 计算该子频段的 bin 范围
+      const segmentStart = voiceMinBin + i * segmentSize;
+      const segmentEnd = Math.min(voiceMinBin + (i + 1) * segmentSize, voiceMaxBin);
       
-      const start = Math.floor(logStart);
-      const end = Math.min(Math.floor(logEnd), bufferLength);
-      
-      // 使用最大值而不是平均值，让峰值更突出，增强视觉差异
+      // 统计该频段的能量
       let maxValue = 0;
       let sum = 0;
       let count = 0;
-      let peakCount = 0; // 峰值数量
+      let peakSum = 0;
+      let peakCount = 0;
       
-      // 计算峰值阈值（超过平均值的值）
-      for (let j = start; j < end; j++) {
+      for (let j = segmentStart; j <= segmentEnd && j < bufferLength; j++) {
         const value = dataArray[j];
         sum += value;
         count++;
         if (value > maxValue) {
           maxValue = value;
         }
-      }
-      
-      const avgValue = count > 0 ? sum / count : 0;
-      const peakThreshold = avgValue * 1.5; // 峰值阈值
-      
-      // 统计峰值数量和平均值
-      let peakSum = 0;
-      for (let j = start; j < end; j++) {
-        const value = dataArray[j];
-        if (value > peakThreshold) {
+        // 检测峰值（超过相对阈值的值）
+        if (value > relativeThreshold) {
           peakSum += value;
           peakCount++;
         }
       }
       
-      // 混合策略：峰值能量 + 平均值
-      // 如果该频段有峰值，优先使用峰值；否则使用平均值
+      const avgValue = count > 0 ? sum / count : 0;
+      
+      // 如果该频段有峰值（人声），使用峰值能量；否则使用平均值但降低权重
       let mixedValue;
-      if (peakCount > 0 && maxValue > peakThreshold) {
-        // 有峰值：70%峰值能量 + 30%平均值
+      if (peakCount > 0 && maxValue > relativeThreshold && hasSignificantEnergy) {
+        // 有人声且整体能量足够：使用峰值能量，突出人声
         const peakAvg = peakSum / peakCount;
-        mixedValue = peakAvg * 0.7 + avgValue * 0.3;
+        mixedValue = peakAvg * 0.85 + avgValue * 0.15;
       } else {
-        // 无峰值：使用增强的平均值
-        mixedValue = avgValue * 1.2;
+        // 无人声或整体能量不足：使用降低的平均值
+        mixedValue = avgValue * 0.4; // 进一步降低权重
       }
       
-      // 应用频段敏感度，让不同频段更独立
-      // 高频段更敏感，能更好地响应声音变化
-      const adjustedValue = Math.min(255, mixedValue * frequencySensitivity[i]);
+      // 应用更严格的阈值过滤：如果能量太低，认为是环境噪音
+      const effectiveThreshold = Math.max(relativeThreshold, absoluteThreshold);
+      if (mixedValue < effectiveThreshold) {
+        mixedValue = mixedValue * 0.2; // 更激进的衰减
+      }
       
-      frequencies.push(adjustedValue);
+      frequencies.push(Math.min(255, mixedValue));
+    }
+    
+    // 频段增益平衡：降低高频段的默认增益，避免右侧持续大
+    // 高频段（右侧）的增益因子，范围从 1.0（左侧）到 0.80（右侧）
+    // 这样可以减少高频环境噪音的影响
+    const frequencyGainFactors = [1.0, 0.92, 0.85, 0.80];
+    
+    // 应用增益平衡（仅在整体能量足够时）
+    if (hasSignificantEnergy) {
+      for (let i = 0; i < dotCount; i++) {
+        // 直接应用增益因子，降低高频段的响应
+        frequencies[i] = Math.min(255, frequencies[i] * frequencyGainFactors[i]);
+      }
     }
 
-    // 减少平滑系数，让变化更明显（从0.4降到0.25）
-    const smoothingFactor = 0.25;
+    // 时间衰减机制：当能量持续低于阈值时，快速衰减到基础大小
+    const decayFactor = 0.85; // 衰减系数，值越小衰减越快
+    
+    // 使用原始总能量来判断是否需要衰减（更准确）
+    // 如果当前原始总能量低于阈值，应用衰减
+    if (totalEnergy < totalEnergyThreshold * energyCount) {
+      // 快速衰减到基础大小
+      previousEnergyRef.current = previousEnergyRef.current * decayFactor;
+    } else {
+      // 有足够能量，更新能量记录（使用原始总能量）
+      previousEnergyRef.current = totalEnergy;
+    }
+    
+    // 时间平滑系数：让人声变化更明显
+    const smoothingFactor = hasSignificantEnergy ? 0.35 : 0.5; // 能量低时更平滑（衰减更快）
     const currentRadii: number[] = [];
 
     // 计算每个点的半径并应用平滑
     for (let i = 0; i < dotCount; i++) {
-      // 使用非线性映射（平方根），让小的变化更明显，大的变化不会过度
-      // 同时添加基础偏移，确保即使没有声音也有可见的基础大小
+      // 使用更激进的非线性映射（平方），让人声变化更明显
       const normalizedValue = frequencies[i] / 255;
-      const sqrtValue = Math.sqrt(Math.max(0, normalizedValue)); // 平方根映射
+      // 使用平方映射替代平方根，增强动态范围
+      const squaredValue = Math.pow(Math.max(0, normalizedValue), 1.5); // 1.5次方，介于平方根和平方之间
       
-      // 映射到半径范围，添加基础偏移（20%的基础大小）
-      const baseOffset = 0.2; // 即使没有声音也有20%的大小
-      const targetRadius = minRadius + baseOffset * (maxRadius - minRadius) + 
-                          sqrtValue * (1 - baseOffset) * (maxRadius - minRadius);
+      // 映射到半径范围
+      // 降低基础偏移到5%，让人声变化更明显
+      // 当没有明显人声时，点会保持很小
+      const baseOffset = 0.05; // 基础大小只有5%（之前是10%）
+      const dynamicRange = 1 - baseOffset; // 动态范围95%
       
-      // 时间平滑：减少平滑度，让变化更明显
+      // 目标半径：基础大小 + 动态范围 * 映射值
+      let targetRadius = minRadius + baseOffset * (maxRadius - minRadius) + 
+                         squaredValue * dynamicRange * (maxRadius - minRadius);
+      
+      // 如果整体能量不足，应用额外的衰减
+      if (!hasSignificantEnergy) {
+        targetRadius = minRadius + (targetRadius - minRadius) * 0.3;
+      }
+      
+      // 时间平滑：让人声变化更流畅
+      // 当能量低时，使用更强的衰减
       const previousRadius = previousRadiiRef.current[i] || minRadius;
-      const smoothedRadius = previousRadius * (1 - smoothingFactor) + targetRadius * smoothingFactor;
+      let smoothedRadius;
+      
+      if (hasSignificantEnergy && normalizedValue > 0.1) {
+        // 有足够能量：正常平滑
+        smoothedRadius = previousRadius * (1 - smoothingFactor) + targetRadius * smoothingFactor;
+      } else {
+        // 能量不足：快速衰减
+        const decaySmoothingFactor = 0.6; // 更强的衰减
+        smoothedRadius = previousRadius * (1 - decaySmoothingFactor) + targetRadius * decaySmoothingFactor;
+      }
+      
+      // 确保半径不会低于基础大小
+      smoothedRadius = Math.max(minRadius + baseOffset * (maxRadius - minRadius), smoothedRadius);
       
       currentRadii.push(smoothedRadius);
       previousRadiiRef.current[i] = smoothedRadius;
@@ -192,7 +267,7 @@ const FourDotWaveform: React.FC<FourDotWaveformProps> = ({
     if (isRecording && analyserNode) {
       animationFrameRef.current = requestAnimationFrame(drawWaveform);
     }
-  }, [analyserNode, isRecording, isDarkMode, minRadius, maxRadius, spacing]);
+  }, [analyserNode, isRecording, isDarkMode, minRadius, maxRadius, spacing, sampleRate]);
 
   // 动画循环
   useEffect(() => {
@@ -205,9 +280,10 @@ const FourDotWaveform: React.FC<FourDotWaveformProps> = ({
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-      // 重置平滑历史值（使用基础大小，包含基础偏移）
-      const baseRadius = minRadius + 0.2 * (maxRadius - minRadius);
+      // 重置平滑历史值（使用基础大小，包含基础偏移5%）
+      const baseRadius = minRadius + 0.05 * (maxRadius - minRadius);
       previousRadiiRef.current = [baseRadius, baseRadius, baseRadius, baseRadius];
+      previousEnergyRef.current = 0;
       // 清除canvas
       if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
