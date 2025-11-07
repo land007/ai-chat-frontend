@@ -56,6 +56,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const recordingStartTimeRef = useRef<number>(0); // 录音开始时间（用于最小录音时长保护）
   const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 识别超时定时器ref
   const mainTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const audioBufferRef = useRef<ArrayBuffer[]>([]); // 音频缓冲区：存储连接建立前的音频数据
+  const isConnectionReadyRef = useRef<boolean>(false); // 连接是否已就绪
+  const isSendingBufferedRef = useRef<boolean>(false); // 是否正在发送缓冲音频
+  const maxBufferSize = 150; // 最大缓冲音频块数（约3秒，假设50块/秒）
   
   // 检测是否为触摸设备
   const isTouchDevice = useCallback(() => {
@@ -184,6 +188,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
     
         analyserRef.current = null;
 
+    // 清空音频缓冲区和重置连接状态
+    audioBufferRef.current = [];
+    isConnectionReadyRef.current = false;
+    isSendingBufferedRef.current = false;
+
     speechRecognitionService.close().catch(err => {
       console.error('[语音输入] 关闭语音识别服务失败:', err);
     });
@@ -246,22 +255,34 @@ const ChatInput: React.FC<ChatInputProps> = ({
       setIsRecognizing(true);
       setRecordingError(null);
 
-      console.log('[语音输入] 先连接WebSocket，等待通路完全打通...');
-      try {
-        await speechRecognitionService.start({
-          mode: voiceInputModeRef.current,
-          language: voiceInputLanguage
-        });
-        console.log('[语音输入] ✅ WebSocket连接成功，通路完全打通，可以开始录音');
-      } catch (error: any) {
+      // 重置音频缓冲区和连接状态
+      audioBufferRef.current = [];
+      isConnectionReadyRef.current = false;
+      isSendingBufferedRef.current = false;
+
+      // 并行执行：同时启动连接和录音，不等待连接完成
+      console.log('[语音输入] 并行启动：同时连接WebSocket和开始录音...');
+      
+      const connectionPromise = speechRecognitionService.start({
+        mode: voiceInputModeRef.current,
+        language: voiceInputLanguage
+      }).then(() => {
+        console.log('[语音输入] ✅ WebSocket连接成功，通路完全打通');
+        isConnectionReadyRef.current = true;
+        // 连接建立后，触发发送缓冲音频
+        return true;
+      }).catch((error: any) => {
         console.error('[语音输入] ❌ WebSocket连接失败:', error);
         setRecordingError(`连接失败: ${error.message}`);
         setIsRecognizing(false);
         setInputMode('keyboard');
         isInitializingRef.current = false;
-        return;
-      }
+        // 连接失败，清空缓冲区
+        audioBufferRef.current = [];
+        throw error;
+      });
 
+      // 注册回调（在连接建立前注册，避免丢失消息）
       speechRecognitionService.removeCallbacks();
       
       speechRecognitionService.onTranscript((text, isFinal) => {
@@ -396,11 +417,55 @@ const ChatInput: React.FC<ChatInputProps> = ({
       
       const audioChunkCountRef = { current: 0 };
       
+      // 发送缓冲音频的函数（在连接建立后调用）
+      const sendBufferedAudioRef = { current: null as (() => Promise<void>) | null };
+      
+      const sendBufferedAudio = async () => {
+        if (isSendingBufferedRef.current || audioBufferRef.current.length === 0) {
+          return;
+        }
+        
+        if (!speechRecognitionService.isReady()) {
+          return;
+        }
+        
+        isSendingBufferedRef.current = true;
+        console.log('[语音输入] 📦 开始发送缓冲音频，共', audioBufferRef.current.length, '个音频块');
+        
+        // 复制缓冲区并清空，避免在发送过程中继续添加
+        const buffered = audioBufferRef.current.splice(0);
+        
+        try {
+          // 按顺序发送所有缓冲的音频数据
+          for (let i = 0; i < buffered.length; i++) {
+            if (!speechRecognitionService.isReady() || !isRecordingRef.current) {
+              console.log('[语音输入] ⚠️ 发送缓冲音频时连接断开或录音停止，停止发送');
+              // 将未发送的音频重新放回缓冲区（如果需要）
+              audioBufferRef.current.unshift(...buffered.slice(i));
+              break;
+            }
+            await speechRecognitionService.sendAudio(buffered[i]);
+            if (i < 10 || i % 20 === 0) {
+              console.log('[语音输入] 📦 已发送缓冲音频块:', i + 1, '/', buffered.length);
+            }
+          }
+          console.log('[语音输入] ✅ 缓冲音频发送完成，共发送', buffered.length, '个音频块');
+        } catch (error) {
+          console.error('[语音输入] ❌ 发送缓冲音频失败:', error);
+          // 发送失败，不再重新放入缓冲区（避免无限重试）
+        } finally {
+          isSendingBufferedRef.current = false;
+        }
+      };
+      
+      // 保存函数引用，以便在连接建立后调用
+      sendBufferedAudioRef.current = sendBufferedAudio;
+      
       scriptProcessor.onaudioprocess = async (event) => {
         audioChunkCountRef.current++;
         
         if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 10 === 0) {
-          console.log('[语音输入] ✅ onaudioprocess触发 #', audioChunkCountRef.current, 'isRecordingRef:', isRecordingRef.current, 'isReady:', speechRecognitionService.isReady(), 'audioContext.state:', audioContext.state);
+          console.log('[语音输入] ✅ onaudioprocess触发 #', audioChunkCountRef.current, 'isRecordingRef:', isRecordingRef.current, 'isReady:', speechRecognitionService.isReady(), 'audioContext.state:', audioContext.state, '缓冲区:', audioBufferRef.current.length);
         }
         
         if (audioContext.state === 'closed') {
@@ -451,6 +516,29 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
         const audioBuffer = pcm16Data.buffer;
 
+        // 检查连接是否就绪
+        const isReady = speechRecognitionService.isReady();
+        
+        if (!isReady) {
+          // 连接未就绪，存入缓冲区
+          if (audioBufferRef.current.length < maxBufferSize) {
+            audioBufferRef.current.push(audioBuffer);
+            if (audioChunkCountRef.current <= 10 || audioChunkCountRef.current % 20 === 0) {
+              console.log('[语音输入] 📦 音频数据已缓冲 #', audioChunkCountRef.current, '缓冲区大小:', audioBufferRef.current.length);
+            }
+          } else {
+            // 缓冲区已满，丢弃最旧的数据（FIFO）
+            audioBufferRef.current.shift();
+            audioBufferRef.current.push(audioBuffer);
+            console.warn('[语音输入] ⚠️ 音频缓冲区已满，丢弃最旧的数据');
+          }
+          return;
+        }
+        
+        // 连接已就绪
+        // 注意：缓冲音频的发送在连接建立的 Promise 回调中处理，这里只发送实时音频
+        
+        // 发送当前音频数据
         try {
           await speechRecognitionService.sendAudio(audioBuffer);
           
@@ -463,6 +551,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
           }
         } catch (error) {
           console.error('[语音输入] ❌ 发送音频数据失败 #', audioChunkCountRef.current, ':', error, 'isRecordingRef:', isRecordingRef.current, 'isReady:', speechRecognitionService.isReady());
+          // 发送失败，如果是因为连接未就绪，将数据存入缓冲区
+          if (!speechRecognitionService.isReady() && audioBufferRef.current.length < maxBufferSize) {
+            audioBufferRef.current.push(audioBuffer);
+            console.log('[语音输入] 📦 发送失败，音频数据已重新缓冲');
+          }
         }
       };
 
@@ -472,7 +565,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       scriptProcessorRef.current = scriptProcessor;
       
       console.log('[语音输入] ScriptProcessor已直接连接到audioContext.destination');
-      console.log('[语音输入] ScriptProcessor已连接，开始处理音频');
+      console.log('[语音输入] ScriptProcessor已连接，开始处理音频（并行模式：连接和录音同时进行）');
       console.log('[语音输入] 音频上下文状态:', audioContext.state);
       console.log('[语音输入] 音频上下文采样率:', audioContext.sampleRate);
       console.log('[语音输入] 音频流活动状态:', stream.active);
@@ -487,8 +580,23 @@ const ChatInput: React.FC<ChatInputProps> = ({
         });
       });
       
+      // 等待连接建立（不阻塞录音）
+      connectionPromise.then(() => {
+        console.log('[语音输入] ✅ 连接已建立，开始发送缓冲音频');
+        // 连接建立后，立即尝试发送缓冲音频
+        setTimeout(() => {
+          if (sendBufferedAudioRef.current) {
+            sendBufferedAudioRef.current();
+          }
+        }, 50);
+      }).catch((error) => {
+        // 连接失败已在 connectionPromise 中处理
+        console.error('[语音输入] 连接失败，清空音频缓冲区');
+        audioBufferRef.current = [];
+      });
+      
       isInitializingRef.current = false;
-      console.log('[语音输入] ✅ 初始化完成，可以开始处理音频');
+      console.log('[语音输入] ✅ 录音初始化完成，音频处理已开始（连接建立前音频将被缓冲）');
       
       setTimeout(() => {
         console.log('[语音输入] 🔍 3秒后检查：isRecordingRef.current =', isRecordingRef.current);
