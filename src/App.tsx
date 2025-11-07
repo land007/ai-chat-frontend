@@ -7,10 +7,11 @@ import TTSIntegrationTest from './components/TTSIntegrationTest';
 import TypewriterCodeTest from './components/TypewriterCodeTest';
 import FeedbackAdmin from './components/FeedbackAdmin';
 import Login from './components/Login';
+import WaveformPreview from './components/WaveformPreview';
 import { Loader2 } from 'lucide-react';
 import './App.css';
 
-type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback' | 'typewriter-code';
+type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback' | 'typewriter-code' | 'waveform-preview';
 
 function AppContent() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -146,6 +147,12 @@ function AppContent() {
               📊 反馈管理
             </button>
           )}
+          <button 
+            onClick={() => setCurrentPage('waveform-preview')}
+            style={buttonStyle('waveform-preview')}
+          >
+            📊 波形预览
+          </button>
         </div>
       )}
       
@@ -157,6 +164,21 @@ function AppContent() {
       {currentPage === 'feedback' && isAdmin && (
         <div style={{ height: '100vh', overflow: 'hidden' }}>
           <FeedbackAdmin isDarkMode={isDarkMode} onClose={() => setCurrentPage('chat')} />
+        </div>
+      )}
+      {currentPage === 'waveform-preview' && (
+        <div style={{
+          height: debugMode ? 'calc(100vh - 52px)' : '100vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch'
+        }}>
+          <WaveformPreview 
+            isDarkMode={isDarkMode}
+            onSelectStyle={(style) => {
+              console.log('选择的波形样式:', style);
+            }}
+          />
         </div>
       )}
     </div>

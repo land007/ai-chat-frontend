@@ -644,7 +644,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     scrollToBottom(true);
     const currentInput = messageText.trim();
     if (!text) {
-      setInputValue('');
+    setInputValue('');
     }
     setIsLoading(true);
 
@@ -1266,7 +1266,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
   // 已移除：所有语音识别相关代码已迁移到 ChatInput 组件
 
   // 已移除：所有语音识别相关函数代码已迁移到 ChatInput 组件
-  
+
   // 动态样式，支持深色主题
   const getStyles = () => {
     const isDark = isDarkMode;

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Square, X, Mic, Keyboard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { speechRecognitionService } from '@/services/speechRecognition';
+import WaveformVisualizer from './WaveformVisualizer';
 
 export interface ChatInputProps {
   value: string;
@@ -44,10 +45,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recognitionRef = useRef<any>(null);
-  const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const currentTranscriptRef = useRef<string>(''); // 当前累积的识别文本
@@ -183,12 +182,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
     
-    analyserRef.current = null;
-
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
+        analyserRef.current = null;
 
     speechRecognitionService.close().catch(err => {
       console.error('[语音输入] 关闭语音识别服务失败:', err);
@@ -216,45 +210,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
       return prev;
     });
   }, [onChange]);
-
-  // 绘制音波效果
-  const drawWaveform = useCallback(() => {
-    if (!waveformCanvasRef.current || !analyserRef.current || !audioContextRef.current) {
-      return;
-    }
-
-    const canvas = waveformCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const analyser = analyserRef.current;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    analyser.getByteFrequencyData(dataArray);
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const barWidth = (canvas.width / bufferLength) * 2.5;
-    let barHeight;
-    let x = 0;
-
-    for (let i = 0; i < bufferLength; i++) {
-      barHeight = (dataArray[i] / 255) * canvas.height;
-      
-      const gradient = ctx.createLinearGradient(0, canvas.height - barHeight, 0, canvas.height);
-      gradient.addColorStop(0, isDarkMode ? '#3b82f6' : '#2563eb');
-      gradient.addColorStop(1, isDarkMode ? '#60a5fa' : '#3b82f6');
-
-      ctx.fillStyle = gradient;
-      ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-
-      x += barWidth + 1;
-    }
-
-    if (isRecording) {
-      animationFrameRef.current = requestAnimationFrame(drawWaveform);
-    }
-  }, [isRecording, isDarkMode]);
 
   // 开始录音
   const startRecording = useCallback(async () => {
@@ -411,13 +366,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
-
-      if (waveformCanvasRef.current) {
-        const canvas = waveformCanvasRef.current;
-        canvas.width = canvas.offsetWidth;
-        canvas.height = 40;
-        drawWaveform();
-      }
 
       setIsRecording(true);
       isRecordingRef.current = true;
@@ -577,7 +525,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         setInputMode('keyboard');
         cleanupAudioResources();
       }
-  }, [hasPermission, requestMicrophonePermission, drawWaveform, checkMediaDevicesSupport, cleanupAudioResources, isTouchDevice, voiceInputLanguage, onChange]);
+  }, [hasPermission, requestMicrophonePermission, checkMediaDevicesSupport, cleanupAudioResources, isTouchDevice, voiceInputLanguage, onChange]);
 
   // 停止录音
   const stopRecording = useCallback(() => {
@@ -782,10 +730,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
         clearTimeout(recognitionTimeoutRef.current);
         recognitionTimeoutRef.current = null;
       }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
       if (mediaRecorderRef.current) {
         try {
           mediaRecorderRef.current.stop();
@@ -836,11 +780,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         gap: '16px'
-      },
-      waveformCanvas: {
-        width: '100%',
-        height: '40px',
-        maxWidth: '600px'
       },
       recordingDuration: {
         fontSize: '14px',
@@ -982,11 +921,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
       {/* 音波效果显示区域（仅录音时显示） */}
       {isRecording && (
         <div style={getStyles().waveformArea}>
-          <canvas
-            ref={waveformCanvasRef}
+          <WaveformVisualizer
+            analyserNode={analyserRef.current}
+            isRecording={isRecording}
+            isDarkMode={isDarkMode}
             width={600}
             height={40}
-            style={getStyles().waveformCanvas}
           />
           <div style={getStyles().recordingDuration}>
             {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
