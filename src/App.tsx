@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ChatInterface from './components/ChatInterface';
-import AudioQueuePlayerTest from './components/AudioQueuePlayerTest';
-import StreamSegmentationTest from './components/StreamSegmentationTest';
-import TTSIntegrationTest from './components/TTSIntegrationTest';
-import TypewriterCodeTest from './components/TypewriterCodeTest';
-import FeedbackAdmin from './components/FeedbackAdmin';
 import Login from './components/Login';
-import WaveformPreview from './components/WaveformPreview';
 import { Loader2 } from 'lucide-react';
 import './App.css';
+
+// 懒加载测试页面组件
+const AudioQueuePlayerTest = lazy(() => import('./components/AudioQueuePlayerTest'));
+const StreamSegmentationTest = lazy(() => import('./components/StreamSegmentationTest'));
+const TTSIntegrationTest = lazy(() => import('./components/TTSIntegrationTest'));
+const TypewriterCodeTest = lazy(() => import('./components/TypewriterCodeTest'));
+const FeedbackAdmin = lazy(() => import('./components/FeedbackAdmin'));
+const WaveformPreview = lazy(() => import('./components/WaveformPreview'));
 
 type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback' | 'typewriter-code' | 'waveform-preview';
 
@@ -157,29 +159,121 @@ function AppContent() {
       )}
       
       {currentPage === 'chat' && <ChatInterface />}
-      {currentPage === 'audio' && <AudioQueuePlayerTest />}
-      {currentPage === 'stream-segment' && <StreamSegmentationTest />}
-      {currentPage === 'tts' && <TTSIntegrationTest />}
-      {currentPage === 'typewriter-code' && <TypewriterCodeTest />}
+      {currentPage === 'audio' && (
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            gap: '16px'
+          }}>
+            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载音频队列测试...</p>
+          </div>
+        }>
+          <AudioQueuePlayerTest />
+        </Suspense>
+      )}
+      {currentPage === 'stream-segment' && (
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            gap: '16px'
+          }}>
+            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载流式分段测试...</p>
+          </div>
+        }>
+          <StreamSegmentationTest />
+        </Suspense>
+      )}
+      {currentPage === 'tts' && (
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            gap: '16px'
+          }}>
+            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载TTS集成测试...</p>
+          </div>
+        }>
+          <TTSIntegrationTest />
+        </Suspense>
+      )}
+      {currentPage === 'typewriter-code' && (
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            gap: '16px'
+          }}>
+            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载打字机代码测试...</p>
+          </div>
+        }>
+          <TypewriterCodeTest />
+        </Suspense>
+      )}
       {currentPage === 'feedback' && isAdmin && (
-        <div style={{ height: '100vh', overflow: 'hidden' }}>
-          <FeedbackAdmin isDarkMode={isDarkMode} onClose={() => setCurrentPage('chat')} />
-        </div>
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            gap: '16px'
+          }}>
+            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载反馈管理...</p>
+          </div>
+        }>
+          <div style={{ height: '100vh', overflow: 'hidden' }}>
+            <FeedbackAdmin isDarkMode={isDarkMode} onClose={() => setCurrentPage('chat')} />
+          </div>
+        </Suspense>
       )}
       {currentPage === 'waveform-preview' && (
-        <div style={{
-          height: debugMode ? 'calc(100vh - 52px)' : '100vh',
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          WebkitOverflowScrolling: 'touch'
-        }}>
-          <WaveformPreview 
-            isDarkMode={isDarkMode}
-            onSelectStyle={(style) => {
-              console.log('选择的波形样式:', style);
-            }}
-          />
-        </div>
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            gap: '16px'
+          }}>
+            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载波形预览...</p>
+          </div>
+        }>
+          <div style={{
+            height: debugMode ? 'calc(100vh - 52px)' : '100vh',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            WebkitOverflowScrolling: 'touch'
+          }}>
+            <WaveformPreview 
+              isDarkMode={isDarkMode}
+              onSelectStyle={(style) => {
+                console.log('选择的波形样式:', style);
+              }}
+            />
+          </div>
+        </Suspense>
       )}
     </div>
   );

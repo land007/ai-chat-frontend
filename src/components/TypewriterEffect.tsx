@@ -1,28 +1,52 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import hljs from 'highlight.js';
-import { Info, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { Info, AlertTriangle, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { TypewriterEffectProps, MapConfig } from '@/types';
-import MermaidChart from './MermaidChart';
 import ImageViewer from './ImageViewer';
-import MapViewer from './MapViewer';
 import AudioPlayer from './AudioPlayer';
 import VideoPlayer from './VideoPlayer';
 import DiffViewer from './DiffViewer';
 import FileDownloader from './FileDownloader';
 import ChecklistItem from './ChecklistItem';
 import TreeViewer from './TreeViewer';
-import PDFViewer from './PDFViewer';
-import ChartRenderer from './ChartRenderer';
-import Model3DViewer from './Model3DViewer';
-import CodeBlockWrapper from './CodeBlockWrapper';
-import CodeBlockViewer from './CodeBlockViewer';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
+
+// 懒加载大型组件
+const MermaidChart = lazy(() => import('./MermaidChart'));
+const MapViewer = lazy(() => import('./MapViewer'));
+const PDFViewer = lazy(() => import('./PDFViewer'));
+const ChartRenderer = lazy(() => import('./ChartRenderer'));
+const Model3DViewer = lazy(() => import('./Model3DViewer'));
+const CodeBlockWrapper = lazy(() => import('./CodeBlockWrapper'));
+const CodeBlockViewer = lazy(() => import('./CodeBlockViewer'));
+
+// 加载占位符组件
+const LoadingPlaceholder: React.FC<{ message?: string }> = ({ message = '加载中...' }) => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+    gap: '12px',
+    color: '#6b7280',
+    fontSize: '14px'
+  }}>
+    <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+    <span>{message}</span>
+    <style>{`
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+    `}</style>
+  </div>
+);
 
 const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   text,
@@ -312,28 +336,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 只有在打字机完成且流式结束后才渲染图表，否则显示普通代码块
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -343,17 +369,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染图表
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <MermaidChart code={actualContent} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <Suspense fallback={<LoadingPlaceholder message="加载Mermaid图表..." />}>
+                      <MermaidChart code={actualContent} isDarkMode={isDarkMode} />
+                    </Suspense>
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
           
@@ -362,28 +392,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 只有在打字机完成且流式结束后才渲染地图，否则显示普通代码块
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -396,28 +428,33 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
               // 解析JSON格式的地图配置
               const mapConfig: MapConfig = JSON.parse(actualContent);
               return (
-                <CodeBlockWrapper
-                  key={blockId}
-                  language={language}
-                  codeContent={actualContent}
-                  renderView={
-                    <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
-                  }
-                  isDarkMode={isDarkMode}
-                  showViewToggle={true}
-                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-                />
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                  <CodeBlockWrapper
+                    key={blockId}
+                    language={language}
+                    codeContent={actualContent}
+                    renderView={
+                      <Suspense fallback={<LoadingPlaceholder message="加载地图..." />}>
+                        <MapViewer config={mapConfig} isDarkMode={isDarkMode} />
+                      </Suspense>
+                    }
+                    isDarkMode={isDarkMode}
+                    showViewToggle={true}
+                    onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                  />
+                </Suspense>
               );
             } catch (error) {
               // 解析失败时显示错误信息
               console.error('[地图] JSON解析失败:', error);
               return (
-                <CodeBlockWrapper
-                  key={blockId}
-                  language={language}
-                  codeContent={actualContent}
-                  renderView={
-                    <div style={{ 
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                  <CodeBlockWrapper
+                    key={blockId}
+                    language={language}
+                    codeContent={actualContent}
+                    renderView={
+                      <div style={{ 
                       padding: '12px',
                       backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
                       borderRadius: '6px',
@@ -436,6 +473,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   showViewToggle={true}
                   onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
                 />
+                </Suspense>
               );
             }
           }
@@ -445,28 +483,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 只有在打字机完成且流式结束后才渲染播放器，否则显示普通代码块（不触发下载）
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -476,17 +516,19 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染播放器
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <AudioPlayer url={actualContent.trim()} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <AudioPlayer url={actualContent.trim()} isDarkMode={isDarkMode} />
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
           
@@ -495,28 +537,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 只有在打字机完成且流式结束后才渲染播放器，否则显示普通代码块（不触发下载）
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -526,17 +570,19 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染播放器
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <VideoPlayer url={actualContent.trim()} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <VideoPlayer url={actualContent.trim()} isDarkMode={isDarkMode} />
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
 
@@ -545,28 +591,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 只有在打字机完成且流式结束后才渲染下载链接，否则显示普通代码块（不触发下载）
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -574,28 +622,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             const fileInfo = parseFileInfo(codeString);
             if (!fileInfo) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={true}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={true}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -606,18 +656,19 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             
             // 打字机完成且流式结束后，渲染下载链接
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  updatedFileInfo ? (
-                    <FileDownloader
-                      url={updatedFileInfo.url}
-                      fileName={updatedFileInfo.fileName}
-                      isDarkMode={isDarkMode}
-                    />
-                  ) : (
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    updatedFileInfo ? (
+                      <FileDownloader
+                        url={updatedFileInfo.url}
+                        fileName={updatedFileInfo.fileName}
+                        isDarkMode={isDarkMode}
+                      />
+                    ) : (
                     <div style={{ 
                       padding: '12px',
                       backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
@@ -638,6 +689,7 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                 showViewToggle={true}
                 onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
               />
+              </Suspense>
             );
           }
 
@@ -646,17 +698,19 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
             const actualContent = getCodeBlockContent(blockId, codeString);
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <DiffViewer code={actualContent} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <DiffViewer code={actualContent} isDarkMode={isDarkMode} />
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
 
@@ -665,17 +719,19 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
             const actualContent = getCodeBlockContent(blockId, codeString);
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <DiffViewer code={actualContent} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <DiffViewer code={actualContent} isDarkMode={isDarkMode} />
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
 
@@ -684,17 +740,19 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             const blockId = generateCodeBlockId(codeString, language, codeBlockIndexRef.current++);
             const actualContent = getCodeBlockContent(blockId, codeString);
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <TreeViewer code={actualContent} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <TreeViewer code={actualContent} isDarkMode={isDarkMode} />
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
 
@@ -702,28 +760,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
           if (!isInline && language === 'chart') {
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
 
@@ -732,17 +792,21 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             const actualContent = getCodeBlockContent(blockId, codeString);
             
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <ChartRenderer config={actualContent} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <Suspense fallback={<LoadingPlaceholder message="加载图表..." />}>
+                      <ChartRenderer config={actualContent} isDarkMode={isDarkMode} />
+                    </Suspense>
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
 
@@ -751,28 +815,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 只有在打字机完成且流式结束后才渲染PDF查看器，否则显示普通代码块（不触发加载）
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -784,12 +850,13 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             const pdfUrl = actualContent.trim().split('\n')[0].trim();
             if (!pdfUrl || (!pdfUrl.startsWith('http://') && !pdfUrl.startsWith('https://'))) {
               return (
-                <CodeBlockWrapper
-                  key={blockId}
-                  language={language}
-                  codeContent={actualContent}
-                  renderView={
-                    <div style={{ 
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                  <CodeBlockWrapper
+                    key={blockId}
+                    language={language}
+                    codeContent={actualContent}
+                    renderView={
+                      <div style={{ 
                       padding: '12px',
                       backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
                       borderRadius: '6px',
@@ -808,22 +875,27 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   showViewToggle={true}
                   onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
                 />
+                </Suspense>
               );
             }
             
             // 打字机完成且流式结束后，渲染PDF查看器
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <PDFViewer url={pdfUrl} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <Suspense fallback={<LoadingPlaceholder message="加载PDF查看器..." />}>
+                      <PDFViewer url={pdfUrl} isDarkMode={isDarkMode} />
+                    </Suspense>
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
           
@@ -832,28 +904,30 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             // 只有在打字机完成且流式结束后才渲染模型，否则显示普通代码块（不触发加载）
             if (isStreaming || !isTypingComplete) {
               return (
-                <CodeBlockViewer
-                  codeContent={codeString}
-                  language={language}
-                  className={className || ''}
-                  codeProps={props}
-                  preStyle={{
-                    backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    overflow: 'auto',
-                    margin: '0',
-                    color: isDarkMode ? '#f1f5f9' : '#111827'
-                  }}
-                  codeStyle={{
-                    color: isDarkMode ? '#f1f5f9' : '#111827',
-                    backgroundColor: 'transparent'
-                  }}
-                  isDarkMode={isDarkMode}
-                  codeComplete={false}
-                >
-                  {children}
-                </CodeBlockViewer>
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+                  <CodeBlockViewer
+                    codeContent={codeString}
+                    language={language}
+                    className={className || ''}
+                    codeProps={props}
+                    preStyle={{
+                      backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                      padding: '12px',
+                      borderRadius: '6px',
+                      overflow: 'auto',
+                      margin: '0',
+                      color: isDarkMode ? '#f1f5f9' : '#111827'
+                    }}
+                    codeStyle={{
+                      color: isDarkMode ? '#f1f5f9' : '#111827',
+                      backgroundColor: 'transparent'
+                    }}
+                    isDarkMode={isDarkMode}
+                    codeComplete={false}
+                  >
+                    {children}
+                  </CodeBlockViewer>
+                </Suspense>
               );
             }
             
@@ -865,12 +939,13 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
             const modelUrl = actualContent.trim().split('\n')[0].trim();
             if (!modelUrl || (!modelUrl.startsWith('http://') && !modelUrl.startsWith('https://'))) {
               return (
-                <CodeBlockWrapper
-                  key={blockId}
-                  language={language}
-                  codeContent={actualContent}
-                  renderView={
-                    <div style={{ 
+                <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                  <CodeBlockWrapper
+                    key={blockId}
+                    language={language}
+                    codeContent={actualContent}
+                    renderView={
+                      <div style={{ 
                       padding: '12px',
                       backgroundColor: isDarkMode ? '#2d1f1f' : '#fee',
                       borderRadius: '6px',
@@ -889,49 +964,56 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
                   showViewToggle={true}
                   onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
                 />
+                </Suspense>
               );
             }
             
             // 打字机完成且流式结束后，渲染3D模型
             return (
-              <CodeBlockWrapper
-                key={blockId}
-                language={language}
-                codeContent={actualContent}
-                renderView={
-                  <Model3DViewer url={modelUrl} isDarkMode={isDarkMode} />
-                }
-                isDarkMode={isDarkMode}
-                showViewToggle={true}
-                onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
-              />
+              <Suspense fallback={<LoadingPlaceholder message="加载代码块包装器..." />}>
+                <CodeBlockWrapper
+                  key={blockId}
+                  language={language}
+                  codeContent={actualContent}
+                  renderView={
+                    <Suspense fallback={<LoadingPlaceholder message="加载3D模型..." />}>
+                      <Model3DViewer url={modelUrl} isDarkMode={isDarkMode} />
+                    </Suspense>
+                  }
+                  isDarkMode={isDarkMode}
+                  showViewToggle={true}
+                  onContentChange={(newContent) => handleCodeBlockContentChange(blockId, newContent)}
+                />
+              </Suspense>
             );
           }
           
           // 普通代码块
           return !isInline ? (
-            <CodeBlockViewer
-              codeContent={codeString}
-              language={language || undefined}
-              className={className || ''}
-              codeProps={props}
-              preStyle={{
-                backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
-                padding: '12px',
-                borderRadius: '6px',
-                overflow: 'auto',
-                margin: '0',
-                color: isDarkMode ? '#f1f5f9' : '#111827'
-              }}
-              codeStyle={{
-                color: isDarkMode ? '#f1f5f9' : '#111827',
-                backgroundColor: 'transparent'
-              }}
-              isDarkMode={isDarkMode}
-              codeComplete={!isStreaming && isTypingComplete}
-            >
-              {children}
-            </CodeBlockViewer>
+            <Suspense fallback={<LoadingPlaceholder message="加载代码块..." />}>
+              <CodeBlockViewer
+                codeContent={codeString}
+                language={language || undefined}
+                className={className || ''}
+                codeProps={props}
+                preStyle={{
+                  backgroundColor: isDarkMode ? '#1e293b' : '#f6f8fa',
+                  padding: '12px',
+                  borderRadius: '6px',
+                  overflow: 'auto',
+                  margin: '0',
+                  color: isDarkMode ? '#f1f5f9' : '#111827'
+                }}
+                codeStyle={{
+                  color: isDarkMode ? '#f1f5f9' : '#111827',
+                  backgroundColor: 'transparent'
+                }}
+                isDarkMode={isDarkMode}
+                codeComplete={!isStreaming && isTypingComplete}
+              >
+                {children}
+              </CodeBlockViewer>
+            </Suspense>
           ) : (
             <code style={{ 
               backgroundColor: isDarkMode ? '#4b5563' : '#f1f3f4', 
