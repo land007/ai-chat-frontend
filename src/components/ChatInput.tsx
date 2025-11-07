@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Square, X, Mic, Keyboard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { speechRecognitionService } from '@/services/speechRecognition';
-import WaveformVisualizer from './WaveformVisualizer';
+import FourDotWaveform from './FourDotWaveform';
 
 export interface ChatInputProps {
   value: string;
@@ -772,10 +772,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
     return {
       waveformArea: {
-        height: '60px',
+        height: '80px',
         backgroundColor: isDarkMode ? '#2d3748' : '#f8fafc',
         borderBottom: `1px solid ${borderColor}`,
-        padding: '8px 24px',
+        padding: '12px 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -921,12 +921,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
       {/* 音波效果显示区域（仅录音时显示） */}
       {isRecording && (
         <div style={getStyles().waveformArea}>
-          <WaveformVisualizer
+          <FourDotWaveform
             analyserNode={analyserRef.current}
             isRecording={isRecording}
             isDarkMode={isDarkMode}
-            width={600}
-            height={40}
+            minRadius={8}
+            maxRadius={24}
+            spacing={24}
           />
           <div style={getStyles().recordingDuration}>
             {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
