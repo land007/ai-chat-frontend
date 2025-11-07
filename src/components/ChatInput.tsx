@@ -225,6 +225,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
     isInitializingRef.current = true;
     recordingStartTimeRef.current = Date.now();
     
+    // 立即失焦，防止键盘弹出
+    if (mainTextareaRef.current && document.activeElement === mainTextareaRef.current) {
+      console.log('[语音输入] 开始录音时，立即失焦防止键盘弹出');
+      mainTextareaRef.current.blur();
+    }
+    
     try {
       console.log('[语音输入] 开始录音（初始化中...）');
       
@@ -797,14 +803,46 @@ const ChatInput: React.FC<ChatInputProps> = ({
     // VAD模式不需要在mouseup时停止，让VAD自动检测结束
   }, []);
 
+  // 处理输入框的焦点事件（语音模式下阻止焦点，防止键盘弹出）
+  const handleInputFocus = useCallback((e: React.FocusEvent<HTMLTextAreaElement>) => {
+    // 在整个语音输入流程中（包括录音和识别时）都不应该获得焦点
+    if (inputMode === 'voice') {
+      console.log('[语音输入] 语音模式下阻止输入框获得焦点，防止键盘弹出', { isRecording, isRecognizing, recognizedText });
+      e.target.blur();
+    }
+  }, [inputMode, isRecording, isRecognizing, recognizedText]);
+
   // 处理输入框的触摸事件（移动端 - 使用Manual模式）
   const handleInputTouchStart = useCallback((e: React.TouchEvent) => {
     if (inputMode === 'voice' && !isRecording && !isRecognizing) {
+      // 如果输入框有焦点，先失焦防止键盘弹出
+      if (mainTextareaRef.current && document.activeElement === mainTextareaRef.current) {
+        console.log('[语音输入] 输入框有焦点，先失焦再开始录音');
+        mainTextareaRef.current.blur();
+      }
       e.preventDefault();
+      e.stopPropagation();
       console.log('[语音输入] 触摸设备，按住开始录音（Manual模式）');
       startRecording();
     }
   }, [inputMode, isRecording, isRecognizing, startRecording]);
+
+  // 处理输入框的触摸移动事件（防止触发滚动或其他交互）
+  const handleInputTouchMove = useCallback((e: React.TouchEvent) => {
+    if (inputMode === 'voice' && isRecording) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [inputMode, isRecording]);
+
+  // 处理输入框的上下文菜单事件（阻止长按弹出粘贴、全选等菜单）
+  const handleInputContextMenu = useCallback((e: React.MouseEvent) => {
+    if (inputMode === 'voice') {
+      console.log('[语音输入] 语音模式下阻止上下文菜单（粘贴、全选等）');
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [inputMode]);
 
   const handleInputTouchEnd = useCallback((e: React.TouchEvent) => {
     if (inputMode === 'voice' && isRecording) {
@@ -1063,9 +1101,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onKeyPress={handleKeyPress}
             placeholder={displayPlaceholder}
             readOnly={inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText}
+            tabIndex={inputMode === 'voice' ? -1 : undefined}
+            onFocus={handleInputFocus}
+            onContextMenu={handleInputContextMenu}
             onMouseDown={handleInputMouseDown}
             onMouseUp={handleInputMouseUp}
             onTouchStart={handleInputTouchStart}
+            onTouchMove={handleInputTouchMove}
             onTouchEnd={handleInputTouchEnd}
             onKeyDown={(e) => {
               if (inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText) {
