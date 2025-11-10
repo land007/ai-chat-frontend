@@ -329,6 +329,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
         setIsRecognizing(false);
         setIsRecording(false);
         isRecordingRef.current = false;
+        // 识别失败时，清空识别结果，回到按钮状态
+        setRecognizedText(null);
+        onChange('');
         cleanupAudioResources();
       });
 
@@ -805,35 +808,133 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // 处理输入框的焦点事件（语音模式下阻止焦点，防止键盘弹出）
   const handleInputFocus = useCallback((e: React.FocusEvent<HTMLTextAreaElement>) => {
-    // 在整个语音输入流程中（包括录音和识别时）都不应该获得焦点
-    if (inputMode === 'voice') {
+    // 在语音输入流程中（录音和识别时）不应该获得焦点
+    // 但识别完成后（有recognizedText时），用户可以编辑输入框
+    if (inputMode === 'voice' && !recognizedText && (isRecording || isRecognizing)) {
       console.log('[语音输入] 语音模式下阻止输入框获得焦点，防止键盘弹出', { isRecording, isRecognizing, recognizedText });
       e.target.blur();
     }
   }, [inputMode, isRecording, isRecognizing, recognizedText]);
 
-  // 处理输入框的触摸事件（移动端 - 使用Manual模式）
-  const handleInputTouchStart = useCallback((e: React.TouchEvent) => {
+  // 处理语音按钮的触摸事件（移动端 - 使用Manual模式）
+  const handleVoiceButtonTouchStart = useCallback((e: React.TouchEvent) => {
+    if (inputMode === 'voice' && isRecording) {
+      // 如果正在录音，再次点击时停止录音（备用方案，防止 onTouchEnd 未触发）
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[语音输入] 正在录音时再次点击，停止录音（备用方案）');
+      stopRecording();
+      return;
+    }
     if (inputMode === 'voice' && !isRecording && !isRecognizing) {
-      // 如果输入框有焦点，先失焦防止键盘弹出
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[语音输入] 触摸设备，按住开始录音（Manual模式）');
+      startRecording();
+    }
+  }, [inputMode, isRecording, isRecognizing, startRecording, stopRecording]);
+
+  // 处理语音按钮的触摸移动事件（防止触发滚动或其他交互）
+  const handleVoiceButtonTouchMove = useCallback((e: React.TouchEvent) => {
+    if (inputMode === 'voice' && isRecording) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, [inputMode, isRecording]);
+
+  // 防止重复触发停止录音的标志
+  const isStoppingRef = useRef(false);
+
+  const handleVoiceButtonTouchEnd = useCallback((e: React.TouchEvent) => {
+    console.log('[语音输入] handleVoiceButtonTouchEnd 触发', { inputMode, isRecording, isRecognizing, isStopping: isStoppingRef.current });
+    if (inputMode === 'voice' && isRecording && !isStoppingRef.current) {
+      isStoppingRef.current = true;
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[语音输入] 触摸设备，松开结束录音（Manual模式，将提交音频）');
+      stopRecording();
+      // 重置标志，延迟一点时间避免重复触发
+      setTimeout(() => {
+        isStoppingRef.current = false;
+      }, 100);
+    } else {
+      console.log('[语音输入] handleVoiceButtonTouchEnd 条件不满足，不执行停止录音');
+    }
+  }, [inputMode, isRecording, isRecognizing, stopRecording]);
+
+  const handleVoiceButtonTouchCancel = useCallback((e: React.TouchEvent) => {
+    console.log('[语音输入] handleVoiceButtonTouchCancel 触发', { inputMode, isRecording, isRecognizing });
+    // 触摸取消时也结束录音（例如用户手指移出按钮区域）
+    if (inputMode === 'voice' && isRecording) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[语音输入] 触摸取消，结束录音');
+      stopRecording();
+    }
+  }, [inputMode, isRecording, isRecognizing, stopRecording]);
+
+  // 处理指针事件（Pointer Events API，更现代的方式，支持触摸和鼠标）
+  const handleVoiceButtonPointerUp = useCallback((e: React.PointerEvent) => {
+    console.log('[语音输入] handleVoiceButtonPointerUp 触发', { inputMode, isRecording, isRecognizing, isStopping: isStoppingRef.current });
+    if (inputMode === 'voice' && isRecording && !isStoppingRef.current) {
+      isStoppingRef.current = true;
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[语音输入] 指针松开，结束录音（Pointer Events）');
+      stopRecording();
+      // 重置标志，延迟一点时间避免重复触发
+      setTimeout(() => {
+        isStoppingRef.current = false;
+      }, 100);
+    }
+  }, [inputMode, isRecording, isRecognizing, stopRecording]);
+
+  // 处理鼠标事件（作为备用方案）
+  const handleVoiceButtonMouseUp = useCallback((e: React.MouseEvent) => {
+    console.log('[语音输入] handleVoiceButtonMouseUp 触发', { inputMode, isRecording, isRecognizing, isStopping: isStoppingRef.current });
+    if (inputMode === 'voice' && isRecording && !isStoppingRef.current) {
+      isStoppingRef.current = true;
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('[语音输入] 鼠标松开，结束录音（备用方案）');
+      stopRecording();
+      // 重置标志，延迟一点时间避免重复触发
+      setTimeout(() => {
+        isStoppingRef.current = false;
+      }, 100);
+    }
+  }, [inputMode, isRecording, isRecognizing, stopRecording]);
+
+  // 处理输入框的触摸事件（移动端 - 仅在识别结果后允许编辑）
+  const handleInputTouchStart = useCallback((e: React.TouchEvent) => {
+    // 移动端语音模式下，输入框不再处理触摸事件（由独立按钮处理）
+    if (inputMode === 'voice' && isTouchDevice()) {
+      return;
+    }
+    // 保留PC端的处理逻辑
+    if (inputMode === 'voice' && !isRecording && !isRecognizing) {
       if (mainTextareaRef.current && document.activeElement === mainTextareaRef.current) {
         console.log('[语音输入] 输入框有焦点，先失焦再开始录音');
         mainTextareaRef.current.blur();
       }
       e.preventDefault();
       e.stopPropagation();
-      console.log('[语音输入] 触摸设备，按住开始录音（Manual模式）');
+      console.log('[语音输入] 鼠标设备，点击开始录音（VAD模式）');
       startRecording();
     }
-  }, [inputMode, isRecording, isRecognizing, startRecording]);
+  }, [inputMode, isRecording, isRecognizing, startRecording, isTouchDevice]);
 
   // 处理输入框的触摸移动事件（防止触发滚动或其他交互）
   const handleInputTouchMove = useCallback((e: React.TouchEvent) => {
-    if (inputMode === 'voice' && isRecording) {
+    // 移动端语音模式下，输入框不再处理触摸事件
+    if (inputMode === 'voice' && isTouchDevice()) {
+      return;
+    }
+    if (inputMode === 'voice' && isRecording && !isTouchDevice()) {
       e.preventDefault();
       e.stopPropagation();
     }
-  }, [inputMode, isRecording]);
+  }, [inputMode, isRecording, isTouchDevice]);
 
   // 处理输入框的上下文菜单事件（阻止长按弹出粘贴、全选等菜单）
   const handleInputContextMenu = useCallback((e: React.MouseEvent) => {
@@ -845,12 +946,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }, [inputMode]);
 
   const handleInputTouchEnd = useCallback((e: React.TouchEvent) => {
+    // 移动端语音模式下，输入框不再处理触摸事件
+    if (inputMode === 'voice' && isTouchDevice()) {
+      return;
+    }
     if (inputMode === 'voice' && isRecording) {
       e.preventDefault();
-      console.log('[语音输入] 触摸设备，松开结束录音（Manual模式，将提交音频）');
+      console.log('[语音输入] 鼠标设备，松开结束录音');
       stopRecording();
     }
-  }, [inputMode, isRecording, stopRecording]);
+  }, [inputMode, isRecording, stopRecording, isTouchDevice]);
 
   // 处理键盘事件
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
@@ -918,14 +1023,44 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
     return {
       waveformArea: {
-        height: '80px',
         backgroundColor: isDarkMode ? '#2d3748' : '#f8fafc',
         borderBottom: `1px solid ${borderColor}`,
         padding: '12px 24px',
         display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '12px'
+      },
+      transcriptArea: {
+        // 识别内容显示区域（在波形上方）
+        minHeight: '40px',
+        maxHeight: '80px',
+        padding: '8px 12px',
+        backgroundColor: isDarkMode ? '#374151' : '#ffffff',
+        borderRadius: '8px',
+        border: `1px solid ${borderColor}`,
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'flex-start'
+      },
+      transcriptText: {
+        fontSize: '14px',
+        lineHeight: '1.5',
+        color: textColor,
+        wordBreak: 'break-word' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        display: '-webkit-box',
+        WebkitLineClamp: 3,
+        WebkitBoxOrient: 'vertical' as const
+      },
+      waveformContainer: {
+        // 波形和时间显示容器
+        display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '16px'
+        gap: '16px',
+        height: '56px'
       },
       recordingDuration: {
         fontSize: '14px',
@@ -1037,6 +1172,56 @@ const ChatInput: React.FC<ChatInputProps> = ({
         opacity: 1,
         backgroundColor: inputMode === 'voice' ? '#2563eb' : (isDarkMode ? '#6b7280' : '#e5e7eb')
       },
+      voiceHoldButton: {
+        flex: 1,
+        minHeight: '48px', // 最小高度，与原先输入框高度一致
+        padding: '12px 24px', // 与原先输入框的 padding 一致
+        backgroundColor: '#3b82f6', // 始终蓝色，不随录音状态变化
+        color: 'white',
+        borderRadius: '16px',
+        border: 'none',
+        display: 'flex',
+        flexDirection: 'row' as const,
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        userSelect: 'none' as const,
+        transition: 'all 0.2s ease',
+        boxShadow: isRecording 
+          ? '0 4px 12px rgba(59, 130, 246, 0.5)' // 录音时阴影更明显
+          : '0 2px 8px rgba(59, 130, 246, 0.3)', // 未录音时阴影轻微
+        fontSize: '16px',
+        fontWeight: 500,
+        touchAction: 'none' as const,
+        WebkitTapHighlightColor: 'transparent'
+      },
+      voiceHoldButtonActive: {
+        transform: 'scale(0.98)',
+        boxShadow: isRecording 
+          ? '0 2px 6px rgba(59, 130, 246, 0.4)' 
+          : '0 1px 4px rgba(59, 130, 246, 0.2)'
+      },
+      voiceHoldButtonText: {
+        fontSize: '16px',
+        fontWeight: 500,
+        lineHeight: 1.5
+      },
+      voiceHoldButtonHint: {
+        // 按钮上方的提示文字样式（用户按住时不会被手指遮挡）
+        marginBottom: '12px',
+        fontSize: '14px',
+        color: mutedColor,
+        textAlign: 'center' as const,
+        fontWeight: 400,
+        lineHeight: 1.4
+      },
+      voiceButtonContainer: {
+        // 包含提示文字和按钮的容器
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'stretch',
+        flex: 1
+      },
       errorMessage: {
         marginTop: '8px',
         padding: '8px 12px',
@@ -1052,13 +1237,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
     };
   };
 
-  const displayValue = isRecognizing 
-    ? '识别中...' 
-    : inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !value.trim()
-      ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
-      : recognizedText || value;
+  // 判断是否应该在移动端显示独立语音按钮
+  // 按住时（isRecording = true）：始终显示按钮，即使有识别结果
+  // 松开后（isRecording = false）：显示输入框，等待最终识别结果
+  const shouldShowVoiceButton = inputMode === 'voice' && isTouchDevice() && 
+    (isRecording || (!recognizedText && !value.trim() && !isRecognizing));
+  
+  // 识别中时输入框显示空白（不是"识别中..."）
+  const displayValue = recognizedText || value;
 
-  const displayPlaceholder = inputMode === 'voice' && !isRecording && !isRecognizing
+  const displayPlaceholder = inputMode === 'voice' && !isRecording && !isRecognizing && !shouldShowVoiceButton
     ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
     : (placeholder || t('ui.inputPlaceholder'));
 
@@ -1067,18 +1255,29 @@ const ChatInput: React.FC<ChatInputProps> = ({
       {/* 音波效果显示区域（仅录音时显示） */}
       {isRecording && (
         <div style={getStyles().waveformArea}>
-          <FourDotWaveform
-            analyserNode={analyserRef.current}
-            isRecording={isRecording}
-            isDarkMode={isDarkMode}
-            minRadius={8}
-            maxRadius={24}
-            spacing={24}
-            sampleRate={audioContextRef.current?.sampleRate || 16000}
-          />
-          <div style={getStyles().recordingDuration}>
-            {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
-            {String(recordingDuration % 60).padStart(2, '0')}
+          {/* 识别内容显示区域（在波形上方） */}
+          {recognizedText && (
+            <div style={getStyles().transcriptArea}>
+              <div style={getStyles().transcriptText}>
+                {recognizedText}
+              </div>
+            </div>
+          )}
+          {/* 波形和时间显示容器 */}
+          <div style={getStyles().waveformContainer}>
+            <FourDotWaveform
+              analyserNode={analyserRef.current}
+              isRecording={isRecording}
+              isDarkMode={isDarkMode}
+              minRadius={8}
+              maxRadius={24}
+              spacing={24}
+              sampleRate={audioContextRef.current?.sampleRate || 16000}
+            />
+            <div style={getStyles().recordingDuration}>
+              {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
+              {String(recordingDuration % 60).padStart(2, '0')}
+            </div>
           </div>
         </div>
       )}
@@ -1086,44 +1285,83 @@ const ChatInput: React.FC<ChatInputProps> = ({
       {/* 输入区域 */}
       <div style={getStyles().inputArea}>
         <div style={getStyles().inputContainer}>
-          <textarea
-            ref={mainTextareaRef}
-            value={displayValue}
-            onChange={(e) => {
-              if (inputMode !== 'voice' || isRecognizing || recognizedText) {
-                const newValue = e.target.value;
-                onChange(newValue);
-                if (recognizedText && newValue !== recognizedText) {
-                  setRecognizedText(null);
-                }
-              }
-            }}
-            onKeyPress={handleKeyPress}
-            placeholder={displayPlaceholder}
-            readOnly={inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText}
-            tabIndex={inputMode === 'voice' ? -1 : undefined}
-            onFocus={handleInputFocus}
-            onContextMenu={handleInputContextMenu}
-            onMouseDown={handleInputMouseDown}
-            onMouseUp={handleInputMouseUp}
-            onTouchStart={handleInputTouchStart}
-            onTouchMove={handleInputTouchMove}
-            onTouchEnd={handleInputTouchEnd}
-            onKeyDown={(e) => {
-              if (inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText) {
-                e.preventDefault();
-              }
-            }}
-            disabled={disabled}
-            style={
-              inputMode === 'voice'
-                ? getStyles().voiceTextarea
-                : {
-                    ...getStyles().textarea,
-                    ...(value.trim() ? getStyles().textareaFocus : {})
+          {/* 移动端语音模式：显示独立语音按钮 */}
+          {shouldShowVoiceButton ? (
+            <div style={getStyles().voiceButtonContainer}>
+              {/* 按钮上方的提示文字（用户按住时不会被手指遮挡） */}
+              {isRecording && (
+                <div style={getStyles().voiceHoldButtonHint}>
+                  松开结束
+                </div>
+              )}
+              {/* 语音按钮 */}
+              <button
+                type="button"
+                onTouchStart={handleVoiceButtonTouchStart}
+                onTouchMove={handleVoiceButtonTouchMove}
+                onTouchEnd={handleVoiceButtonTouchEnd}
+                onTouchCancel={handleVoiceButtonTouchCancel}
+                onPointerUp={handleVoiceButtonPointerUp}
+                onMouseUp={handleVoiceButtonMouseUp}
+                style={{
+                  ...getStyles().voiceHoldButton,
+                  ...(isRecording ? getStyles().voiceHoldButtonActive : {}),
+                  touchAction: 'none' as const,
+                  WebkitUserSelect: 'none' as const,
+                  userSelect: 'none' as const,
+                  WebkitTapHighlightColor: 'transparent'
+                }}
+              >
+                <div 
+                  style={{
+                    ...getStyles().voiceHoldButtonText,
+                    pointerEvents: 'none' as const
+                  }}
+                >
+                  按住说话
+                </div>
+              </button>
+            </div>
+          ) : (
+            <textarea
+              ref={mainTextareaRef}
+              value={displayValue}
+              onChange={(e) => {
+                if (inputMode !== 'voice' || isRecognizing || recognizedText) {
+                  const newValue = e.target.value;
+                  onChange(newValue);
+                  if (recognizedText && newValue !== recognizedText) {
+                    setRecognizedText(null);
                   }
-            }
-          />
+                }
+              }}
+              onKeyPress={handleKeyPress}
+              placeholder={displayPlaceholder}
+              readOnly={inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !isTouchDevice()}
+              tabIndex={inputMode === 'voice' && !recognizedText && isTouchDevice() ? -1 : undefined}
+              onFocus={handleInputFocus}
+              onContextMenu={handleInputContextMenu}
+              onMouseDown={handleInputMouseDown}
+              onMouseUp={handleInputMouseUp}
+              onTouchStart={handleInputTouchStart}
+              onTouchMove={handleInputTouchMove}
+              onTouchEnd={handleInputTouchEnd}
+              onKeyDown={(e) => {
+                if (inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !isTouchDevice()) {
+                  e.preventDefault();
+                }
+              }}
+              disabled={disabled}
+              style={
+                inputMode === 'voice' && !isTouchDevice()
+                  ? getStyles().voiceTextarea
+                  : {
+                      ...getStyles().textarea,
+                      ...(value.trim() ? getStyles().textareaFocus : {})
+                    }
+              }
+            />
+          )}
           {/* 发送按钮（键盘模式或识别结果时显示） */}
           {/* 识别中时，只有电脑（VAD模式）才显示X按钮，手机（Manual模式）不显示 */}
           {(inputMode === 'keyboard' || recognizedText || (isRecognizing && !isTouchDevice())) && (
