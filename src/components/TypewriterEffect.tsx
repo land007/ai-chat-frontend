@@ -1,10 +1,4 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeHighlight from 'rehype-highlight';
-import rehypeKatex from 'rehype-katex';
-import hljs from 'highlight.js';
 import { Info, AlertTriangle, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { TypewriterEffectProps, MapConfig } from '@/types';
 import ImageViewer from './ImageViewer';
@@ -14,8 +8,15 @@ import DiffViewer from './DiffViewer';
 import FileDownloader from './FileDownloader';
 import ChecklistItem from './ChecklistItem';
 import TreeViewer from './TreeViewer';
-import 'highlight.js/styles/github.css';
-import 'katex/dist/katex.min.css';
+
+// 动态导入大型库
+type MarkdownLibs = {
+  ReactMarkdown: typeof import('react-markdown').default;
+  remarkGfm: typeof import('remark-gfm').default;
+  remarkMath: typeof import('remark-math').default;
+  rehypeHighlight: typeof import('rehype-highlight').default;
+  rehypeKatex: typeof import('rehype-katex').default;
+};
 
 // 懒加载大型组件
 const MermaidChart = lazy(() => import('./MermaidChart'));
@@ -63,8 +64,69 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isTypingComplete, setIsTypingComplete] = useState(!enabled); // 如果打字机被禁用，则认为已完成
   const [codeBlockContents, setCodeBlockContents] = useState<Map<string, string>>(new Map());
+  const [markdownLibs, setMarkdownLibs] = useState<MarkdownLibs | null>(null);
+  const [isLibsLoading, setIsLibsLoading] = useState(true);
   const targetTextRef = useRef('');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 动态加载 Markdown 相关库和 CSS
+  useEffect(() => {
+    let isMounted = true;
+    
+    const loadMarkdownLibs = async () => {
+      try {
+        setIsLibsLoading(true);
+        
+        // 并行加载所有库
+        // highlight.js 会被 rehype-highlight 自动引入，这里也导入以确保代码分割
+        const [
+          ReactMarkdownModule,
+          remarkGfmModule,
+          remarkMathModule,
+          rehypeHighlightModule,
+          rehypeKatexModule
+        ] = await Promise.all([
+          import('react-markdown'),
+          import('remark-gfm'),
+          import('remark-math'),
+          import('rehype-highlight'),
+          import('rehype-katex'),
+          import('highlight.js')
+        ]);
+        
+        // 动态导入 CSS（webpack 会处理代码分割）
+        // 使用 Promise.all 但不需要等待结果，CSS 会自动加载
+        Promise.all([
+          import('highlight.js/styles/github.css'),
+          import('katex/dist/katex.min.css')
+        ]).catch(err => {
+          console.warn('[TypewriterEffect] CSS 加载失败（非致命）:', err);
+        });
+        
+        if (isMounted) {
+          setMarkdownLibs({
+            ReactMarkdown: ReactMarkdownModule.default,
+            remarkGfm: remarkGfmModule.default,
+            remarkMath: remarkMathModule.default,
+            rehypeHighlight: rehypeHighlightModule.default,
+            rehypeKatex: rehypeKatexModule.default
+          });
+          setIsLibsLoading(false);
+        }
+      } catch (error) {
+        console.error('[TypewriterEffect] 加载 Markdown 库失败:', error);
+        if (isMounted) {
+          setIsLibsLoading(false);
+        }
+      }
+    };
+    
+    loadMarkdownLibs();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // enabled=false：直接渲染完整内容（历史消息）
   // enabled=true：启动打字机（当前流式消息）
@@ -316,8 +378,37 @@ const TypewriterEffect: React.FC<TypewriterEffectProps> = ({
 
   // 渲染Markdown内容
   const renderMarkdown = (content: string) => {
+    // 如果库还在加载中，显示加载状态或纯文本
+    if (isLibsLoading || !markdownLibs) {
+      return (
+        <div style={{
+          padding: '20px',
+          color: '#6b7280',
+          fontSize: '14px',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word'
+        }}>
+          {isLibsLoading && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '12px',
+              color: '#9ca3af'
+            }}>
+              <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+              <span>加载渲染引擎...</span>
+            </div>
+          )}
+          {content}
+        </div>
+      );
+    }
+    
     // 重置代码块计数器（每次渲染 markdown 时重置）
     codeBlockIndexRef.current = 0;
+    
+    const { ReactMarkdown, remarkGfm, remarkMath, rehypeHighlight, rehypeKatex } = markdownLibs;
     
     return (
     <ReactMarkdown

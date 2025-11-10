@@ -58,18 +58,48 @@ module.exports = {
               priority: 25,
               reuseExistingChunk: true,
             },
-            // 工具库（highlight.js, katex等）
-            utils: {
-              test: /[\\/]node_modules[\\/](highlight\.js|katex|mermaid)[\\/]/,
-              name: 'utils-vendor',
-              priority: 20,
+            // highlight.js 单独拆分
+            highlight: {
+              test: /[\\/]node_modules[\\/]highlight\.js[\\/]/,
+              name: 'highlight-vendor',
+              priority: 30,
               reuseExistingChunk: true,
             },
-            // Markdown相关库
+            // katex 单独拆分
+            katex: {
+              test: /[\\/]node_modules[\\/]katex[\\/]/,
+              name: 'katex-vendor',
+              priority: 30,
+              reuseExistingChunk: true,
+            },
+            // mermaid 单独拆分（已经懒加载）
+            mermaid: {
+              test: /[\\/]node_modules[\\/]mermaid[\\/]/,
+              name: 'mermaid-vendor',
+              priority: 28,
+              reuseExistingChunk: true,
+            },
+            // Markdown相关库（react-markdown及其插件）
             markdown: {
               test: /[\\/]node_modules[\\/](react-markdown|remark-|rehype-)[\\/]/,
               name: 'markdown-vendor',
-              priority: 20,
+              priority: 28,
+              reuseExistingChunk: true,
+            },
+            // i18next 相关库（保持同步加载，因为需要立即使用）
+            i18n: {
+              test: /[\\/]node_modules[\\/](i18next|react-i18next|i18next-browser-languagedetector)[\\/]/,
+              name: 'i18n-vendor',
+              priority: 26,
+              reuseExistingChunk: true,
+            },
+            // 其他工具库（剩余的小型工具库）
+            // 注意：这个规则会匹配所有 node_modules，但由于优先级较低，
+            // 只有没有被其他高优先级规则匹配的库才会进入这里
+            utils: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'utils-vendor',
+              priority: 15,
               reuseExistingChunk: true,
             },
             // 其他vendor
