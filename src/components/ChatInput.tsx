@@ -1172,11 +1172,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
         justifyContent: 'center',
         cursor: 'pointer',
         transition: 'all 0.2s ease',
-        opacity: 0.7
+        opacity: 0.7,
+        outline: 'none',
+        WebkitTapHighlightColor: 'transparent'
       },
       modeToggleButtonHover: {
         opacity: 1,
         backgroundColor: '#2563eb'
+      },
+      modeToggleButtonActive: {
+        borderRadius: '16px',
+        transform: 'scale(0.98)'
       },
       voiceHoldButton: {
         flex: 1,
@@ -1425,6 +1431,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   onMouseLeave={(e) => {
                     Object.assign(e.currentTarget.style, getStyles().modeToggleButton);
                   }}
+                  onMouseDown={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = 'scale(0.98)';
+                  }}
+                  onMouseUp={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = '';
+                  }}
+                  onTouchStart={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = 'scale(0.98)';
+                  }}
+                  onTouchEnd={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = '';
+                  }}
                   title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
                 >
                   {inputMode === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
@@ -1433,10 +1455,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
             </>
           ) : (
             <>
-              {/* PC端：保持原有布局 */}
-              {/* 发送按钮（键盘模式或识别结果时显示） */}
-              {/* 识别中时，只有电脑（VAD模式）才显示X按钮，手机（Manual模式）不显示 */}
-              {(inputMode === 'keyboard' || recognizedText || (isRecognizing && !isTouchDevice())) && (
+              {/* PC端：与移动端相同的逻辑 */}
+              {/* 有文字时：显示发送按钮 */}
+              {(value.trim() || recognizedText || isLoading || isRecognizing) && (
                 <button
                   onClick={
                     isRecognizing
@@ -1492,7 +1513,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   )}
                 </button>
               )}
-              {/* 取消按钮（识别结果时显示） */}
+              {/* 识别完毕时：显示取消按钮（在发送按钮右侧） */}
               {recognizedText && !isRecognizing && (
                 <button
                   onClick={handleCancelRecognizedText}
@@ -1508,8 +1529,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   <X size={20} />
                 </button>
               )}
-              {/* 模式切换按钮（右下角）- 仅在启用语音输入时显示，识别结束后隐藏 */}
-              {enableVoiceInput && !recognizedText && (
+              {/* 无文字时：显示模式切换按钮 */}
+              {enableVoiceInput && !value.trim() && !recognizedText && !isLoading && !isRecognizing && (
                 <button
                   onClick={handleToggleInputMode}
                   style={getStyles().modeToggleButton}
@@ -1518,6 +1539,22 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   }}
                   onMouseLeave={(e) => {
                     Object.assign(e.currentTarget.style, getStyles().modeToggleButton);
+                  }}
+                  onMouseDown={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = 'scale(0.98)';
+                  }}
+                  onMouseUp={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = '';
+                  }}
+                  onTouchStart={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = 'scale(0.98)';
+                  }}
+                  onTouchEnd={(e) => {
+                    e.currentTarget.style.borderRadius = '16px';
+                    e.currentTarget.style.transform = '';
                   }}
                   title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
                 >
