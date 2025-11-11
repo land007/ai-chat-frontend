@@ -239,6 +239,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         console.error('[语音输入] 不支持麦克风访问:', support.message);
         setRecordingError(support.message);
         setInputMode('keyboard');
+        setIsRecognizing(false); // 重置识别状态
         isInitializingRef.current = false;
         return;
       }
@@ -247,6 +248,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         const granted = await requestMicrophonePermission();
         if (!granted) {
           setInputMode('keyboard');
+          setIsRecognizing(false); // 重置识别状态
           isInitializingRef.current = false;
           return;
         }
@@ -258,6 +260,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
       currentTranscriptRef.current = '';
       setRecognizedText(null);
+      // 确保 isRecognizing 为 true（可能在 handleVoiceButtonTouchStart 中已经设置，再次设置也无妨）
       setIsRecognizing(true);
       setRecordingError(null);
 
@@ -830,6 +833,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault();
       e.stopPropagation();
       console.log('[语音输入] 触摸设备，按住开始录音（Manual模式）');
+      // 立即设置 isRecognizing 为 true，确保按钮立即显示，不显示输入框
+      setIsRecognizing(true);
+      // 然后异步开始录音
       startRecording();
     }
   }, [inputMode, isRecording, isRecognizing, startRecording, stopRecording]);
@@ -1238,10 +1244,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   // 判断是否应该在移动端显示独立语音按钮
-  // 按住时（isRecording = true）：始终显示按钮，即使有识别结果
-  // 松开后（isRecording = false）：显示输入框，等待最终识别结果
+  // 按住时（isRecording = true 或 isRecognizing = true）：始终显示按钮，即使有识别结果
+  // 松开后（isRecording = false 且 isRecognizing = false）：显示输入框，等待最终识别结果
+  // 注意：isRecognizing 在初始化时就会变为 true，所以即使 isRecording 还没 true，也应该显示按钮
   const shouldShowVoiceButton = inputMode === 'voice' && isTouchDevice() && 
-    (isRecording || (!recognizedText && !value.trim() && !isRecognizing));
+    (isRecording || isRecognizing || (!recognizedText && !value.trim()));
   
   // 识别中时输入框显示空白（不是"识别中..."）
   const displayValue = recognizedText || value;
@@ -1288,12 +1295,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
           {/* 移动端语音模式：显示独立语音按钮 */}
           {shouldShowVoiceButton ? (
             <div style={getStyles().voiceButtonContainer}>
-              {/* 按钮上方的提示文字（用户按住时不会被手指遮挡） */}
-              {isRecording && (
-                <div style={getStyles().voiceHoldButtonHint}>
-                  松开结束
-                </div>
-              )}
               {/* 语音按钮 */}
               <button
                 type="button"
@@ -1305,7 +1306,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 onMouseUp={handleVoiceButtonMouseUp}
                 style={{
                   ...getStyles().voiceHoldButton,
-                  ...(isRecording ? getStyles().voiceHoldButtonActive : {}),
+                  ...((isRecording || isRecognizing) ? getStyles().voiceHoldButtonActive : {}),
                   touchAction: 'none' as const,
                   WebkitUserSelect: 'none' as const,
                   userSelect: 'none' as const,

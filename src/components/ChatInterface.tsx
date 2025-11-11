@@ -12,7 +12,7 @@ import {
   ChatInterfaceProps
 } from '@/types';
 import { generateId, copyToClipboard } from '@/utils';
-import 'highlight.js/styles/github.css';
+// highlight.js CSS 已由 TypewriterEffect 动态加载，无需在此同步导入
 
 // 随机选择数组中的n个元素
 const getRandomItems = <T,>(array: T[], count: number): T[] => {

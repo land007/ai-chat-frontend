@@ -93,6 +93,13 @@ module.exports = {
               priority: 26,
               reuseExistingChunk: true,
             },
+            // lucide-react 图标库（单独拆分）
+            lucide: {
+              test: /[\\/]node_modules[\\/]lucide-react[\\/]/,
+              name: 'lucide-vendor',
+              priority: 24,
+              reuseExistingChunk: true,
+            },
             // 其他工具库（剩余的小型工具库）
             // 注意：这个规则会匹配所有 node_modules，但由于优先级较低，
             // 只有没有被其他高优先级规则匹配的库才会进入这里
