@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Copy, Check, Code, Eye, AlertTriangle } from 'lucide-react';
+import { Copy, Check, Code, Eye, AlertTriangle, Loader2 } from 'lucide-react';
 import { copyToClipboard } from '@/utils';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github.css';
+
+// 动态导入类型定义
+type MarkdownLibs = {
+  ReactMarkdown: typeof import('react-markdown').default;
+  remarkGfm: typeof import('remark-gfm').default;
+  rehypeHighlight: typeof import('rehype-highlight').default;
+};
+
+type HighlightLib = typeof import('highlight.js').default;
 
 // 支持编辑的语言类型列表
 const EDITABLE_LANGUAGES = [
@@ -41,6 +45,9 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
   const [editedContent, setEditedContent] = useState(codeContent);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [markdownLibs, setMarkdownLibs] = useState<MarkdownLibs | null>(null);
+  const [highlightLib, setHighlightLib] = useState<HighlightLib | null>(null);
+  const [isLibsLoading, setIsLibsLoading] = useState(false);
   const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const codeBlockIdRef = useRef(`code-block-${Date.now()}-${Math.random()}`);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -51,6 +58,54 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
   // 判断当前语言是否支持编辑
   const isEditable = EDITABLE_LANGUAGES.includes(language);
   const isJsonType = language === 'map' || language === 'chart';
+  
+  // 动态加载 highlight.js（用于 JSON 高亮）
+  useEffect(() => {
+    if (isJsonType && viewMode === 'source' && !highlightLib && !isLibsLoading) {
+      setIsLibsLoading(true);
+      Promise.all([
+        import('highlight.js'),
+        import('highlight.js/styles/github.css').catch(() => {
+          console.warn('[CodeBlockWrapper] highlight.js CSS 加载失败（非致命）');
+        })
+      ])
+        .then(([hljsModule]) => {
+          setHighlightLib(hljsModule.default);
+          setIsLibsLoading(false);
+        })
+        .catch((error) => {
+          console.error('[CodeBlockWrapper] 加载 highlight.js 失败:', error);
+          setIsLibsLoading(false);
+        });
+    }
+  }, [isJsonType, viewMode, highlightLib, isLibsLoading]);
+  
+  // 动态加载 Markdown 相关库（用于非可编辑类型的源码视图）
+  useEffect(() => {
+    if (viewMode === 'source' && !isEditable && !markdownLibs && !isLibsLoading) {
+      setIsLibsLoading(true);
+      Promise.all([
+        import('react-markdown'),
+        import('remark-gfm'),
+        import('rehype-highlight'),
+        import('highlight.js/styles/github.css').catch(() => {
+          console.warn('[CodeBlockWrapper] highlight.js CSS 加载失败（非致命）');
+        })
+      ])
+        .then(([ReactMarkdownModule, remarkGfmModule, rehypeHighlightModule]) => {
+          setMarkdownLibs({
+            ReactMarkdown: ReactMarkdownModule.default,
+            remarkGfm: remarkGfmModule.default,
+            rehypeHighlight: rehypeHighlightModule.default
+          });
+          setIsLibsLoading(false);
+        })
+        .catch((error) => {
+          console.error('[CodeBlockWrapper] 加载 Markdown 库失败:', error);
+          setIsLibsLoading(false);
+        });
+    }
+  }, [viewMode, isEditable, markdownLibs, isLibsLoading]);
   
   // 当 codeContent 变化时，同步更新 editedContent
   useEffect(() => {
@@ -107,12 +162,18 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
   const applyHighlight = (content: string, preserveCursor: boolean = false) => {
     if (!isJsonType || !editableDivRef.current) return;
     
+    // 如果 highlight.js 还没加载，先显示纯文本
+    if (!highlightLib) {
+      editableDivRef.current.textContent = content;
+      return;
+    }
+    
     if (preserveCursor) {
       saveCursorPosition();
     }
     
     try {
-      const highlighted = hljs.highlight(content, { language: 'json' });
+      const highlighted = highlightLib.highlight(content, { language: 'json' });
       editableDivRef.current.innerHTML = highlighted.value;
       
       if (preserveCursor) {
@@ -293,10 +354,10 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
 
   // 渲染高亮后的代码（用于JSON类型）
   const renderHighlightedCode = (content: string): string => {
-    if (!isJsonType) return content;
+    if (!isJsonType || !highlightLib) return content;
     try {
       // 尝试高亮JSON
-      const highlighted = hljs.highlight(content, { language: 'json' });
+      const highlighted = highlightLib.highlight(content, { language: 'json' });
       return highlighted.value;
     } catch (error) {
       // 如果高亮失败，返回原始内容
@@ -544,6 +605,45 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({
     
     // 非可编辑类型，使用原有的代码显示方式
     const markdownCode = `\`\`\`${language}\n${codeContent}\n\`\`\``;
+    
+    // 如果库还在加载中，显示加载状态
+    if (isLibsLoading || !markdownLibs) {
+      return (
+        <div
+          style={{
+            margin: 0,
+            borderRadius: 0,
+            border: 'none',
+            borderTop: 'none',
+            backgroundColor: codeBgColor,
+            padding: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '100px'
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: isDarkMode ? '#9ca3af' : '#6b7280',
+            fontSize: '14px'
+          }}>
+            <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+            <span>加载渲染引擎...</span>
+          </div>
+          <style>{`
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      );
+    }
+    
+    const { ReactMarkdown, remarkGfm, rehypeHighlight } = markdownLibs;
     
     return (
       <div

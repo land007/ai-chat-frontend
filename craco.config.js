@@ -104,7 +104,37 @@ module.exports = {
             // 注意：这个规则会匹配所有 node_modules，但由于优先级较低，
             // 只有没有被其他高优先级规则匹配的库才会进入这里
             utils: {
-              test: /[\\/]node_modules[\\/]/,
+              // 使用负面查找，排除服务器端库和已经被拆分的库
+              test: (module) => {
+                const modulePath = module.resource || '';
+                // 必须是 node_modules
+                if (!modulePath.includes('node_modules')) {
+                  return false;
+                }
+                // 排除服务器端库
+                const serverLibs = ['express', 'cors', 'jsonwebtoken', 'pm2', 'ws', 'ai'];
+                if (serverLibs.some(lib => modulePath.includes(`node_modules/${lib}/`))) {
+                  return false;
+                }
+                // 排除已经被拆分的库
+                const excludedLibs = [
+                  'react', 'react-dom', 'react-router', 'react-router-dom',
+                  'three', '@react-three',
+                  'pdfjs-dist', 'react-pdf',
+                  'leaflet', 'react-leaflet',
+                  '@ant-design/plots',
+                  'highlight.js',
+                  'katex',
+                  'mermaid',
+                  'react-markdown', 'remark-', 'rehype-',
+                  'i18next', 'react-i18next', 'i18next-browser-languagedetector',
+                  'lucide-react'
+                ];
+                if (excludedLibs.some(lib => modulePath.includes(`node_modules/${lib}/`))) {
+                  return false;
+                }
+                return true;
+              },
               name: 'utils-vendor',
               priority: 15,
               reuseExistingChunk: true,

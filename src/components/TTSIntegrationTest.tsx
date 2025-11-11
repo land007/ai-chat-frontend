@@ -1,12 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Square } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
+import { Play, Pause, Square, Loader2 } from 'lucide-react';
 import { StreamTextSegmenter } from '../utils/StreamTextSegmenter';
 import AudioQueuePlayer from './AudioQueuePlayer';
 import { TextSegment, AudioQueuePlayerHandle } from '@/types';
-import 'highlight.js/styles/github.css';
+
+// 动态导入类型定义
+type MarkdownLibs = {
+  ReactMarkdown: typeof import('react-markdown').default;
+  remarkGfm: typeof import('remark-gfm').default;
+  rehypeHighlight: typeof import('rehype-highlight').default;
+};
 
 const TTSIntegrationTest: React.FC = () => {
   // 状态管理
@@ -27,10 +30,41 @@ const TTSIntegrationTest: React.FC = () => {
   const [pendingSegments, setPendingSegments] = useState<TextSegment[]>([]);
   const maxQueueSize = 2; // 最大队列长度（当前播放 + 预加载）
   
+  // Markdown 库动态加载
+  const [markdownLibs, setMarkdownLibs] = useState<MarkdownLibs | null>(null);
+  const [isLibsLoading, setIsLibsLoading] = useState(false);
+  
   // Refs
   const audioPlayerRef = useRef<AudioQueuePlayerHandle>(null);
   const segmenterRef = useRef<StreamTextSegmenter>(new StreamTextSegmenter());
   const currentStreamIndexRef = useRef(0);
+  
+  // 动态加载 Markdown 相关库
+  useEffect(() => {
+    if (!markdownLibs && !isLibsLoading && segments.length > 0) {
+      setIsLibsLoading(true);
+      Promise.all([
+        import('react-markdown'),
+        import('remark-gfm'),
+        import('rehype-highlight'),
+        import('highlight.js/styles/github.css').catch(() => {
+          console.warn('[TTSIntegrationTest] highlight.js CSS 加载失败（非致命）');
+        })
+      ])
+        .then(([ReactMarkdownModule, remarkGfmModule, rehypeHighlightModule]) => {
+          setMarkdownLibs({
+            ReactMarkdown: ReactMarkdownModule.default,
+            remarkGfm: remarkGfmModule.default,
+            rehypeHighlight: rehypeHighlightModule.default
+          });
+          setIsLibsLoading(false);
+        })
+        .catch((error) => {
+          console.error('[TTSIntegrationTest] 加载 Markdown 库失败:', error);
+          setIsLibsLoading(false);
+        });
+    }
+  }, [segments.length, markdownLibs, isLibsLoading]);
   
   // 测试数据 - 复用StreamSegmentationTest的markdown
   const testMarkdown = `# 智能分段测试
@@ -820,20 +854,33 @@ function calculate() {
                 style={{ cursor: 'pointer' }}
                 title={`点击从此处播放到结尾 (${segments.length - index} 个segments)`}
               >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight]}
-                  components={{
-                    p: ({ node, children, ...props }) => {
-                      if (segment.type === 'paragraph') {
-                        return <span {...props}>{children}</span>;
+                {isLibsLoading || !markdownLibs ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px' }}>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>加载中...</span>
+                    <style>{`
+                      @keyframes spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
                       }
-                      return <p {...props}>{children}</p>;
-                    }
-                  }}
-                >
-                  {segment.text}
-                </ReactMarkdown>
+                    `}</style>
+                  </div>
+                ) : (
+                  <markdownLibs.ReactMarkdown
+                    remarkPlugins={[markdownLibs.remarkGfm]}
+                    rehypePlugins={[markdownLibs.rehypeHighlight]}
+                    components={{
+                      p: ({ node, children, ...props }) => {
+                        if (segment.type === 'paragraph') {
+                          return <span {...props}>{children}</span>;
+                        }
+                        return <p {...props}>{children}</p>;
+                      }
+                    }}
+                  >
+                    {segment.text}
+                  </markdownLibs.ReactMarkdown>
+                )}
               </div>
             ))}
             

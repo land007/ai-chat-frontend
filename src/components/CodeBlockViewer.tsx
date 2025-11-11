@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { copyToClipboard } from '@/utils';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github.css';
+
+// 动态导入类型定义
+type HighlightLib = typeof import('highlight.js').default;
 
 interface CodeBlockViewerProps {
   /** 代码内容（必填） */
@@ -64,6 +65,8 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [lineCount, setLineCount] = useState(0);
   const [isLongCode, setIsLongCode] = useState(false);
+  const [highlightLib, setHighlightLib] = useState<HighlightLib | null>(null);
+  const [isLibLoading, setIsLibLoading] = useState(false);
   const copyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const highlightTimerRef = useRef<NodeJS.Timeout | null>(null);
   const preRef = useRef<HTMLPreElement | null>(null);
@@ -76,6 +79,27 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   
   // 判断是否为JSON类型（需要代码高亮）
   const isJsonType = language === 'map' || language === 'chart';
+  
+  // 动态加载 highlight.js（用于 JSON 高亮）
+  useEffect(() => {
+    if (isJsonType && codeContent && !highlightLib && !isLibLoading) {
+      setIsLibLoading(true);
+      Promise.all([
+        import('highlight.js'),
+        import('highlight.js/styles/github.css').catch(() => {
+          console.warn('[CodeBlockViewer] highlight.js CSS 加载失败（非致命）');
+        })
+      ])
+        .then(([hljsModule]) => {
+          setHighlightLib(hljsModule.default);
+          setIsLibLoading(false);
+        })
+        .catch((error) => {
+          console.error('[CodeBlockViewer] 加载 highlight.js 失败:', error);
+          setIsLibLoading(false);
+        });
+    }
+  }, [isJsonType, codeContent, highlightLib, isLibLoading]);
   
   // 生成稳定的ID键
   const idKey = `${codeContent}-${language || ''}`;
@@ -127,10 +151,10 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
   
   // 实时高亮JSON内容（流式输出时）- 在useEffect中异步更新状态
   useEffect(() => {
-    if (isJsonType && codeContent) {
+    if (isJsonType && codeContent && highlightLib) {
       const highlightNow = () => {
         try {
-          const highlighted = hljs.highlight(codeContent, { language: 'json' });
+          const highlighted = highlightLib.highlight(codeContent, { language: 'json' });
           // 使用函数式更新确保状态正确更新
           setHighlightedContent(prev => {
             // 如果内容相同，不更新（避免不必要的重新渲染）
@@ -157,7 +181,7 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
       highlightTimerRef.current = setTimeout(() => {
         highlightNow();
       }, 100);
-    } else {
+    } else if (!isJsonType) {
       setHighlightedContent(null);
     }
     
@@ -167,7 +191,7 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
         highlightTimerRef.current = null;
       }
     };
-  }, [codeContent, isJsonType, language]);
+  }, [codeContent, isJsonType, language, highlightLib]);
 
   // 组件卸载时清理定时器
   useEffect(() => {
@@ -408,15 +432,18 @@ const CodeBlockViewer: React.FC<CodeBlockViewerProps> = ({
                 if (highlightedContent) {
                   return <span dangerouslySetInnerHTML={{ __html: highlightedContent }} />;
                 }
-                // 如果高亮内容还没准备好，尝试实时高亮（同步方式，避免异步延迟）
-                // 注意：这里不更新状态，只是直接计算并渲染，避免在渲染中更新状态
-                try {
-                  const highlighted = hljs.highlight(codeContent, { language: 'json' });
-                  return <span dangerouslySetInnerHTML={{ __html: highlighted.value }} />;
-                } catch (error) {
-                  // 如果高亮失败，显示原始内容
-                  return <span>{codeContent}</span>;
+                // 如果 highlight.js 已加载但高亮内容还没准备好，尝试实时高亮
+                if (highlightLib) {
+                  try {
+                    const highlighted = highlightLib.highlight(codeContent, { language: 'json' });
+                    return <span dangerouslySetInnerHTML={{ __html: highlighted.value }} />;
+                  } catch (error) {
+                    // 如果高亮失败，显示原始内容
+                    return <span>{codeContent}</span>;
+                  }
                 }
+                // 如果库还在加载中，显示原始内容
+                return <span>{codeContent}</span>;
               }
               
               // 非JSON类型，使用children
