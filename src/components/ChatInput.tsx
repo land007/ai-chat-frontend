@@ -1163,8 +1163,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
       modeToggleButton: {
         width: '48px',
         height: '48px',
-        backgroundColor: inputMode === 'voice' ? '#3b82f6' : (isDarkMode ? '#4b5563' : '#f3f4f6'),
-        color: inputMode === 'voice' ? 'white' : mutedColor,
+        backgroundColor: '#3b82f6',
+        color: 'white',
         borderRadius: '16px',
         border: 'none',
         display: 'flex',
@@ -1176,7 +1176,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       },
       modeToggleButtonHover: {
         opacity: 1,
-        backgroundColor: inputMode === 'voice' ? '#2563eb' : (isDarkMode ? '#6b7280' : '#e5e7eb')
+        backgroundColor: '#2563eb'
       },
       voiceHoldButton: {
         flex: 1,
@@ -1363,95 +1363,168 @@ const ChatInput: React.FC<ChatInputProps> = ({
               }
             />
           )}
-          {/* 发送按钮（键盘模式或识别结果时显示） */}
-          {/* 识别中时，只有电脑（VAD模式）才显示X按钮，手机（Manual模式）不显示 */}
-          {(inputMode === 'keyboard' || recognizedText || (isRecognizing && !isTouchDevice())) && (
-            <button
-              onClick={
-                isRecognizing
-                  ? handleCancelRecognizedText
-                  : recognizedText
-                    ? handleSendRecognizedText
-                    : isLoading
-                      ? onStop
+          {/* 移动端：精简布局 - 根据内容动态显示按钮 */}
+          {isTouchDevice() ? (
+            <>
+              {/* 有文字时：显示发送按钮 */}
+              {(value.trim() || recognizedText) && (
+                <button
+                  onClick={
+                    recognizedText
+                      ? handleSendRecognizedText
                       : () => onSend(value)
-              }
-              disabled={
-                isRecognizing
-                  ? false
-                  : recognizedText
-                    ? !recognizedText.trim() && !value.trim()
-                    : !isLoading && !value.trim()
-              }
-              style={{
-                ...getStyles().sendButton,
-                ...(isLoading || isRecognizing ? getStyles().stopButton : {}),
-                ...(!isLoading && !isRecognizing && !value.trim() && !recognizedText ? getStyles().sendButtonDisabled : {})
-              }}
-              onMouseEnter={(e) => {
-                if (isLoading || isRecognizing) {
-                  e.currentTarget.style.backgroundColor = '#dc2626';
-                } else if (value.trim() || recognizedText) {
-                  e.currentTarget.style.backgroundColor = '#2563eb';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (isLoading || isRecognizing) {
-                  e.currentTarget.style.backgroundColor = '#ef4444';
-                } else if (value.trim() || recognizedText) {
-                  e.currentTarget.style.backgroundColor = '#3b82f6';
-                }
-              }}
-              title={
-                isRecognizing
-                  ? '取消'
-                  : recognizedText
-                    ? '发送'
-                    : isLoading
-                      ? t('ui.stop')
-                      : t('ui.send')
-              }
-            >
-              {isRecognizing ? (
-                <X size={20} />
-              ) : isLoading ? (
-                <Square size={20} />
-              ) : (
-                <Send size={20} />
+                  }
+                  disabled={
+                    recognizedText
+                      ? !recognizedText.trim() && !value.trim()
+                      : !value.trim()
+                  }
+                  style={{
+                    ...getStyles().sendButton,
+                    ...(!value.trim() && !recognizedText ? getStyles().sendButtonDisabled : {})
+                  }}
+                  onMouseEnter={(e) => {
+                    if (value.trim() || recognizedText) {
+                      e.currentTarget.style.backgroundColor = '#2563eb';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (value.trim() || recognizedText) {
+                      e.currentTarget.style.backgroundColor = '#3b82f6';
+                    }
+                  }}
+                  title={recognizedText ? '发送' : t('ui.send')}
+                >
+                  <Send size={20} />
+                </button>
               )}
-            </button>
-          )}
-          {/* 取消按钮（识别结果时显示） */}
-          {recognizedText && !isRecognizing && (
-            <button
-              onClick={handleCancelRecognizedText}
-              style={getStyles().voiceCancelButton}
-              onMouseEnter={(e) => {
-                Object.assign(e.currentTarget.style, getStyles().voiceCancelButtonHover);
-              }}
-              onMouseLeave={(e) => {
-                Object.assign(e.currentTarget.style, getStyles().voiceCancelButton);
-              }}
-              title="取消"
-            >
-              <X size={20} />
-            </button>
-          )}
-          {/* 模式切换按钮（右下角）- 仅在启用语音输入时显示，识别结束后隐藏 */}
-          {enableVoiceInput && !recognizedText && (
-            <button
-              onClick={handleToggleInputMode}
-              style={getStyles().modeToggleButton}
-              onMouseEnter={(e) => {
-                Object.assign(e.currentTarget.style, getStyles().modeToggleButtonHover);
-              }}
-              onMouseLeave={(e) => {
-                Object.assign(e.currentTarget.style, getStyles().modeToggleButton);
-              }}
-              title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
-            >
-              {inputMode === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
-            </button>
+              {/* 识别完毕时：显示取消按钮（在发送按钮右侧） */}
+              {recognizedText && !isRecognizing && (
+                <button
+                  onClick={handleCancelRecognizedText}
+                  style={getStyles().voiceCancelButton}
+                  onMouseEnter={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().voiceCancelButtonHover);
+                  }}
+                  onMouseLeave={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().voiceCancelButton);
+                  }}
+                  title="取消"
+                >
+                  <X size={20} />
+                </button>
+              )}
+              {/* 无文字时：显示模式切换按钮 */}
+              {enableVoiceInput && !value.trim() && !recognizedText && (
+                <button
+                  onClick={handleToggleInputMode}
+                  style={getStyles().modeToggleButton}
+                  onMouseEnter={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().modeToggleButtonHover);
+                  }}
+                  onMouseLeave={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().modeToggleButton);
+                  }}
+                  title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
+                >
+                  {inputMode === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              {/* PC端：保持原有布局 */}
+              {/* 发送按钮（键盘模式或识别结果时显示） */}
+              {/* 识别中时，只有电脑（VAD模式）才显示X按钮，手机（Manual模式）不显示 */}
+              {(inputMode === 'keyboard' || recognizedText || (isRecognizing && !isTouchDevice())) && (
+                <button
+                  onClick={
+                    isRecognizing
+                      ? handleCancelRecognizedText
+                      : recognizedText
+                        ? handleSendRecognizedText
+                        : isLoading
+                          ? onStop
+                          : () => onSend(value)
+                  }
+                  disabled={
+                    isRecognizing
+                      ? false
+                      : recognizedText
+                        ? !recognizedText.trim() && !value.trim()
+                        : !isLoading && !value.trim()
+                  }
+                  style={{
+                    ...getStyles().sendButton,
+                    ...(isLoading || isRecognizing ? getStyles().stopButton : {}),
+                    ...(!isLoading && !isRecognizing && !value.trim() && !recognizedText ? getStyles().sendButtonDisabled : {})
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isLoading || isRecognizing) {
+                      e.currentTarget.style.backgroundColor = '#dc2626';
+                    } else if (value.trim() || recognizedText) {
+                      e.currentTarget.style.backgroundColor = '#2563eb';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isLoading || isRecognizing) {
+                      e.currentTarget.style.backgroundColor = '#ef4444';
+                    } else if (value.trim() || recognizedText) {
+                      e.currentTarget.style.backgroundColor = '#3b82f6';
+                    }
+                  }}
+                  title={
+                    isRecognizing
+                      ? '取消'
+                      : recognizedText
+                        ? '发送'
+                        : isLoading
+                          ? t('ui.stop')
+                          : t('ui.send')
+                  }
+                >
+                  {isRecognizing ? (
+                    <X size={20} />
+                  ) : isLoading ? (
+                    <Square size={20} />
+                  ) : (
+                    <Send size={20} />
+                  )}
+                </button>
+              )}
+              {/* 取消按钮（识别结果时显示） */}
+              {recognizedText && !isRecognizing && (
+                <button
+                  onClick={handleCancelRecognizedText}
+                  style={getStyles().voiceCancelButton}
+                  onMouseEnter={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().voiceCancelButtonHover);
+                  }}
+                  onMouseLeave={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().voiceCancelButton);
+                  }}
+                  title="取消"
+                >
+                  <X size={20} />
+                </button>
+              )}
+              {/* 模式切换按钮（右下角）- 仅在启用语音输入时显示，识别结束后隐藏 */}
+              {enableVoiceInput && !recognizedText && (
+                <button
+                  onClick={handleToggleInputMode}
+                  style={getStyles().modeToggleButton}
+                  onMouseEnter={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().modeToggleButtonHover);
+                  }}
+                  onMouseLeave={(e) => {
+                    Object.assign(e.currentTarget.style, getStyles().modeToggleButton);
+                  }}
+                  title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
+                >
+                  {inputMode === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
+                </button>
+              )}
+            </>
           )}
         </div>
         {/* 错误提示 */}
