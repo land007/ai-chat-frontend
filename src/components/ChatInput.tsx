@@ -39,6 +39,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const [recognizedText, setRecognizedText] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [showDebugLog, setShowDebugLog] = useState(false); // 显示调试日志开关
+  const [debugLogs, setDebugLogs] = useState<string[]>([]); // 调试日志数组
   
   // 录音相关refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -49,12 +51,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const currentTranscriptRef = useRef<string>(''); // 当前累积的识别文本
+  const currentTranscriptRef = useRef<string>(''); // 当前累积的识别文本（已废弃，保留用于兼容）
+  const finalTextRef = useRef<string>(''); // 所有已确定段落的累加文本（游标之前的内容，确定不变）
+  const currentSegmentRef = useRef<string>(''); // 当前正在识别的段落（游标位置，不确定的，实时更新）
   const voiceInputModeRef = useRef<'vad' | 'manual'>('vad'); // 当前使用的模式
   const isRecordingRef = useRef<boolean>(false); // 录音状态ref（用于闭包中访问）
   const isInitializingRef = useRef<boolean>(false); // 初始化状态ref（防止过早清理）
   const recordingStartTimeRef = useRef<number>(0); // 录音开始时间（用于最小录音时长保护）
   const recognitionTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 识别超时定时器ref
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null); // 关闭连接超时定时器ref（如果服务器2秒内未关闭，客户端主动关闭）
   const mainTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const audioBufferRef = useRef<ArrayBuffer[]>([]); // 音频缓冲区：存储连接建立前的音频数据
   const isConnectionReadyRef = useRef<boolean>(false); // 连接是否已就绪
@@ -126,6 +131,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const cleanupAudioResources = useCallback(() => {
     console.log('[语音输入] 清理音频资源');
     
+    // 清除关闭超时定时器
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    
     if (isInitializingRef.current) {
       console.log('[语音输入] ⚠️ 正在初始化，延迟清理资源');
       setTimeout(() => {
@@ -193,9 +204,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
     isConnectionReadyRef.current = false;
     isSendingBufferedRef.current = false;
 
-    speechRecognitionService.close().catch(err => {
-      console.error('[语音输入] 关闭语音识别服务失败:', err);
-    });
+    // 注意：不在这里关闭 WebSocket 连接
+    // 连接应该由服务器关闭（收到 stop 消息后）
+    // 客户端只负责清理本地资源（媒体流、AudioContext等）
+    // speechRecognitionService.close() 应该在 onClose 回调中调用，或者由服务器关闭
     
     isInitializingRef.current = false;
     
@@ -204,26 +216,56 @@ const ChatInput: React.FC<ChatInputProps> = ({
       recognitionTimeoutRef.current = null;
     }
 
-    setIsRecognizing(prev => {
-      if (prev) {
-        console.log('[语音输入] 清理资源时检测到仍在识别状态，立即重置');
-        setRecognizedText(prevText => {
-          if (!prevText || prevText.trim() === '') {
-            onChange('');
-            return null;
+        setIsRecognizing(prev => {
+          if (prev) {
+            console.log('[语音输入] 清理资源时检测到仍在识别状态，立即重置');
+            // 注意：这里不应该清空 finalTextRef，因为可能是在继续识别下一段
+            // 只清空 currentSegmentRef，保留已确定的文本以便累加
+            currentSegmentRef.current = '';
+            // 如果有已确定的文本，显示它；否则清空
+            if (finalTextRef.current) {
+              setRecognizedText(finalTextRef.current);
+              onChange(finalTextRef.current);
+            } else {
+              setRecognizedText(null);
+              onChange('');
+            }
+            return false;
           }
-          return prevText;
+          return prev;
         });
-        return false;
-      }
-      return prev;
-    });
   }, [onChange]);
 
   // 开始录音
   const startRecording = useCallback(async () => {
     isInitializingRef.current = true;
     recordingStartTimeRef.current = Date.now();
+    
+    // PC端检查：如果有内容，无法开始新的录音
+    const hasContent = finalTextRef.current || currentSegmentRef.current || value.trim();
+    if (hasContent && !isTouchDevice()) {
+      console.log('[语音输入] PC端：输入框有内容，无法开始新的录音');
+      setRecordingError('请先清空输入框内容后再开始录音');
+      isInitializingRef.current = false;
+      return;
+    }
+    
+    // 开始录音时：只在没有已确定文本时清空（支持多段累加）
+    // 如果有已确定文本，保留它以便累加下一段
+    if (!finalTextRef.current) {
+      // 第一次开始录音，清空所有内容
+      finalTextRef.current = '';
+      currentSegmentRef.current = '';
+      setRecognizedText(null);
+      onChange('');
+    } else {
+      // 继续识别下一段，只清空当前正在识别的部分，保留已确定的文本
+      currentSegmentRef.current = '';
+      // 更新显示，只显示已确定的文本
+      const fullText = finalTextRef.current;
+      setRecognizedText(fullText);
+      onChange(fullText);
+    }
     
     // 立即失焦，防止键盘弹出
     if (mainTextareaRef.current && document.activeElement === mainTextareaRef.current) {
@@ -259,7 +301,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
       console.log('[语音输入] 设备类型:', touchDevice ? '触摸设备（手机）' : '鼠标设备（电脑）', '使用模式:', voiceInputModeRef.current);
 
       currentTranscriptRef.current = '';
-      setRecognizedText(null);
+      // 注意：这里不应该清空 finalTextRef，因为可能是在继续识别下一段
+      // 只清空 currentSegmentRef，保留已确定的文本以便累加
+      currentSegmentRef.current = '';
+      // 如果有已确定的文本，显示它；否则清空
+      if (finalTextRef.current) {
+        setRecognizedText(finalTextRef.current);
+        onChange(finalTextRef.current);
+      } else {
+        setRecognizedText(null);
+        onChange('');
+      }
       // 确保 isRecognizing 为 true（可能在 handleVoiceButtonTouchStart 中已经设置，再次设置也无妨）
       setIsRecognizing(true);
       setRecordingError(null);
@@ -295,30 +347,53 @@ const ChatInput: React.FC<ChatInputProps> = ({
       speechRecognitionService.removeCallbacks();
       
       speechRecognitionService.onTranscript((text, isFinal) => {
-        console.log('[语音输入] 识别结果:', text, 'isFinal:', isFinal);
+        const logMsg = `[识别结果] isFinal=${isFinal}, text="${text}", finalText="${finalTextRef.current}", currentSegment="${currentSegmentRef.current}"`;
+        console.log('[语音输入]', logMsg);
         
-        currentTranscriptRef.current = text;
-        setRecognizedText(text);
-        onChange(text);
+        // 添加到调试日志
+        setDebugLogs(prev => [...prev.slice(-49), logMsg]); // 只保留最近50条
         
         if (isFinal) {
-          console.log('[语音输入] ✅ 最终识别结果:', text);
+          // 最终结果：将当前段落的最终文本累加到已确定文本
+          // 注意：isFinal=true 时，text 是最终确定的文本，应该直接使用它来累加
+          // 使用 text 参数（最终确定的文本）累加到 finalTextRef
+          const segmentToAdd = text || '';
+          const oldFinalText = finalTextRef.current;
+          finalTextRef.current = finalTextRef.current + segmentToAdd;
+          currentSegmentRef.current = '';
+          const fullText = finalTextRef.current;
+          
+          const finalLogMsg = `[最终结果] 累加前="${oldFinalText}", 累加段落="${segmentToAdd}", 累加后="${finalTextRef.current}"`;
+          console.log('[语音输入] ✅', finalLogMsg);
+          setDebugLogs(prev => [...prev.slice(-49), finalLogMsg]);
+          
+          setRecognizedText(fullText);
+          onChange(fullText);
+          
+          // 注意：收到 isFinal: true 时，只更新文本，不停止录音，不清理资源，不关闭连接
+          // 因为用户可能还在继续说话，需要继续采集和发送音频
+          // 只有在用户松手（stopRecording）或收到 complete 消息时，才停止录音和清理资源
+          // 重置识别超时定时器，继续等待后续消息
           if (recognitionTimeoutRef.current) {
             clearTimeout(recognitionTimeoutRef.current);
             recognitionTimeoutRef.current = null;
           }
-          setIsRecognizing(false);
-          setIsRecording(false);
-          isRecordingRef.current = false;
           
-          if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach(track => track.stop());
-            mediaStreamRef.current = null;
-          }
-          
-          cleanupAudioResources();
+          // 不设置 setIsRecognizing(false)，因为可能还有后续消息
+          // 不设置 setIsRecording(false)，因为用户可能还在说话
+          // 不停止 mediaStream，因为需要继续采集音频
+          // 不调用 cleanupAudioResources()，因为它会关闭 WebSocket 连接和停止录音
         } else {
-          console.log('[语音输入] 📝 实时识别结果:', text);
+          // 实时猜测：更新当前正在识别的段落
+          currentSegmentRef.current = text;
+          const fullText = finalTextRef.current + currentSegmentRef.current;
+          
+          const realtimeLogMsg = `[实时猜测] 已确定="${finalTextRef.current}", 正在识别="${currentSegmentRef.current}", 完整="${fullText}"`;
+          console.log('[语音输入] 📝', realtimeLogMsg);
+          setDebugLogs(prev => [...prev.slice(-49), realtimeLogMsg]);
+          
+          setRecognizedText(fullText);
+          onChange(fullText);
         }
       });
 
@@ -332,9 +407,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
         setIsRecognizing(false);
         setIsRecording(false);
         isRecordingRef.current = false;
-        // 识别失败时，清空识别结果，回到按钮状态
-        setRecognizedText(null);
-        onChange('');
+        // 识别失败时，保留已确定的文本，只清空正在识别的部分
+        const finalText = finalTextRef.current;
+        currentSegmentRef.current = '';
+        setRecognizedText(finalText || null);
+        onChange(finalText || '');
         cleanupAudioResources();
       });
 
@@ -348,14 +425,48 @@ const ChatInput: React.FC<ChatInputProps> = ({
         setIsRecording(false);
         isRecordingRef.current = false;
         
+        // 识别完成时，保留已确定的文本
+        const finalText = finalTextRef.current;
+        currentSegmentRef.current = '';
         setRecognizedText(prevText => {
           if (!prevText || prevText.trim() === '') {
-            onChange('');
-            return null;
+            onChange(finalText || '');
+            return finalText || null;
           }
           return prevText;
         });
+        
+        // 注意：识别完成时，不在这里清理资源
+        // 应该等待服务器关闭连接，在 onClose 回调中清理资源
       });
+
+      // 注册关闭回调（服务器关闭连接时触发，用于清理资源）
+      speechRecognitionService.onClose(() => {
+        console.log('[语音输入] WebSocket连接已关闭（由服务器关闭），清理音频资源');
+        
+        // 清除关闭超时定时器（服务器已经关闭连接，不需要客户端再关闭）
+        if (closeTimeoutRef.current) {
+          clearTimeout(closeTimeoutRef.current);
+          closeTimeoutRef.current = null;
+        }
+        
+        // 停止录音状态（确保 cleanupAudioResources 可以执行）
+        setIsRecording(false);
+        isRecordingRef.current = false;
+        setIsRecognizing(false);
+        
+        // 清理音频资源（连接已经被服务器关闭，不需要再关闭）
+        // cleanupAudioResources() 中已经移除了 speechRecognitionService.close() 的调用
+        cleanupAudioResources();
+        
+        // 重置状态，允许再次按下
+        // 重置 isStoppingRef，确保可以再次按下按钮
+        // 注意：isStoppingRef 是在组件顶层定义的，onClose 回调在 startRecording 中注册
+        // 由于 startRecording 是组件内部的 useCallback，可以通过闭包访问 isStoppingRef
+        // 但为了确保，我们通过一个间接方式：在 stopRecording 中已经设置了100ms后重置
+        // 这里再确保一次，以防连接关闭很慢
+        console.log('[语音输入] 状态已重置，可以再次按下开始录音');
+    });
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('浏览器不支持麦克风访问，请使用 HTTPS 或 localhost');
@@ -667,59 +778,64 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     setIsRecording(false);
+    isRecordingRef.current = false;
     
+    // 停止发送音频数据
     if (voiceInputModeRef.current === 'manual') {
-      console.log('[语音输入] Manual模式，主动提交音频并立即停止发送');
-      isRecordingRef.current = false;
+      console.log('[语音输入] Manual模式，主动提交音频');
       speechRecognitionService.commit().catch(err => {
         console.error('[语音输入] 提交音频失败:', err);
         setRecordingError(`提交音频失败: ${err.message}`);
       });
-    } else {
-      console.log('[语音输入] VAD模式，等待服务器自动检测结束');
-      setTimeout(() => {
-        isRecordingRef.current = false;
-        console.log('[语音输入] isRecordingRef已设置为false（延迟设置）');
-      }, 2000);
     }
+    
+    // 发送 stop 消息给服务器，让服务器关闭连接
+    // 注意：不在这里调用 cleanupAudioResources()，应该在 WebSocket onclose 事件中清理
+    console.log('[语音输入] 发送 stop 消息给服务器，等待服务器关闭连接');
+    
+    // 清除之前的关闭超时定时器（如果有）
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+    
+    // 设置2秒超时：如果服务器没有关闭连接，客户端主动关闭
+    closeTimeoutRef.current = setTimeout(() => {
+      console.warn('[语音输入] ⚠️ 服务器2秒内未关闭连接，客户端主动关闭');
+      closeTimeoutRef.current = null;
+      // 主动关闭连接并清理资源
+      speechRecognitionService.close().catch(err => {
+        console.error('[语音输入] 主动关闭连接失败:', err);
+      });
+      // 清理资源
+      setIsRecording(false);
+      isRecordingRef.current = false;
+      setIsRecognizing(false);
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+      }
+      cleanupAudioResources();
+      // 重置状态，允许再次按下
+      // 重置 isStoppingRef，确保可以再次按下按钮
+      // 注意：这里可以直接访问 isStoppingRef，因为它在组件顶层定义
+      isStoppingRef.current = false;
+      console.log('[语音输入] 状态已重置（超时关闭），可以再次按下开始录音');
+    }, 2000);
+    
+    speechRecognitionService.stop().catch(err => {
+      console.error('[语音输入] 发送 stop 消息失败:', err);
+      // 如果发送失败，清除超时定时器并直接清理资源
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+      cleanupAudioResources();
+    });
 
     if (recognitionTimeoutRef.current) {
       clearTimeout(recognitionTimeoutRef.current);
       recognitionTimeoutRef.current = null;
-    }
-
-    recognitionTimeoutRef.current = setTimeout(() => {
-      setIsRecognizing(prev => {
-        if (prev) {
-          console.log('[语音输入] 识别超时（3秒未收到结果），自动重置识别状态');
-          setRecognizedText(prevText => {
-            if (!prevText || prevText.trim() === '') {
-              onChange('');
-              return null;
-            }
-            return prevText;
-          });
-          recognitionTimeoutRef.current = null;
-          return false;
-        }
-        return prev;
-      });
-    }, 3000);
-
-    if (isInitializingRef.current) {
-      console.log('[语音输入] 正在初始化，等待初始化完成后再清理...');
-      const checkInterval = setInterval(() => {
-        if (!isInitializingRef.current) {
-          clearInterval(checkInterval);
-          setTimeout(() => {
-            cleanupAudioResources();
-          }, 1000);
-        }
-      }, 50);
-    } else {
-      setTimeout(() => {
-        cleanupAudioResources();
-      }, 1000);
     }
   }, [cleanupAudioResources, onChange]);
 
@@ -748,9 +864,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // 发送识别结果
   const handleSendRecognizedText = useCallback(() => {
-    const textToSend = recognizedText || value.trim();
+    // 发送时使用完整文本（已确定 + 正在识别的，如果有）
+    const fullText = finalTextRef.current + currentSegmentRef.current;
+    const textToSend = fullText || recognizedText || value.trim();
     if (textToSend && !isLoading) {
       onChange(textToSend);
+      
+      // 清空所有内容，重置所有状态
+      finalTextRef.current = '';
+      currentSegmentRef.current = '';
       setRecognizedText(null);
       setInputMode('keyboard');
       setIsRecognizing(false);
@@ -787,6 +909,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
     
     cleanupAudioResources();
     
+    // 清空所有内容，重置所有状态
+    finalTextRef.current = '';
+    currentSegmentRef.current = '';
     setRecognizedText(null);
     onChange('');
     setIsRecognizing(false);
@@ -986,6 +1111,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (recognitionTimeoutRef.current) {
         clearTimeout(recognitionTimeoutRef.current);
         recognitionTimeoutRef.current = null;
+      }
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
       }
       if (mediaRecorderRef.current) {
         try {
@@ -1256,8 +1385,30 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const shouldShowVoiceButton = inputMode === 'voice' && isTouchDevice() && 
     (isRecording || isRecognizing || (!recognizedText && !value.trim()));
   
-  // 识别中时输入框显示空白（不是"识别中..."）
-  const displayValue = recognizedText || value;
+  // 识别中时输入框显示累加后的完整文本
+  // 如果正在识别（currentSegmentRef不为空），需要区分显示已确定和正在识别的部分
+  // 确保显示完整的文本：已确定部分 + 正在识别部分
+  const getDisplayValue = () => {
+    if (recognizedText !== null) {
+      return recognizedText;
+    }
+    // 如果 recognizedText 为 null，但 ref 中有值，使用 ref 的值
+    const fullText = finalTextRef.current + currentSegmentRef.current;
+    return fullText || value;
+  };
+  const displayValue = getDisplayValue();
+  
+  // 计算完整文本（用于显示和编辑）
+  const getFullText = () => {
+    return finalTextRef.current + currentSegmentRef.current;
+  };
+  
+  // 检查是否正在识别（currentSegmentRef不为空）
+  // 注意：这里通过比较 recognizedText 和 finalTextRef 来判断是否有正在识别的部分
+  // 如果 recognizedText 的长度大于 finalTextRef 的长度，说明有正在识别的部分
+  const finalTextLength = finalTextRef.current.length;
+  const isRecognizingSegment = isRecognizing && recognizedText !== null && 
+    recognizedText.length > finalTextLength;
 
   const displayPlaceholder = inputMode === 'voice' && !isRecording && !isRecognizing && !shouldShowVoiceButton
     ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
@@ -1265,6 +1416,121 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <>
+      {/* 调试日志面板 */}
+      {showDebugLog && (
+        <div style={{
+          position: 'fixed',
+          top: '10px',
+          right: '10px',
+          width: '300px',
+          maxHeight: '400px',
+          backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+          border: `2px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+          borderRadius: '8px',
+          padding: '12px',
+          zIndex: 10000,
+          overflow: 'auto',
+          fontSize: '11px',
+          fontFamily: 'monospace',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px',
+            paddingBottom: '8px',
+            borderBottom: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
+          }}>
+            <strong style={{ color: isDarkMode ? '#f9fafb' : '#111827' }}>识别日志</strong>
+            <button
+              onClick={() => setShowDebugLog(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: isDarkMode ? '#9ca3af' : '#6b7280',
+                cursor: 'pointer',
+                fontSize: '16px',
+                padding: '0 4px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{
+            maxHeight: '350px',
+            overflowY: 'auto'
+          }}>
+            {debugLogs.length === 0 ? (
+              <div style={{ color: isDarkMode ? '#9ca3af' : '#6b7280', fontStyle: 'italic' }}>
+                暂无日志
+              </div>
+            ) : (
+              debugLogs.map((log, index) => (
+                <div
+                  key={index}
+                  style={{
+                    marginBottom: '4px',
+                    padding: '4px',
+                    backgroundColor: isDarkMode ? '#374151' : '#f9fafb',
+                    borderRadius: '4px',
+                    color: isDarkMode ? '#e5e7eb' : '#374151',
+                    wordBreak: 'break-word',
+                    whiteSpace: 'pre-wrap'
+                  }}
+                >
+                  {log}
+                </div>
+              ))
+            )}
+          </div>
+          <button
+            onClick={() => setDebugLogs([])}
+            style={{
+              marginTop: '8px',
+              padding: '4px 8px',
+              backgroundColor: isDarkMode ? '#4b5563' : '#e5e7eb',
+              border: 'none',
+              borderRadius: '4px',
+              color: isDarkMode ? '#f9fafb' : '#111827',
+              cursor: 'pointer',
+              fontSize: '11px',
+              width: '100%'
+            }}
+          >
+            清空日志
+          </button>
+        </div>
+      )}
+      
+      {/* 调试日志开关按钮（仅在语音模式下显示） */}
+      {inputMode === 'voice' && (
+        <button
+          onClick={() => setShowDebugLog(!showDebugLog)}
+          style={{
+            position: 'fixed',
+            top: '10px',
+            right: showDebugLog ? '320px' : '10px',
+            width: '40px',
+            height: '40px',
+            backgroundColor: showDebugLog ? '#3b82f6' : (isDarkMode ? '#374151' : '#f3f4f6'),
+            border: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`,
+            borderRadius: '50%',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            fontSize: '12px',
+            color: isDarkMode ? '#f9fafb' : '#111827',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}
+          title="显示/隐藏识别日志"
+        >
+          📋
+        </button>
+      )}
+      
       {/* 音波效果显示区域（仅录音时显示） */}
       {isRecording && (
         <div style={getStyles().waveformArea}>
@@ -1272,7 +1538,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
           {recognizedText && (
             <div style={getStyles().transcriptArea}>
               <div style={getStyles().transcriptText}>
-                {recognizedText}
+                {/* 已确定文本：正常显示 */}
+                <span>{finalTextRef.current}</span>
+                {/* 正在识别的文本：淡色显示 */}
+                {isRecognizingSegment && (
+                  <span style={{ opacity: 0.7, color: isDarkMode ? '#9ca3af' : '#6b7280' }}>
+                    {recognizedText.substring(finalTextLength)}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -1336,15 +1609,33 @@ const ChatInput: React.FC<ChatInputProps> = ({
               onChange={(e) => {
                 if (inputMode !== 'voice' || isRecognizing || recognizedText) {
                   const newValue = e.target.value;
+                  
+                  // 如果正在识别（有正在识别的部分），不允许编辑
+                  const hasCurrentSegment = recognizedText && recognizedText.length > finalTextRef.current.length;
+                  if (hasCurrentSegment && isRecognizing) {
+                    // 恢复原值，不允许修改正在识别的部分
+                    e.target.value = displayValue;
+                    return;
+                  }
+                  
+                  // 识别结束后，允许编辑已确定文本
+                  // 将用户编辑后的完整文本作为新的finalTextRef
+                  finalTextRef.current = newValue;
+                  currentSegmentRef.current = '';
                   onChange(newValue);
+                  
                   if (recognizedText && newValue !== recognizedText) {
-                    setRecognizedText(null);
+                    setRecognizedText(newValue);
                   }
                 }
               }}
               onKeyPress={handleKeyPress}
               placeholder={displayPlaceholder}
-              readOnly={inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !isTouchDevice()}
+              readOnly={
+                inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !isTouchDevice()
+                  ? true
+                  : isRecognizingSegment // 正在识别时禁用编辑
+              }
               tabIndex={inputMode === 'voice' && !recognizedText && isTouchDevice() ? -1 : undefined}
               onFocus={handleInputFocus}
               onContextMenu={handleInputContextMenu}
@@ -1356,7 +1647,25 @@ const ChatInput: React.FC<ChatInputProps> = ({
               onKeyDown={(e) => {
                 if (inputMode === 'voice' && !isRecording && !isRecognizing && !recognizedText && !isTouchDevice()) {
                   e.preventDefault();
+                  return;
                 }
+                
+                // 处理删除功能：只允许删除正在识别的部分（currentSegmentRef）
+                // 检查是否有正在识别的部分（通过比较 recognizedText 和 finalTextRef 的长度）
+                const hasCurrentSegment = recognizedText && recognizedText.length > finalTextRef.current.length;
+                if (e.key === 'Backspace' && hasCurrentSegment && isRecognizing) {
+                  // 如果正在识别，只删除currentSegmentRef
+                  currentSegmentRef.current = '';
+                  const fullText = finalTextRef.current;
+                  setRecognizedText(fullText);
+                  onChange(fullText);
+                  e.preventDefault();
+                  return;
+                }
+                
+                // 如果currentSegmentRef为空，正常删除finalTextRef的最后一个字符
+                // 但已确定的文本（finalTextRef）不允许删除，所以这里不做特殊处理
+                // 让浏览器默认行为处理（用户可以通过正常编辑删除）
               }}
               disabled={disabled}
               style={

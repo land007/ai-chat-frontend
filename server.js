@@ -559,6 +559,9 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
     this.ws = null;
     this.isRunning = false;
     this.eventIdCounter = 0;
+    this.isSessionReady = false; // 会话是否已就绪（收到session.created）
+    this.lastConfirmedText = ''; // 最后确认的文本（从text字段）
+    this.lastStashText = ''; // 最后的stash文本（实时猜测）
   }
 
   /**
@@ -603,6 +606,9 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
         this.ws.on('open', () => {
           logger.info('[语音识别] WebSocket连接已建立');
           this.isRunning = true;
+          this.isSessionReady = false; // 重置标志，等待session.created
+          this.lastConfirmedText = ''; // 重置已确认文本
+          this.lastStashText = ''; // 重置stash文本
           this._sendSessionUpdate(config);
           resolve();
         });
@@ -682,7 +688,7 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
 
     if (this.ws && this.ws.readyState === 1) {
       this.ws.send(JSON.stringify(sessionConfig));
-      logger.debug('[语音识别] 发送session.update:', JSON.stringify(sessionConfig, null, 2));
+      logger.debug('[语音识别] 🟢 [→阿里云] session.update:', JSON.stringify(sessionConfig, null, 2));
     }
   }
 
@@ -692,6 +698,10 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
   async sendAudio(audioData) {
     if (!this.ws || this.ws.readyState !== 1) {
       throw new Error('WebSocket未连接');
+    }
+
+    if (!this.isSessionReady) {
+      throw new Error('会话未就绪，请等待ready消息后再发送音频数据');
     }
 
     if (!this.isRunning) {
@@ -715,9 +725,9 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
     }
     this._audioChunkCount++;
     if (this._audioChunkCount % 100 === 0) {
-      logger.info('[语音识别] 已发送音频块:', this._audioChunkCount, '大小:', audioData.length, 'bytes');
+      logger.info('[语音识别] 🟢 [→阿里云] 已发送音频块:', this._audioChunkCount, '大小:', audioData.length, 'bytes');
     } else {
-      logger.debug('[语音识别] 发送音频块:', eventId, '大小:', audioData.length, 'bytes');
+      logger.debug('[语音识别] 🟢 [→阿里云] 音频块:', eventId, '大小:', audioData.length, 'bytes');
     }
   }
 
@@ -736,18 +746,63 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
     };
 
     this.ws.send(JSON.stringify(commitEvent));
-    logger.info('[语音识别] 发送commit事件');
+    logger.info('[语音识别] 🟢 [→阿里云] commit事件');
   }
 
   /**
-   * 关闭连接
+   * 处理未确认的stash文本（用户松手或连接关闭时调用）
+   * 将最后一个stash文本作为isFinal: true发送
+   * 关键：在关闭阿里云连接前调用，因为关闭后stash不会再移动到text字段
+   */
+  _finalizePendingStash() {
+    // 检查是否有未确认的stash文本
+    // 确保 lastConfirmedText 是字符串类型
+    const lastConfirmed = (this.lastConfirmedText !== undefined && this.lastConfirmedText !== null) ? String(this.lastConfirmedText) : '';
+    if (this.lastStashText && this.lastStashText !== lastConfirmed) {
+      // 提取未确认的部分（stash中超出已确认文本的部分）
+      const pendingText = this.lastStashText.slice(lastConfirmed.length);
+      if (pendingText) {
+        logger.info('[语音识别] 🟣 [→客户端] 未确认的stash文本 (isFinal: true)', {
+          pendingText: pendingText,
+          lastStash: this.lastStashText,
+          lastConfirmed: this.lastConfirmedText
+        });
+        this._emitTranscript(pendingText, true);
+        this.lastConfirmedText = this.lastStashText; // 更新已确认文本
+        this.lastStashText = ''; // 清空stash文本
+      }
+    }
+  }
+
+  /**
+   * 关闭连接（关闭到阿里云的连接，不关闭客户端WebSocket）
    */
   async close() {
+    logger.info('[语音识别] 关闭阿里云连接', {
+      isRunning: this.isRunning,
+      wsExists: !!this.ws,
+      wsReadyState: this.ws ? this.ws.readyState : 'null',
+      lastStash: this.lastStashText,
+      lastConfirmed: this.lastConfirmedText
+    });
+    
+    // 在关闭阿里云连接前，处理未确认的stash文本
+    // 因为关闭连接后，stash不会再移动到text字段
+    this._finalizePendingStash();
+    
     this.isRunning = false;
     
     if (this.ws) {
       if (this.ws.readyState === 1) {
+        logger.info('[语音识别] 执行阿里云WebSocket关闭', {
+          code: 1000,
+          reason: 'ASR completed'
+        });
         this.ws.close(1000, 'ASR completed');
+      } else {
+        logger.warn('[语音识别] 阿里云WebSocket状态异常，无法关闭', {
+          readyState: this.ws.readyState
+        });
       }
       this.ws = null;
     }
@@ -757,12 +812,12 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
    * 处理接收到的消息
    */
   _handleMessage(data) {
-    logger.debug('[语音识别] 收到事件:', JSON.stringify(data, null, 2));
+    logger.debug('[语音识别] 🔵 [阿里云←]事件:', JSON.stringify(data, null, 2));
 
     // 处理识别结果事件
     if (data.type === 'conversation.item.input_audio_transcription.completed') {
       const transcript = data.transcript || '';
-      logger.info('[语音识别] 最终识别结果:', transcript);
+      logger.info('[语音识别] 🔵 [阿里云←]最终识别结果:', transcript);
       this._emitTranscript(transcript, true);
       this._emitComplete();
       this.isRunning = false;
@@ -774,37 +829,71 @@ class AliSpeechRecognitionAdapter extends SpeechRecognitionService {
       // 增量识别结果（实时转录）
       const transcript = data.delta || '';
       if (transcript) {
-        logger.info('[语音识别] 增量识别结果:', transcript);
+        logger.info('[语音识别] 🔵 [阿里云←]增量识别结果:', transcript);
         this._emitTranscript(transcript, false);
       }
     } else if (data.type === 'conversation.item.input_audio_transcription.text') {
-      // 实时识别结果（阿里云使用text事件，包含stash字段）
-      const transcript = data.stash || data.text || '';
-      if (transcript) {
-        logger.info('[语音识别] 实时识别结果 (text事件):', transcript);
-        this._emitTranscript(transcript, false);
+      // 实时识别结果（阿里云使用text事件，包含text和stash字段）
+      // text: 已确认的文本
+      // stash: 实时猜测的文本
+      const confirmedText = data.text || ''; // 已确认的文本
+      const stashText = data.stash || '';    // 实时猜测的文本
+      
+      // 1. 如果有新的确认文本（text 字段变化），发送 isFinal: true
+      // 确保 lastConfirmedText 是字符串类型
+      const lastConfirmed = (this.lastConfirmedText !== undefined && this.lastConfirmedText !== null) ? String(this.lastConfirmedText) : '';
+      if (confirmedText && confirmedText !== lastConfirmed) {
+        // 提取新增的确认文本部分
+        const newConfirmedText = confirmedText.slice(lastConfirmed.length);
+        if (newConfirmedText) {
+          logger.info('[语音识别] 🔵 [阿里云←]新确认文本 (isFinal: true)', {
+            newText: newConfirmedText,
+            fullConfirmed: confirmedText,
+            lastConfirmed: lastConfirmed,
+            stash: stashText
+          });
+          this._emitTranscript(newConfirmedText, true);
+          this.lastConfirmedText = confirmedText; // 更新已确认文本
+        }
+      }
+      
+      // 2. 如果有实时猜测文本（stash 字段有值），发送全量 stash 文本，isFinal: false
+      if (stashText && stashText !== confirmedText) {
+        // 发送全量的 stash 文本（不是增量）
+        logger.info('[语音识别] 🔵 [阿里云←]实时猜测全量 (isFinal: false)', {
+          stash: stashText,
+          stashLength: stashText.length,
+          confirmed: confirmedText
+        });
+        this._emitTranscript(stashText, false);
+        // 更新最后一个stash文本
+        this.lastStashText = stashText;
+      } else if (stashText === confirmedText) {
+        // stash 与 text 相同，说明已确认，清空 lastStashText
+        this.lastStashText = '';
       }
     } else if (data.type === 'conversation.item.input_audio_buffer.speech_started') {
       // 检测到语音开始
-      logger.info('[语音识别] 检测到语音开始');
+      logger.info('[语音识别] 🔵 [阿里云←]语音开始事件');
     } else if (data.type === 'conversation.item.input_audio_buffer.speech_stopped') {
       // 检测到语音停止
-      logger.info('[语音识别] 检测到语音停止');
+      logger.info('[语音识别] 🔵 [阿里云←]语音停止事件');
     } else if (data.type === 'error') {
       // 错误事件
       const errorMessage = data.error?.message || data.error?.code || '未知错误';
-      logger.error('[语音识别] 错误事件:', errorMessage);
+      logger.error('[语音识别] 🔵 [阿里云←]错误事件:', errorMessage);
       this._emitError(errorMessage);
     } else if (data.type === 'session.updated') {
       // 会话更新确认
-      logger.info('[语音识别] 会话已更新');
+      logger.info('[语音识别] 🔵 [阿里云←]会话更新事件');
     } else if (data.type === 'session.created') {
       // 会话创建确认（通路完全打通）
-      logger.info('[语音识别] 会话已创建，通路完全打通');
+      logger.info('[语音识别] 🔵 [阿里云←]会话创建事件，通路完全打通');
+      this.isSessionReady = true; // 标记会话已就绪
       this._emitReady(); // 通知客户端连接已就绪
     } else {
       // 其他事件
-      logger.debug('[语音识别] 收到其他事件:', data.type);
+      logger.debug('[语音识别] 🔵 [阿里云←]其他事件:', data.type);
     }
   }
 }
@@ -2879,6 +2968,7 @@ wss.on('connection', async (ws, req) => {
 
     // 注册回调
     adapter.onTranscript((text, isFinal) => {
+      logger.debug('[语音识别WS] 🟣 [→客户端] transcript:', { text, isFinal });
       ws.send(JSON.stringify({
         type: 'transcript',
         text: text,
@@ -2887,6 +2977,7 @@ wss.on('connection', async (ws, req) => {
     });
 
     adapter.onError((error) => {
+      logger.warn('[语音识别WS] 🟣 [→客户端] error:', error);
       ws.send(JSON.stringify({
         type: 'error',
         message: error
@@ -2894,6 +2985,7 @@ wss.on('connection', async (ws, req) => {
     });
 
     adapter.onComplete(() => {
+      logger.info('[语音识别WS] 🟣 [→客户端] complete');
       ws.send(JSON.stringify({
         type: 'complete'
       }));
@@ -2901,7 +2993,7 @@ wss.on('connection', async (ws, req) => {
 
     // 注册就绪回调（通路完全打通后发送ready消息）
     adapter.onReady(() => {
-      logger.info('[语音识别WS] ✅ 通路完全打通，向客户端发送ready消息');
+      logger.info('[语音识别WS] 🟣 [→客户端] ready消息（通路完全打通）');
       ws.send(JSON.stringify({
         type: 'ready'
       }));
@@ -2916,6 +3008,7 @@ wss.on('connection', async (ws, req) => {
       logger.info('[语音识别WS] ✅ 会话已自动启动（方案1），模式:', mode, '语言:', language, '等待session.created事件...');
     } catch (error) {
       logger.error('[语音识别WS] 启动会话失败:', error.message);
+      logger.warn('[语音识别WS] 🟣 [→客户端] error: 启动会话失败');
       ws.send(JSON.stringify({
         type: 'error',
         message: `启动会话失败: ${error.message}`
@@ -2923,6 +3016,7 @@ wss.on('connection', async (ws, req) => {
     }
   } catch (error) {
     logger.error('[语音识别WS] 初始化适配器失败:', error.message);
+    logger.warn('[语音识别WS] 🟣 [→客户端] error: 初始化失败');
     ws.send(JSON.stringify({
       type: 'error',
       message: `初始化失败: ${error.message}`
@@ -2938,6 +3032,7 @@ wss.on('connection', async (ws, req) => {
         if (!adapter) {
           // 适配器未初始化，拒绝音频数据（连接确认后才开始录音）
           logger.warn('[语音识别WS] 适配器未初始化，拒绝音频数据（连接确认后才开始录音）');
+          logger.warn('[语音识别WS] 🟣 [→客户端] error: 连接未就绪');
           ws.send(JSON.stringify({
             type: 'error',
             message: '连接未就绪，请等待ready消息后再发送音频数据'
@@ -2963,22 +3058,32 @@ wss.on('connection', async (ws, req) => {
           }
           ws._audioChunkCount++;
           if (ws._audioChunkCount % 100 === 0) {
-            logger.debug('[语音识别WS] 已接收并转发音频块:', ws._audioChunkCount, '大小:', audioBuffer.length, 'bytes', '包含非零数据:', hasNonZeroData);
+            logger.debug('[语音识别WS] 🟡 [客户端←]音频块并转发:', ws._audioChunkCount, '大小:', audioBuffer.length, 'bytes', '包含非零数据:', hasNonZeroData);
           }
         } catch (error) {
-          logger.error('[语音识别WS] 发送音频失败:', error.message);
-          ws.send(JSON.stringify({
-            type: 'error',
-            message: `发送音频失败: ${error.message}`
-          }));
+          if (error.message.includes('会话未就绪')) {
+            logger.warn('[语音识别WS] 会话未就绪，拒绝音频数据');
+            logger.warn('[语音识别WS] 🟣 [→客户端] error: 会话未就绪');
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: '会话未就绪，请等待ready消息后再发送音频数据'
+            }));
+          } else {
+            logger.error('[语音识别WS] 发送音频失败:', error.message);
+            logger.warn('[语音识别WS] 🟣 [→客户端] error: 发送音频失败');
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: `发送音频失败: ${error.message}`
+            }));
+          }
         }
-        return;
+        return; // 二进制消息处理完毕，不继续处理文本消息
       }
 
       // 文本消息：解析JSON
       // 方案1：不再需要 start 消息，适配器在连接时已自动初始化
       const data = JSON.parse(message.toString());
-      logger.info('[语音识别WS] 收到客户端消息:', data.type);
+      logger.info('[语音识别WS] 🟡 [客户端←]消息:', data.type);
 
       // 方案1：兼容旧格式，但不再处理 start 消息（适配器已自动初始化）
       if (data.type === 'start') {
@@ -3020,6 +3125,40 @@ wss.on('connection', async (ws, req) => {
             type: 'error',
             message: `提交音频失败: ${error.message}`
           }));
+        }
+
+      } else if (data.type === 'stop' || data.type === 'release') {
+        // 用户松手，通知服务器
+        if (!adapter) {
+          logger.warn('[语音识别WS] 适配器未初始化，忽略松手消息');
+          return;
+        }
+
+        logger.info('[语音识别WS] 收到用户松手通知', {
+          type: data.type,
+          isRunning: adapter.isRunning,
+          lastStash: adapter.lastStashText,
+          lastConfirmed: adapter.lastConfirmedText
+        });
+        
+        // 标记用户已松手
+        adapter.userReleased = true;
+        
+        // 关闭到阿里云的连接，然后关闭WebSocket连接（按需连接模式）
+        // close() 方法中会先处理未确认的stash文本，然后关闭连接
+        try {
+          logger.info('[语音识别WS] 用户松手，关闭阿里云连接', {
+            lastStash: adapter.lastStashText,
+            lastConfirmed: adapter.lastConfirmedText
+          });
+          await adapter.close();
+          logger.info('[语音识别WS] 阿里云连接已关闭，关闭WebSocket连接');
+          // 关闭WebSocket连接（按需连接模式）
+          ws.close(1000, 'User released');
+        } catch (error) {
+          logger.error('[语音识别WS] 关闭阿里云连接失败:', error.message);
+          // 即使关闭失败，也关闭WebSocket连接
+          ws.close(1000, 'User released');
         }
 
       } else {

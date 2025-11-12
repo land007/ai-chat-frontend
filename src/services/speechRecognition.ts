@@ -16,6 +16,7 @@ class SpeechRecognitionService {
   private transcriptCallbacks: Array<(text: string, isFinal: boolean) => void> = [];
   private errorCallbacks: Array<(error: string) => void> = [];
   private completeCallbacks: Array<() => void> = [];
+  private closeCallbacks: Array<() => void> = [];
   
   // 用于保存connect Promise的resolve和reject
   private connectResolve: (() => void) | null = null;
@@ -90,6 +91,9 @@ class SpeechRecognitionService {
             this.connectReject(new Error('连接已关闭'));
             this.connectReject = null;
           }
+
+          // 触发关闭回调（用于清理资源）
+          this.emitClose();
 
           // 注意：重连需要配置信息，但这里没有保存，所以不支持自动重连
           // 如果需要重连，需要调用 start() 方法
@@ -243,7 +247,28 @@ class SpeechRecognitionService {
   }
 
   /**
-   * 关闭连接
+   * 停止识别（用户松手时调用，通知服务器关闭连接）
+   */
+  async stop(): Promise<void> {
+    if (!this.isConnected) {
+      console.warn('[语音识别] WebSocket未连接，无法发送stop消息');
+      return;
+    }
+
+    try {
+      this.sendMessage({
+        type: 'stop'
+      });
+      console.log('[语音识别] 已发送stop消息，等待服务器关闭连接');
+    } catch (error: any) {
+      console.error('[语音识别] 发送stop消息失败:', error.message);
+      // 如果发送失败，直接关闭连接
+      await this.close();
+    }
+  }
+
+  /**
+   * 关闭连接（仅在需要主动关闭时调用，正常情况下由服务器关闭）
    */
   async close(): Promise<void> {
     this.isConnected = false;
@@ -279,12 +304,20 @@ class SpeechRecognitionService {
   }
 
   /**
+   * 注册关闭回调（连接关闭时触发，用于清理资源）
+   */
+  onClose(callback: () => void) {
+    this.closeCallbacks.push(callback);
+  }
+
+  /**
    * 移除回调
    */
   removeCallbacks() {
     this.transcriptCallbacks = [];
     this.errorCallbacks = [];
     this.completeCallbacks = [];
+    this.closeCallbacks = [];
   }
 
   /**
@@ -306,6 +339,13 @@ class SpeechRecognitionService {
    */
   private emitComplete() {
     this.completeCallbacks.forEach(cb => cb());
+  }
+
+  /**
+   * 触发关闭事件
+   */
+  private emitClose() {
+    this.closeCallbacks.forEach(cb => cb());
   }
 
   /**
