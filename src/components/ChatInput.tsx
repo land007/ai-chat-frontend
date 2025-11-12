@@ -1193,15 +1193,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
         // 波形和时间显示容器
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
         gap: '16px',
         height: '56px'
+      },
+      waveformWrapper: {
+        flex: 1,
+        maxWidth: '320px'
       },
       recordingDuration: {
         fontSize: '14px',
         color: mutedColor,
-        minWidth: '50px',
-        textAlign: 'center' as const
+        whiteSpace: 'nowrap' as const,
+        paddingRight: '6px'
       },
       inputArea: {
         backgroundColor: surfaceColor,
@@ -1551,15 +1554,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
           )}
           {/* 波形和时间显示容器 */}
           <div style={getStyles().waveformContainer}>
-            <FourDotWaveform
-              analyserNode={analyserRef.current}
-              isRecording={isRecording}
-              isDarkMode={isDarkMode}
-              minRadius={8}
-              maxRadius={24}
-              spacing={24}
-              sampleRate={audioContextRef.current?.sampleRate || 16000}
-            />
+            <div style={getStyles().waveformWrapper}>
+              <FourDotWaveform
+                analyserNode={analyserRef.current}
+                isRecording={isRecording}
+                isDarkMode={isDarkMode}
+                minRadius={8}
+                maxRadius={24}
+                spacing={24}
+                sampleRate={audioContextRef.current?.sampleRate || 16000}
+              />
+            </div>
             <div style={getStyles().recordingDuration}>
               {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
               {String(recordingDuration % 60).padStart(2, '0')}

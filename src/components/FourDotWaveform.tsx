@@ -322,9 +322,7 @@ const FourDotWaveform: React.FC<FourDotWaveformProps> = ({
       style={{
         width: '100%',
         height: '60px',
-        maxWidth: '320px',
-        display: 'block',
-        margin: '0 auto'
+        display: 'block'
       }}
       className={className}
     />
