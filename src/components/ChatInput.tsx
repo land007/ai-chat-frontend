@@ -1766,7 +1766,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     pointerEvents: 'none' as const
                   }}
                 >
-                  按住说话
+                  {isRecording ? '松开结束' : '按住说话'}
                 </div>
               </button>
             </div>
