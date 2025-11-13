@@ -65,6 +65,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const isConnectionReadyRef = useRef<boolean>(false); // 连接是否已就绪
   const isSendingBufferedRef = useRef<boolean>(false); // 是否正在发送缓冲音频
   const maxBufferSize = 150; // 最大缓冲音频块数（约3秒，假设50块/秒）
+  const touchStartTimerRef = useRef<NodeJS.Timeout | null>(null); // 延迟开始录音的定时器（移动端按住检测）
+  const isTouchHoldingRef = useRef<boolean>(false); // 标记用户是否正在按住（用于区分点击和按住）
   
   // 检测是否为触摸设备
   const isTouchDevice = useCallback(() => {
@@ -957,13 +959,41 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (inputMode === 'voice' && !isRecording && !isRecognizing) {
       e.preventDefault();
       e.stopPropagation();
-      console.log('[语音输入] 触摸设备，按住开始录音（Manual模式）');
-      // 立即设置 isRecognizing 为 true，确保按钮立即显示，不显示输入框
-      setIsRecognizing(true);
-      // 然后异步开始录音
-      startRecording();
+      
+      // 移动端：使用延迟机制，只有按住超过一定时间才开始录音
+      if (isTouchDevice()) {
+        console.log('[语音输入] 移动端触摸开始，设置延迟定时器（150ms）');
+        isTouchHoldingRef.current = true;
+        
+        // 清除之前的定时器（如果有）
+        if (touchStartTimerRef.current) {
+          clearTimeout(touchStartTimerRef.current);
+          touchStartTimerRef.current = null;
+        }
+        
+        // 设置延迟定时器，150ms后开始录音
+        touchStartTimerRef.current = setTimeout(() => {
+          // 检查用户是否还在按住
+          if (isTouchHoldingRef.current && !isRecording && !isRecognizing) {
+            console.log('[语音输入] 移动端按住超过150ms，开始录音（Manual模式）');
+            touchStartTimerRef.current = null;
+            // 立即设置 isRecognizing 为 true，确保按钮立即显示，不显示输入框
+            setIsRecognizing(true);
+            // 然后异步开始录音
+            startRecording();
+          } else {
+            console.log('[语音输入] 移动端延迟期间状态已变化，取消开始录音');
+            touchStartTimerRef.current = null;
+          }
+        }, 150);
+      } else {
+        // PC端：立即开始录音（保持原有逻辑）
+        console.log('[语音输入] PC端点击开始录音（VAD模式）');
+        setIsRecognizing(true);
+        startRecording();
+      }
     }
-  }, [inputMode, isRecording, isRecognizing, startRecording, stopRecording]);
+  }, [inputMode, isRecording, isRecognizing, startRecording, stopRecording, isTouchDevice]);
 
   // 处理语音按钮的触摸移动事件（防止触发滚动或其他交互）
   const handleVoiceButtonTouchMove = useCallback((e: React.TouchEvent) => {
@@ -978,6 +1008,23 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleVoiceButtonTouchEnd = useCallback((e: React.TouchEvent) => {
     console.log('[语音输入] handleVoiceButtonTouchEnd 触发', { inputMode, isRecording, isRecognizing, isStopping: isStoppingRef.current });
+    
+    // 移动端：标记不再按住
+    if (isTouchDevice()) {
+      isTouchHoldingRef.current = false;
+      
+      // 如果延迟定时器还在，说明用户快速点击，取消开始录音
+      if (touchStartTimerRef.current) {
+        console.log('[语音输入] 移动端快速点击，取消开始录音');
+        clearTimeout(touchStartTimerRef.current);
+        touchStartTimerRef.current = null;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+    
+    // 如果已经开始录音，正常停止
     if (inputMode === 'voice' && isRecording && !isStoppingRef.current) {
       isStoppingRef.current = true;
       e.preventDefault();
@@ -991,10 +1038,21 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } else {
       console.log('[语音输入] handleVoiceButtonTouchEnd 条件不满足，不执行停止录音');
     }
-  }, [inputMode, isRecording, isRecognizing, stopRecording]);
+  }, [inputMode, isRecording, isRecognizing, stopRecording, isTouchDevice]);
 
   const handleVoiceButtonTouchCancel = useCallback((e: React.TouchEvent) => {
     console.log('[语音输入] handleVoiceButtonTouchCancel 触发', { inputMode, isRecording, isRecognizing });
+    
+    // 移动端：标记不再按住，清除延迟定时器
+    if (isTouchDevice()) {
+      isTouchHoldingRef.current = false;
+      if (touchStartTimerRef.current) {
+        console.log('[语音输入] 移动端触摸取消，清除延迟定时器');
+        clearTimeout(touchStartTimerRef.current);
+        touchStartTimerRef.current = null;
+      }
+    }
+    
     // 触摸取消时也结束录音（例如用户手指移出按钮区域）
     if (inputMode === 'voice' && isRecording) {
       e.preventDefault();
@@ -1002,11 +1060,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
       console.log('[语音输入] 触摸取消，结束录音');
       stopRecording();
     }
-  }, [inputMode, isRecording, isRecognizing, stopRecording]);
+  }, [inputMode, isRecording, isRecognizing, stopRecording, isTouchDevice]);
 
   // 处理指针事件（Pointer Events API，更现代的方式，支持触摸和鼠标）
   const handleVoiceButtonPointerUp = useCallback((e: React.PointerEvent) => {
     console.log('[语音输入] handleVoiceButtonPointerUp 触发', { inputMode, isRecording, isRecognizing, isStopping: isStoppingRef.current });
+    
+    // 移动端：如果是触摸指针，标记不再按住，清除延迟定时器
+    if (isTouchDevice() && e.pointerType === 'touch') {
+      isTouchHoldingRef.current = false;
+      if (touchStartTimerRef.current) {
+        console.log('[语音输入] 移动端指针松开（触摸），清除延迟定时器');
+        clearTimeout(touchStartTimerRef.current);
+        touchStartTimerRef.current = null;
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+    
+    // 如果已经开始录音，正常停止
     if (inputMode === 'voice' && isRecording && !isStoppingRef.current) {
       isStoppingRef.current = true;
       e.preventDefault();
@@ -1018,7 +1091,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         isStoppingRef.current = false;
       }, 100);
     }
-  }, [inputMode, isRecording, isRecognizing, stopRecording]);
+  }, [inputMode, isRecording, isRecognizing, stopRecording, isTouchDevice]);
 
   // 处理鼠标事件（作为备用方案）
   const handleVoiceButtonMouseUp = useCallback((e: React.MouseEvent) => {
@@ -1035,6 +1108,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }, 100);
     }
   }, [inputMode, isRecording, isRecognizing, stopRecording]);
+
+  // 处理按钮点击事件（移动端阻止默认行为，防止快速点击触发录音）
+  const handleVoiceButtonClick = useCallback((e: React.MouseEvent) => {
+    // 移动端：阻止默认点击行为，只允许按住开始录音
+    if (isTouchDevice() && inputMode === 'voice') {
+      console.log('[语音输入] 移动端点击事件，阻止默认行为（只允许按住开始）');
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    // PC端：允许点击开始（但实际由 mousedown/mouseup 处理）
+  }, [inputMode, isTouchDevice]);
 
   // 处理输入框的触摸事件（移动端 - 仅在识别结果后允许编辑）
   const handleInputTouchStart = useCallback((e: React.TouchEvent) => {
@@ -1115,6 +1199,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
       if (closeTimeoutRef.current) {
         clearTimeout(closeTimeoutRef.current);
         closeTimeoutRef.current = null;
+      }
+      if (touchStartTimerRef.current) {
+        clearTimeout(touchStartTimerRef.current);
+        touchStartTimerRef.current = null;
       }
       if (mediaRecorderRef.current) {
         try {
@@ -1197,8 +1285,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         height: '56px'
       },
       waveformWrapper: {
-        flex: 1,
-        maxWidth: '320px'
+        flex: 1
       },
       recordingDuration: {
         fontSize: '14px',
@@ -1582,6 +1669,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               {/* 语音按钮 */}
               <button
                 type="button"
+                onClick={handleVoiceButtonClick}
                 onTouchStart={handleVoiceButtonTouchStart}
                 onTouchMove={handleVoiceButtonTouchMove}
                 onTouchEnd={handleVoiceButtonTouchEnd}
