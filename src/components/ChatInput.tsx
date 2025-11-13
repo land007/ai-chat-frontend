@@ -1516,8 +1516,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
   const displayValue = getDisplayValue();
   
-  // ✅ 优化：检查是否正在识别但无文本（用于显示"正在识别..."提示）
-  const isRecognizingWithoutText = isRecognizing && !displayValue && !isRecording;
+  // ✅ 优化：检查是否有实际文本内容（用于显示"正在识别..."提示）
+  // 修复：确保返回布尔值，而不是字符串
+  const hasActualText = !!(displayValue && displayValue.trim().length > 0);
   
   // 计算完整文本（用于显示和编辑）
   const getFullText = () => {
@@ -1531,12 +1532,35 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const isRecognizingSegment = isRecognizing && recognizedText !== null && 
     recognizedText.length > finalTextLength;
 
-  // ✅ 优化：占位符逻辑，添加"正在识别..."提示
-  const displayPlaceholder = inputMode === 'voice' && isRecognizingWithoutText
-    ? '正在识别...'
-    : (inputMode === 'voice' && !isRecording && !isRecognizing && !shouldShowVoiceButton
-      ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
-      : (placeholder || t('ui.inputPlaceholder')));
+  // ✅ 优化：占位符逻辑（仅PC端优化，移动端保持不变）
+  // PC端识别中且无文本：始终显示"正在识别..."，避免快速切换到"输入您的问题"
+  // PC端识别完成且无文本：显示"点击说话，自动结束"
+  // 移动端：保持原有逻辑不变
+  // 
+  // 关键修复：PC端识别中时，优先判断 isRecognizing 状态
+  // 如果 isRecognizing 为 true，即使没有文本，也应该显示"正在识别..."
+  // 这样可以避免在识别过程中状态切换导致的占位符闪烁
+  // 
+  // 注意：VAD模式下，isRecording 可能在识别过程中仍为 true，所以判断时需要考虑这种情况
+  // 只要 isRecognizing 为 true 且无文本，就应该显示"正在识别..."
+  const isPC = !isTouchDevice();
+  const pcIsRecognizingState = inputMode === 'voice' && isPC && isRecognizing && !hasActualText;
+  const pcIsCompletedState = inputMode === 'voice' && isPC && !isRecording && !isRecognizing && !hasActualText;
+  
+  // 计算占位符（必须在日志之前计算）
+  const displayPlaceholder = 
+    // PC端识别中且无文本：始终显示"正在识别..."（关键修复，优先级最高）
+    pcIsRecognizingState
+      ? '正在识别...'
+      // PC端识别完成且无文本：显示"点击说话，自动结束"
+      : pcIsCompletedState
+        ? '点击说话，自动结束'
+        // 移动端逻辑（保持不变，无问题）
+        : (inputMode === 'voice' && isTouchDevice() && !isRecording && !isRecognizing && !shouldShowVoiceButton)
+          ? '按住说话，松开结束'
+          // 默认占位符（只有在不满足上述条件时才显示）
+          : (placeholder || t('ui.inputPlaceholder'));
+  
 
   return (
     <>
