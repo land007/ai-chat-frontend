@@ -423,20 +423,32 @@ const ChatInput: React.FC<ChatInputProps> = ({
           clearTimeout(recognitionTimeoutRef.current);
           recognitionTimeoutRef.current = null;
         }
-        setIsRecognizing(false);
-        setIsRecording(false);
-        isRecordingRef.current = false;
         
-        // 识别完成时，保留已确定的文本
+        // ✅ 优化：识别完成时，确保文本正确显示
         const finalText = finalTextRef.current;
         currentSegmentRef.current = '';
+        
+        // 更新识别文本状态
         setRecognizedText(prevText => {
+          // 如果之前没有文本或为空，使用最终文本
           if (!prevText || prevText.trim() === '') {
             onChange(finalText || '');
             return finalText || null;
           }
+          // 如果之前有文本，确保使用最终文本（可能更准确）
+          if (finalText && finalText !== prevText) {
+            onChange(finalText);
+            return finalText;
+          }
           return prevText;
         });
+        
+        // ✅ 优化：识别完成后才设置 isRecognizing = false
+        setIsRecognizing(false);
+        setIsRecording(false);
+        isRecordingRef.current = false;
+        
+        console.log('[语音输入] ✅ 识别完成，最终文本:', finalText);
         
         // 注意：识别完成时，不在这里清理资源
         // 应该等待服务器关闭连接，在 onClose 回调中清理资源
@@ -781,6 +793,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
     setIsRecording(false);
     isRecordingRef.current = false;
+    
+    // ✅ 优化：检查是否有识别文本，决定是否立即显示输入框
+    const hasRecognizedText = finalTextRef.current || currentSegmentRef.current;
+    if (hasRecognizedText) {
+      // 有文本：立即更新显示，让用户看到识别结果
+      const fullText = finalTextRef.current + currentSegmentRef.current;
+      setRecognizedText(fullText);
+      onChange(fullText);
+      console.log('[语音输入] ✅ 检测到识别文本，立即显示输入框:', fullText);
+    } else {
+      console.log('[语音输入] ⏳ 暂无识别文本，保持识别状态，等待服务器返回结果');
+    }
+    // 注意：保持 isRecognizing = true，等待服务器返回最终结果
     
     // 停止发送音频数据
     if (voiceInputModeRef.current === 'manual') {
@@ -1469,9 +1494,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   // 判断是否应该在移动端显示独立语音按钮
-  // 按住时（isRecording = true 或 isRecognizing = true）：始终显示按钮，即使有识别结果
-  // 松开后（isRecording = false 且 isRecognizing = false）：显示输入框，等待最终识别结果
-  // 注意：isRecognizing 在初始化时就会变为 true，所以即使 isRecording 还没 true，也应该显示按钮
+  // ✅ 优化后的逻辑（保持原有行为，但改善即时反馈）：
+  // - 正在录音时：始终显示按钮
+  // - 识别中时：显示按钮（保持原有逻辑，不管有没有文本）
+  // - 识别完成且无文本时：显示按钮
+  // - 识别完成且有文本时：显示输入框（让用户看到识别结果）
+  const hasAnyText = finalTextRef.current || currentSegmentRef.current || recognizedText || value.trim();
   const shouldShowVoiceButton = inputMode === 'voice' && isTouchDevice() && 
     (isRecording || isRecognizing || (!recognizedText && !value.trim()));
   
@@ -1488,6 +1516,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
   const displayValue = getDisplayValue();
   
+  // ✅ 优化：检查是否正在识别但无文本（用于显示"正在识别..."提示）
+  const isRecognizingWithoutText = isRecognizing && !displayValue && !isRecording;
+  
   // 计算完整文本（用于显示和编辑）
   const getFullText = () => {
     return finalTextRef.current + currentSegmentRef.current;
@@ -1500,9 +1531,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const isRecognizingSegment = isRecognizing && recognizedText !== null && 
     recognizedText.length > finalTextLength;
 
-  const displayPlaceholder = inputMode === 'voice' && !isRecording && !isRecognizing && !shouldShowVoiceButton
-    ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
-    : (placeholder || t('ui.inputPlaceholder'));
+  // ✅ 优化：占位符逻辑，添加"正在识别..."提示
+  const displayPlaceholder = inputMode === 'voice' && isRecognizingWithoutText
+    ? '正在识别...'
+    : (inputMode === 'voice' && !isRecording && !isRecognizing && !shouldShowVoiceButton
+      ? (isTouchDevice() ? '按住说话，松开结束' : '点击说话，自动结束')
+      : (placeholder || t('ui.inputPlaceholder')));
 
   return (
     <>
@@ -1621,11 +1655,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </button>
       )}
       
-      {/* 音波效果显示区域（仅录音时显示） */}
-      {isRecording && (
+      {/* 音波效果显示区域（✅ 优化：录音时显示波形，识别中时显示文本） */}
+      {(isRecording || (isRecognizing && hasAnyText)) && (
         <div style={getStyles().waveformArea}>
           {/* 识别内容显示区域（在波形上方） */}
-          {recognizedText && (
+          {hasAnyText && (
             <div style={getStyles().transcriptArea}>
               <div style={getStyles().transcriptText}>
                 {/* 已确定文本：正常显示 */}
@@ -1636,27 +1670,44 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     {recognizedText.substring(finalTextLength)}
                   </span>
                 )}
+                {/* 如果 recognizedText 为空但 ref 有值，显示 ref 的值 */}
+                {!recognizedText && (finalTextRef.current || currentSegmentRef.current) && (
+                  <span>{finalTextRef.current + currentSegmentRef.current}</span>
+                )}
               </div>
             </div>
           )}
-          {/* 波形和时间显示容器 */}
-          <div style={getStyles().waveformContainer}>
-            <div style={getStyles().waveformWrapper}>
-              <FourDotWaveform
-                analyserNode={analyserRef.current}
-                isRecording={isRecording}
-                isDarkMode={isDarkMode}
-                minRadius={8}
-                maxRadius={24}
-                spacing={24}
-                sampleRate={audioContextRef.current?.sampleRate || 16000}
-              />
+          {/* 波形和时间显示容器（仅在录音时显示） */}
+          {isRecording && (
+            <div style={getStyles().waveformContainer}>
+              <div style={getStyles().waveformWrapper}>
+                <FourDotWaveform
+                  analyserNode={analyserRef.current}
+                  isRecording={isRecording}
+                  isDarkMode={isDarkMode}
+                  minRadius={8}
+                  maxRadius={24}
+                  spacing={24}
+                  sampleRate={audioContextRef.current?.sampleRate || 16000}
+                />
+              </div>
+              <div style={getStyles().recordingDuration}>
+                {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
+                {String(recordingDuration % 60).padStart(2, '0')}
+              </div>
             </div>
-            <div style={getStyles().recordingDuration}>
-              {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:
-              {String(recordingDuration % 60).padStart(2, '0')}
+          )}
+          {/* 识别中但不在录音时的提示 */}
+          {!isRecording && isRecognizing && hasAnyText && (
+            <div style={{
+              padding: '8px 12px',
+              textAlign: 'center',
+              color: isDarkMode ? '#9ca3af' : '#6b7280',
+              fontSize: '14px'
+            }}>
+              正在识别...
             </div>
-          </div>
+          )}
         </div>
       )}
 
