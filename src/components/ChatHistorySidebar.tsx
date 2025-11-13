@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { MessageSquare, Search, Edit2, Trash2, X, Plus, Menu } from 'lucide-react';
 import { chatAPI } from '@/services/api';
 import { ChatSession } from '@/types';
@@ -20,6 +21,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
   currentSessionId,
   isDarkMode
 }) => {
+  const { t } = useTranslation();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
@@ -99,7 +101,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
   const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!window.confirm('确定要删除这个对话吗？')) {
+    if (!window.confirm(t('chatHistory.deleteConfirm'))) {
       return;
     }
 
@@ -115,7 +117,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
       }
     } catch (error) {
       console.error('[历史侧边栏] 删除失败:', error);
-      alert('删除失败，请重试');
+      alert(t('chatHistory.deleteFailed'));
     }
   };
 
@@ -144,7 +146,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
       setEditingSessionId(null);
     } catch (error) {
       console.error('[历史侧边栏] 更新标题失败:', error);
-      alert('更新标题失败，请重试');
+      alert(t('chatHistory.deleteFailed'));
     }
   };
 
@@ -192,13 +194,21 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth()) {
-      return '昨天';
+      return t('chatHistory.yesterday');
     }
     
     // 一周内
     if (diff < 7 * 24 * 60 * 60 * 1000) {
-      const days = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      return days[date.getDay()];
+      const weekdays = [
+        t('chatHistory.weekdays.0'),
+        t('chatHistory.weekdays.1'),
+        t('chatHistory.weekdays.2'),
+        t('chatHistory.weekdays.3'),
+        t('chatHistory.weekdays.4'),
+        t('chatHistory.weekdays.5'),
+        t('chatHistory.weekdays.6')
+      ];
+      return weekdays[date.getDay()];
     }
     
     // 其他
@@ -266,7 +276,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
             color: textColor,
             margin: 0
           }}>
-            历史对话
+            {t('chatHistory.title')}
           </h2>
           <button
             onClick={onClose}
@@ -280,7 +290,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
               alignItems: 'center',
               justifyContent: 'center'
             }}
-            title="关闭"
+            title={t('chatHistory.close')}
           >
             <X size={20} />
           </button>
@@ -310,7 +320,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
             onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
           >
             <Plus size={18} />
-            新建对话
+            {t('chatHistory.newChat')}
           </button>
         </div>
 
@@ -331,7 +341,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
             />
             <input
               type="text"
-              placeholder="搜索对话..."
+              placeholder={t('chatHistory.searchPlaceholder')}
               value={searchKeyword}
               onChange={handleSearchChange}
               style={{
@@ -365,7 +375,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
               color: mutedColor,
               fontSize: '14px'
             }}>
-              {searchKeyword ? '没有找到相关对话' : '暂无历史对话'}
+              {searchKeyword ? t('chatHistory.noResults') : t('chatHistory.empty')}
             </div>
           )}
 
@@ -436,8 +446,8 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
                         fontSize: '12px',
                         cursor: 'pointer'
                       }}
-                    >
-                      保存
+                      >
+                      {t('chatHistory.save')}
                     </button>
                     <button
                       onClick={handleCancelEdit}
@@ -451,7 +461,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
                         cursor: 'pointer'
                       }}
                     >
-                      取消
+                      {t('chatHistory.cancel')}
                     </button>
                   </div>
                 </div>
@@ -522,7 +532,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
                         }}
                         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverColor}
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        title="重命名"
+                        title={t('chatHistory.rename')}
                       >
                         <Edit2 size={14} />
                       </button>
@@ -546,7 +556,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
                           e.currentTarget.style.backgroundColor = 'transparent';
                           e.currentTarget.style.color = mutedColor;
                         }}
-                        title="删除"
+                        title={t('chatHistory.delete')}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -564,7 +574,7 @@ const ChatHistorySidebar: React.FC<ChatHistorySidebarProps> = ({
               color: mutedColor,
               fontSize: '14px'
             }}>
-              加载中...
+              {t('chatHistory.loading')}
             </div>
           )}
         </div>

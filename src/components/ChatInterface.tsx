@@ -182,7 +182,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
       console.log('[历史记录] 会话加载成功', { messageCount: detail.messages.length });
     } catch (error) {
       console.error('[历史记录] 加载会话失败:', error);
-      alert('加载会话失败，请重试');
+      alert(t('messages.loadSessionFailed'));
     } finally {
       setIsHistoryLoading(false);
     }
@@ -551,7 +551,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           },
           (error: string) => {
             // 检查是否是用户中止
-            if (error === '请求已取消') {
+            if (error === t('ui.requestCancelled')) {
               console.log('[UI] 请求已被用户取消');
               setIsStreamingThinking(false);
               setStreamingMessageId(null);
@@ -707,7 +707,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           },
           (error: string) => {
             // 检查是否是用户中止
-            if (error === '请求已取消') {
+            if (error === t('ui.requestCancelled')) {
               console.log('[UI] 请求已被用户取消');
               setIsStreamingThinking(false);
               setStreamingMessageId(null);
@@ -885,7 +885,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           },
           (error: string) => {
             // 检查是否是用户中止
-            if (error === '请求已取消') {
+            if (error === t('ui.requestCancelled')) {
               console.log('[UI] 请求已被用户取消');
               setIsStreamingThinking(false);
               setStreamingMessageId(null);
@@ -1041,7 +1041,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
           },
           (error: string) => {
             // 检查是否是用户中止
-            if (error === '请求已取消') {
+            if (error === t('ui.requestCancelled')) {
               console.log('[UI] 请求已被用户取消');
               setIsStreamingThinking(false);
               setStreamingMessageId(null);
@@ -1795,7 +1795,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             onMouseLeave={(e) => {
               Object.assign(e.currentTarget.style, getStyles().actionButton);
             }}
-            title="历史记录"
+            title={t('ui.history')}
           >
             <Menu size={18} />
           </button>
@@ -1852,7 +1852,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               onMouseLeave={(e) => {
                 Object.assign(e.currentTarget.style, getStyles().actionButton);
               }}
-              title="反馈管理"
+              title={t('ui.feedbackAdmin')}
             >
               <Settings size={18} />
             </button>
@@ -1868,7 +1868,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               onMouseLeave={(e) => {
                 Object.assign(e.currentTarget.style, getStyles().actionButton);
               }}
-              title="退出登录"
+              title={t('ui.logout')}
             >
               <LogOut size={18} />
             </button>
@@ -2123,7 +2123,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
               </div>
               <div style={getStyles().loadingBubble}>
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={getStyles().loadingText}>思考中...</span>
+                <span style={getStyles().loadingText}>{t('ui.thinking')}</span>
               </div>
             </div>
           </div>
@@ -2204,7 +2204,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
             color: isDarkMode ? '#f9fafb' : '#111827'
           }}>
             <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
-            <span>加载中...</span>
+            <span>{t('app.loading')}</span>
           </div>
         </div>
       )}

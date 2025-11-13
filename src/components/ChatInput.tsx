@@ -81,13 +81,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
         return {
           supported: false,
           reason: 'https',
-          message: '语音输入功能需要 HTTPS 环境，请使用 HTTPS 访问或使用 localhost'
+          message: t('voiceInput.errorHTTPSRequired')
         };
       }
       return {
         supported: false,
         reason: 'not_supported',
-        message: '浏览器不支持语音输入功能'
+          message: t('voiceInput.errorNotSupported')
       };
     }
     return {
@@ -95,7 +95,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       reason: null,
       message: null
     };
-  }, []);
+  }, [t]);
 
   // 请求麦克风权限
   const requestMicrophonePermission = useCallback(async (): Promise<boolean> => {
@@ -117,17 +117,17 @@ const ChatInput: React.FC<ChatInputProps> = ({
       console.error('[语音输入] 麦克风权限请求失败:', error);
       setHasPermission(false);
       if (error.name === 'NotAllowedError') {
-        setRecordingError('需要麦克风权限才能使用语音输入，请在浏览器设置中允许麦克风权限');
+        setRecordingError(t('voiceInput.errorMicrophonePermission'));
       } else if (error.name === 'NotFoundError') {
-        setRecordingError('未检测到麦克风设备，请检查设备连接');
+        setRecordingError(t('voiceInput.errorNoMicrophone'));
       } else if (error.name === 'NotSupportedError') {
-        setRecordingError('浏览器不支持麦克风访问，请使用 HTTPS 或 localhost');
+        setRecordingError(t('voiceInput.errorNotSupportedBrowser'));
       } else {
-        setRecordingError('无法访问麦克风，请检查设备权限或使用 HTTPS 环境');
+        setRecordingError(t('voiceInput.errorMicrophoneAccess'));
       }
       return false;
     }
-  }, [checkMediaDevicesSupport]);
+  }, [checkMediaDevicesSupport, t]);
 
   // 清理音频资源
   const cleanupAudioResources = useCallback(() => {
@@ -247,7 +247,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     const hasContent = finalTextRef.current || currentSegmentRef.current || value.trim();
     if (hasContent && !isTouchDevice()) {
       console.log('[语音输入] PC端：输入框有内容，无法开始新的录音');
-      setRecordingError('请先清空输入框内容后再开始录音');
+      setRecordingError(t('voiceInput.errorClearInputFirst'));
       isInitializingRef.current = false;
       return;
     }
@@ -336,7 +336,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         return true;
       }).catch((error: any) => {
         console.error('[语音输入] ❌ WebSocket连接失败:', error);
-        setRecordingError(`连接失败: ${error.message}`);
+        setRecordingError(`${t('voiceInput.errorConnectionFailed')}: ${error.message}`);
         setIsRecognizing(false);
         setInputMode('keyboard');
         isInitializingRef.current = false;
@@ -405,7 +405,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           clearTimeout(recognitionTimeoutRef.current);
           recognitionTimeoutRef.current = null;
         }
-        setRecordingError(`识别失败: ${error}`);
+        setRecordingError(`${t('voiceInput.errorRecognitionFailed')}: ${error}`);
         setIsRecognizing(false);
         setIsRecording(false);
         isRecordingRef.current = false;
@@ -483,7 +483,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     });
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('浏览器不支持麦克风访问，请使用 HTTPS 或 localhost');
+        throw new Error(t('voiceInput.errorNotSupportedBrowser'));
       }
 
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
@@ -762,7 +762,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
       } catch (error: any) {
         console.error('[语音输入] 录音失败:', error);
-        setRecordingError(`录音失败: ${error.message}`);
+        setRecordingError(`${t('voiceInput.errorRecordingFailed')}: ${error.message}`);
         setIsRecording(false);
         isRecordingRef.current = false;
         isInitializingRef.current = false;
@@ -812,7 +812,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       console.log('[语音输入] Manual模式，主动提交音频');
       speechRecognitionService.commit().catch(err => {
         console.error('[语音输入] 提交音频失败:', err);
-        setRecordingError(`提交音频失败: ${err.message}`);
+        setRecordingError(`${t('voiceInput.errorCommitFailed')}: ${err.message}`);
       });
     }
     
@@ -1551,13 +1551,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const displayPlaceholder = 
     // PC端识别中且无文本：始终显示"正在识别..."（关键修复，优先级最高）
     pcIsRecognizingState
-      ? '正在识别...'
+      ? t('voiceInput.recognizing')
       // PC端识别完成且无文本：显示"点击说话，自动结束"
       : pcIsCompletedState
-        ? '点击说话，自动结束'
+        ? t('voiceInput.clickToSpeak')
         // 移动端逻辑（保持不变，无问题）
         : (inputMode === 'voice' && isTouchDevice() && !isRecording && !isRecognizing && !shouldShowVoiceButton)
-          ? '按住说话，松开结束'
+          ? t('voiceInput.holdToSpeak')
           // 默认占位符（只有在不满足上述条件时才显示）
           : (placeholder || t('ui.inputPlaceholder'));
   
@@ -1590,7 +1590,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             paddingBottom: '8px',
             borderBottom: `1px solid ${isDarkMode ? '#4b5563' : '#e5e7eb'}`
           }}>
-            <strong style={{ color: isDarkMode ? '#f9fafb' : '#111827' }}>识别日志</strong>
+            <strong style={{ color: isDarkMode ? '#f9fafb' : '#111827' }}>{t('voiceInput.debugLogTitle')}</strong>
             <button
               onClick={() => setShowDebugLog(false)}
               style={{
@@ -1611,7 +1611,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           }}>
             {debugLogs.length === 0 ? (
               <div style={{ color: isDarkMode ? '#9ca3af' : '#6b7280', fontStyle: 'italic' }}>
-                暂无日志
+                {t('voiceInput.noLogs')}
               </div>
             ) : (
               debugLogs.map((log, index) => (
@@ -1646,7 +1646,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               width: '100%'
             }}
           >
-            清空日志
+            {t('voiceInput.clearLogs')}
           </button>
         </div>
       )}
@@ -1673,7 +1673,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             color: isDarkMode ? '#f9fafb' : '#111827',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
           }}
-          title="显示/隐藏识别日志"
+          title={t('voiceInput.showDebugLog')}
         >
           📋
         </button>
@@ -1729,7 +1729,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               color: isDarkMode ? '#9ca3af' : '#6b7280',
               fontSize: '14px'
             }}>
-              正在识别...
+              {t('voiceInput.recognizing')}
             </div>
           )}
         </div>
@@ -1766,7 +1766,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     pointerEvents: 'none' as const
                   }}
                 >
-                  {isRecording ? '松开结束' : '按住说话'}
+                  {isRecording ? t('voiceInput.releaseButton') : t('voiceInput.holdButton')}
                 </div>
               </button>
             </div>
@@ -1876,7 +1876,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                       e.currentTarget.style.backgroundColor = '#3b82f6';
                     }
                   }}
-                  title={recognizedText ? '发送' : t('ui.send')}
+                  title={recognizedText ? t('voiceInput.send') : t('ui.send')}
                 >
                   <Send size={20} />
                 </button>
@@ -1892,7 +1892,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   onMouseLeave={(e) => {
                     Object.assign(e.currentTarget.style, getStyles().voiceCancelButton);
                   }}
-                  title="取消"
+                  title={t('voiceInput.cancel')}
                 >
                   <X size={20} />
                 </button>
@@ -1924,7 +1924,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     e.currentTarget.style.borderRadius = '16px';
                     e.currentTarget.style.transform = '';
                   }}
-                  title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
+                  title={inputMode === 'voice' ? t('voiceInput.switchToKeyboard') : t('voiceInput.switchToVoice')}
                 >
                   {inputMode === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
                 </button>
@@ -1973,9 +1973,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   }}
                   title={
                     isRecognizing
-                      ? '取消'
+                      ? t('voiceInput.cancel')
                       : recognizedText
-                        ? '发送'
+                        ? t('voiceInput.send')
                         : isLoading
                           ? t('ui.stop')
                           : t('ui.send')
@@ -2001,7 +2001,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   onMouseLeave={(e) => {
                     Object.assign(e.currentTarget.style, getStyles().voiceCancelButton);
                   }}
-                  title="取消"
+                  title={t('voiceInput.cancel')}
                 >
                   <X size={20} />
                 </button>
@@ -2033,7 +2033,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     e.currentTarget.style.borderRadius = '16px';
                     e.currentTarget.style.transform = '';
                   }}
-                  title={inputMode === 'voice' ? '切换到键盘模式' : '切换到语音模式'}
+                  title={inputMode === 'voice' ? t('voiceInput.switchToKeyboard') : t('voiceInput.switchToVoice')}
                 >
                   {inputMode === 'voice' ? <Keyboard size={20} /> : <Mic size={20} />}
                 </button>

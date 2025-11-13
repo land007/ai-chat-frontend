@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { LogIn, Loader2, User, Lock } from 'lucide-react';
 
 const Login: React.FC = () => {
+  const { t } = useTranslation();
   const { authConfig, loginWithPassword, loginWithWework, handleAuthCallback, isLoading } = useAuth();
   const [error, setError] = useState<string>('');
   const [username, setUsername] = useState('');
@@ -23,17 +25,17 @@ const Login: React.FC = () => {
         })
         .catch((err) => {
           console.error('[登录组件] 授权回调失败:', err);
-          setError('登录失败，请重试');
+          setError(t('login.errorLoginFailed'));
           // 清除URL中的code参数
           window.history.replaceState({}, document.title, window.location.pathname);
         });
     }
-  }, [handleAuthCallback]);
+  }, [handleAuthCallback, t]);
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setError('请输入用户名和密码');
+      setError(t('login.errorUsernamePasswordRequired'));
       return;
     }
 
@@ -43,7 +45,7 @@ const Login: React.FC = () => {
     try {
       await loginWithPassword(username.trim(), password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败，请重试');
+      setError(err instanceof Error ? err.message : t('login.errorLoginFailed'));
     } finally {
       setIsPasswordLoading(false);
     }
@@ -153,7 +155,7 @@ const Login: React.FC = () => {
         <div style={styles.card}>
           <div style={styles.loader}>
             <Loader2 size={48} style={{ animation: 'spin 1s linear infinite' }} />
-            <p>正在验证身份...</p>
+            <p>{t('login.verifying')}</p>
           </div>
         </div>
         <style>
@@ -179,9 +181,9 @@ const Login: React.FC = () => {
         <div style={styles.icon}>
           <LogIn size={32} />
         </div>
-        <h1 style={styles.title}>登录</h1>
+        <h1 style={styles.title}>{t('login.title')}</h1>
         <p style={styles.description}>
-          请选择登录方式以访问AI智能助手
+          {t('login.description')}
         </p>
 
         {/* 用户名密码登录表单 */}
@@ -197,7 +199,7 @@ const Login: React.FC = () => {
               }} />
               <input
                 type="text"
-                placeholder="用户名"
+                placeholder={t('login.usernamePlaceholder')}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 style={{
@@ -217,7 +219,7 @@ const Login: React.FC = () => {
               }} />
               <input
                 type="password"
-                placeholder="密码"
+                placeholder={t('login.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 style={{
@@ -249,12 +251,12 @@ const Login: React.FC = () => {
             {isPasswordLoading ? (
               <>
                 <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
-                登录中...
+                {t('login.loggingIn')}
               </>
             ) : (
               <>
                 <User size={20} />
-                用户名密码登录
+                {t('login.usernamePasswordLogin')}
               </>
             )}
           </button>
@@ -271,7 +273,7 @@ const Login: React.FC = () => {
               fontSize: '14px'
             }}>
               <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
-              <span style={{ margin: '0 16px' }}>或</span>
+              <span style={{ margin: '0 16px' }}>{t('login.or')}</span>
               <div style={{ flex: 1, height: '1px', backgroundColor: '#e5e7eb' }}></div>
             </div>
             <button
@@ -294,7 +296,7 @@ const Login: React.FC = () => {
               }}
             >
               <LogIn size={20} />
-              使用企业微信登录
+              {t('login.weworkLogin')}
             </button>
           </>
         )}

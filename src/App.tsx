@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ChatInterface from './components/ChatInterface';
 import Login from './components/Login';
@@ -16,6 +17,7 @@ const WaveformPreview = lazy(() => import('./components/WaveformPreview'));
 type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback' | 'typewriter-code' | 'waveform-preview';
 
 function AppContent() {
+  const { t } = useTranslation();
   const { isAuthenticated, isLoading, user } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('chat');
   const [debugMode, setDebugMode] = useState(false);
@@ -65,7 +67,7 @@ function AppContent() {
         gap: '16px'
       }}>
         <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
-        <p style={{ color: '#6b7280', fontSize: '16px' }}>加载中...</p>
+        <p style={{ color: '#6b7280', fontSize: '16px' }}>{t('app.loading')}</p>
         <style>
           {`
             @keyframes spin {
@@ -109,51 +111,51 @@ function AppContent() {
           alignItems: 'center'
         }}>
           <span style={{ fontSize: '14px', fontWeight: '600', marginRight: '12px' }}>
-            测试导航:
+            {t('app.testNavigation')}
           </span>
           <button 
             onClick={() => setCurrentPage('chat')}
             style={buttonStyle('chat')}
           >
-            💬 聊天界面
+            {t('app.chatInterface')}
           </button>
           <button 
             onClick={() => setCurrentPage('typewriter-code')}
             style={buttonStyle('typewriter-code')}
           >
-            📝 打字机代码测试
+            {t('app.typewriterCodeTest')}
           </button>
           <button 
             onClick={() => setCurrentPage('stream-segment')}
             style={buttonStyle('stream-segment')}
           >
-            🔄 流式分段测试
+            {t('app.streamSegmentTest')}
           </button>
           <button 
             onClick={() => setCurrentPage('audio')}
             style={buttonStyle('audio')}
           >
-            🎵 音频队列测试
+            {t('app.audioQueueTest')}
           </button>
           <button 
             onClick={() => setCurrentPage('tts')}
             style={buttonStyle('tts')}
           >
-            🎙️ TTS集成测试
+            {t('app.ttsIntegrationTest')}
           </button>
           {isAdmin && (
             <button 
               onClick={() => setCurrentPage('feedback')}
               style={buttonStyle('feedback')}
             >
-              📊 反馈管理
+              {t('app.feedbackManagement')}
             </button>
           )}
           <button 
             onClick={() => setCurrentPage('waveform-preview')}
             style={buttonStyle('waveform-preview')}
           >
-            📊 波形预览
+            {t('app.waveformPreview')}
           </button>
         </div>
       )}
@@ -170,7 +172,7 @@ function AppContent() {
             gap: '16px'
           }}>
             <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载音频队列测试...</p>
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>{t('app.loadingAudioQueueTest')}</p>
           </div>
         }>
           <AudioQueuePlayerTest />
@@ -187,7 +189,7 @@ function AppContent() {
             gap: '16px'
           }}>
             <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载流式分段测试...</p>
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>{t('app.loadingStreamSegmentTest')}</p>
           </div>
         }>
           <StreamSegmentationTest />
@@ -204,7 +206,7 @@ function AppContent() {
             gap: '16px'
           }}>
             <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载TTS集成测试...</p>
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>{t('app.loadingTTSIntegrationTest')}</p>
           </div>
         }>
           <TTSIntegrationTest />
@@ -221,7 +223,7 @@ function AppContent() {
             gap: '16px'
           }}>
             <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载打字机代码测试...</p>
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>{t('app.loadingTypewriterCodeTest')}</p>
           </div>
         }>
           <TypewriterCodeTest />
@@ -238,7 +240,7 @@ function AppContent() {
             gap: '16px'
           }}>
             <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载反馈管理...</p>
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>{t('app.loadingFeedbackManagement')}</p>
           </div>
         }>
           <div style={{ height: '100vh', overflow: 'hidden' }}>
@@ -257,7 +259,7 @@ function AppContent() {
             gap: '16px'
           }}>
             <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
-            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载波形预览...</p>
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>{t('app.loadingWaveformPreview')}</p>
           </div>
         }>
           <div style={{

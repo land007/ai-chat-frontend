@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ThumbsUp, ThumbsDown, X, User, Bot, ChevronDown } from 'lucide-react';
 import { chatAPI } from '@/services/api';
 import { FeedbackListItem, FeedbackData } from '@/types';
@@ -9,6 +10,7 @@ interface FeedbackAdminProps {
 }
 
 const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) => {
+  const { t } = useTranslation();
   const [feedbackList, setFeedbackList] = useState<FeedbackListItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'like' | 'dislike'>('all');
   const [page, setPage] = useState(1);
@@ -326,7 +328,7 @@ const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) =>
         <div style={styles.container} onClick={(e) => e.stopPropagation()}>
           {/* 头部 */}
           <div style={styles.header}>
-            <h2 style={styles.title}>用户反馈管理</h2>
+            <h2 style={styles.title}>{t('feedback.title')}</h2>
             <button
               style={styles.closeButton}
               onClick={onClose}
@@ -350,7 +352,7 @@ const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) =>
               }}
               onClick={() => setFilter('all')}
             >
-              全部
+              {t('feedback.all')}
             </button>
             <button
               style={{
@@ -360,7 +362,7 @@ const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) =>
               onClick={() => setFilter('like')}
             >
               <ThumbsUp size={14} />
-              点赞
+              {t('feedback.like')}
             </button>
             <button
               style={{
@@ -370,14 +372,14 @@ const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) =>
               onClick={() => setFilter('dislike')}
             >
               <ThumbsDown size={14} />
-              点踩
+              {t('feedback.dislike')}
             </button>
           </div>
 
           {/* 列表 */}
           <div ref={listRef} style={styles.listContainer}>
             {feedbackList.length === 0 && !isLoading ? (
-              <div style={styles.emptyText}>暂无反馈数据</div>
+              <div style={styles.emptyText}>{t('feedback.empty')}</div>
             ) : (
               feedbackList.map((item) => (
                 <div
@@ -409,17 +411,17 @@ const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) =>
                   <div style={styles.listItemContent}>
                     <div style={styles.listItemTitle}>{item.filename}</div>
                     <div style={styles.listItemMeta}>
-                      <span>用户: {item.username}</span>
-                      <span>消息数: {item.messageCount}</span>
+                      <span>{t('feedback.user')}: {item.username}</span>
+                      <span>{t('feedback.messageCount')}: {item.messageCount}</span>
                       <span>{formatDate(item.timestamp)}</span>
                     </div>
                   </div>
                 </div>
               ))
             )}
-            {isLoading && <div style={styles.loadingText}>加载中...</div>}
+            {isLoading && <div style={styles.loadingText}>{t('feedback.loading')}</div>}
             {!hasMore && feedbackList.length > 0 && (
-              <div style={styles.loadingText}>没有更多了</div>
+              <div style={styles.loadingText}>{t('feedback.noMore')}</div>
             )}
           </div>
         </div>
@@ -431,7 +433,7 @@ const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) =>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div>
-                <h3 style={styles.title}>对话详情</h3>
+                <h3 style={styles.title}>{t('feedback.detailTitle')}</h3>
                 <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
                   {formatDate(selectedFeedback.timestamp)} · {selectedFeedback.username}
                 </div>
@@ -464,7 +466,7 @@ const FeedbackAdmin: React.FC<FeedbackAdminProps> = ({ isDarkMode, onClose }) =>
                       {message.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                     </div>
                     <span style={{ fontSize: '14px', fontWeight: '500', color: '#6b7280' }}>
-                      {message.role === 'user' ? '用户' : 'AI助手'}
+                      {message.role === 'user' ? t('feedback.user') : t('feedback.aiAssistant')}
                     </span>
                   </div>
                   <div
