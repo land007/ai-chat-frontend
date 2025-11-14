@@ -15,7 +15,10 @@ const ArcButtonLayoutTest: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // 布局参数
-  const containerHeight = 280; // 大元素高度（从350px减少到280px，整体下移70px）
+  // 计算合适的容器高度：按钮外半径265px，圆心在containerHeight+70，按钮最高点需要一些padding
+  // 按钮最高点相对于容器顶部 = (containerHeight + 70) - 265 - (screenHeight - containerHeight)
+  // 简化：按钮最高点需要约20-30px的padding，所以容器高度可以设置为约220px
+  const containerHeight = 220; // 减少容器高度，减少上方空白空间（从280px减少到220px）
   const arcRadius = 200; // 圆弧半径（大圆的半径）
   // 按钮应该落在大圆外侧，所以按钮的内半径应该大于圆弧半径
   // 增加buttonDistance，确保按钮内半径大于圆弧半径，避免压在大圆边线上
