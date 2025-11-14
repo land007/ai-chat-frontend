@@ -27,10 +27,10 @@ const ArcButtonLayoutTest: React.FC = () => {
   const buttonAngleRange = 50; // 按钮覆盖角度（从30度增加到50度，覆盖面积变大）
   
   // 按钮角度范围（向中间靠拢，减少中间空档）
-  const cancelButtonStartAngle = -50; // 取消按钮起始角度（从-70°向中间靠拢到-50°）
-  const cancelButtonEndAngle = -15; // 取消按钮结束角度（从-20°向中间靠拢到-15°）
-  const editButtonStartAngle = 15; // 编辑按钮起始角度（从+20°向中间靠拢到+15°）
-  const editButtonEndAngle = 50; // 编辑按钮结束角度（从+70°向中间靠拢到+50°）
+  const cancelButtonStartAngle = -45; // 取消按钮起始角度（进一步向中间靠拢）
+  const cancelButtonEndAngle = -10; // 取消按钮结束角度（进一步向中间靠拢）
+  const editButtonStartAngle = 10; // 编辑按钮起始角度（进一步向中间靠拢）
+  const editButtonEndAngle = 45; // 编辑按钮结束角度（进一步向中间靠拢）
 
   // 获取触摸位置
   const getTouchPoint = (e: React.TouchEvent | React.MouseEvent): Point => {
