@@ -23,7 +23,7 @@ const ArcButtonLayoutTest: React.FC = () => {
   // 按钮应该落在大圆外侧，所以按钮的内半径应该大于圆弧半径
   // 增加buttonDistance，确保按钮内半径大于圆弧半径，避免压在大圆边线上
   const buttonDistance = arcRadius + 40; // 按钮中心距离圆心的距离（240px，落在大圆外侧）
-  const buttonWidth = 50; // 按钮宽度（内外半径差，从30px增加到50px，变厚）
+  const buttonWidth = 70; // 按钮宽度（内外半径差，增加到70px，提供更多空间给图标和文字）
   const buttonAngleRange = 50; // 按钮覆盖角度（从30度增加到50度，覆盖面积变大）
   
   // 按钮角度范围（向中间靠拢，减少中间空档）
@@ -86,25 +86,32 @@ const ArcButtonLayoutTest: React.FC = () => {
 
   // 检测触摸点所在区域（基于按钮实际形状）
   const detectArea = (x: number, y: number, screenWidth: number): 'cancel' | 'edit' | 'send' | null => {
+    // 将触摸坐标从视口坐标转换为容器内坐标
+    // 容器是 position: fixed, bottom: 0，高度为 containerHeight
+    // 容器顶部在视口中的Y坐标 = window.innerHeight - containerHeight
+    const containerTopInViewport = window.innerHeight - containerHeight;
+    const yInContainer = y - containerTopInViewport;
+    
     const centerX = screenWidth / 2;
     // 圆弧是半圆，圆心在底部边缘：top + height = containerHeight - arcRadius + 70 + arcRadius = containerHeight + 70
-    const centerY = containerHeight + 70; // 大圆圆心Y坐标（圆弧底部边缘）
+    const centerY = containerHeight + 70; // 大圆圆心Y坐标（圆弧底部边缘，相对于容器顶部）
     
     const innerRadius = buttonDistance - buttonWidth / 2;
     const outerRadius = buttonDistance + buttonWidth / 2;
     
-    // 检测是否在取消按钮内
-    if (isPointInSector(x, y, centerX, centerY, innerRadius, outerRadius, cancelButtonStartAngle, cancelButtonEndAngle)) {
+    // 检测是否在取消按钮内（使用容器内坐标）
+    if (isPointInSector(x, yInContainer, centerX, centerY, innerRadius, outerRadius, cancelButtonStartAngle, cancelButtonEndAngle)) {
       return 'cancel';
     }
     
-    // 检测是否在编辑按钮内
-    if (isPointInSector(x, y, centerX, centerY, innerRadius, outerRadius, editButtonStartAngle, editButtonEndAngle)) {
+    // 检测是否在编辑按钮内（使用容器内坐标）
+    if (isPointInSector(x, yInContainer, centerX, centerY, innerRadius, outerRadius, editButtonStartAngle, editButtonEndAngle)) {
       return 'edit';
     }
     
     // 检测是否在发送区域（中央区域，不在按钮内）
-    if (x >= screenWidth * 0.3 && x <= screenWidth * 0.7) {
+    // 发送区域也需要使用容器内坐标进行检测
+    if (yInContainer >= 0 && yInContainer <= containerHeight && x >= screenWidth * 0.3 && x <= screenWidth * 0.7) {
       return 'send';
     }
     
@@ -393,15 +400,17 @@ const ArcButtonLayoutTest: React.FC = () => {
               position: 'absolute',
               top: `${sendButtonY}px`,
               left: '50%',
-              transform: 'translateX(-50%)',
-              fontSize: highlightedArea === 'send' ? '20px' : '18px',
-              fontWeight: highlightedArea === 'send' ? 'bold' : '600',
-              color: highlightedArea === 'send' ? '#3b82f6' : '#2563eb',
-              transition: 'all 0.2s ease',
+              transform: highlightedArea === 'send' ? 'translateX(-50%) scale(1.1)' : 'translateX(-50%) scale(1)',
+              fontSize: highlightedArea === 'send' ? '20px' : '17px',
+              fontWeight: highlightedArea === 'send' ? '700' : '500',
+              color: highlightedArea === 'send' ? '#2563eb' : '#64748b',
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
               pointerEvents: 'none',
               zIndex: 1002,
-              // 确保文字在圆弧内部可见
-              textShadow: '0 1px 2px rgba(255, 255, 255, 0.8)'
+              textShadow: highlightedArea === 'send' 
+                ? '0 2px 8px rgba(37, 99, 235, 0.3)' 
+                : '0 1px 3px rgba(255, 255, 255, 0.9)',
+              letterSpacing: '0.5px'
             }}
           >
             松开发送
@@ -417,10 +426,13 @@ const ArcButtonLayoutTest: React.FC = () => {
               height: '100%',
               clipPath: `path("${cancelButtonClipPath}")`,
               backgroundColor: highlightedArea === 'cancel' 
-                ? 'rgba(239, 68, 68, 0.3)' 
-                : 'rgba(239, 68, 68, 0.1)',
-              border: `2px solid ${highlightedArea === 'cancel' ? '#ef4444' : 'rgba(239, 68, 68, 0.3)'}`,
-              transition: 'all 0.2s ease',
+                ? 'rgba(239, 68, 68, 0.25)' 
+                : 'rgba(239, 68, 68, 0.08)',
+              border: `2px solid ${highlightedArea === 'cancel' ? '#ef4444' : 'rgba(239, 68, 68, 0.25)'}`,
+              boxShadow: highlightedArea === 'cancel' 
+                ? '0 4px 12px rgba(239, 68, 68, 0.3)' 
+                : 'none',
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
               cursor: 'pointer',
               zIndex: 1001,
               pointerEvents: 'auto'
@@ -432,26 +444,40 @@ const ArcButtonLayoutTest: React.FC = () => {
               position: 'absolute',
               left: `${cancelButtonCenter.x}px`,
               top: `${cancelButtonCenter.y}px`,
-              transform: 'translate(-50%, -50%)',
+              transform: highlightedArea === 'cancel' 
+                ? 'translate(-50%, -50%) scale(1.1)' 
+                : 'translate(-50%, -50%) scale(1)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: '3px',
               pointerEvents: 'none',
-              zIndex: 1002
+              zIndex: 1002,
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+              // 确保内容不超出按钮边界
+              width: '60px',
+              height: '60px',
+              overflow: 'hidden'
             }}
           >
             <X 
-              size={24} 
-              color={highlightedArea === 'cancel' ? '#ef4444' : '#dc2626'} 
+              size={highlightedArea === 'cancel' ? 26 : 24} 
+              color={highlightedArea === 'cancel' ? '#dc2626' : '#991b1b'} 
+              strokeWidth={highlightedArea === 'cancel' ? 2.5 : 2}
             />
             <span
               style={{
-                fontSize: '12px',
-                fontWeight: highlightedArea === 'cancel' ? 'bold' : 'normal',
-                color: highlightedArea === 'cancel' ? '#ef4444' : '#dc2626',
-                marginTop: '2px',
-                transition: 'all 0.2s ease'
+                fontSize: highlightedArea === 'cancel' ? '14px' : '13px',
+                fontWeight: highlightedArea === 'cancel' ? '700' : '500',
+                color: highlightedArea === 'cancel' ? '#dc2626' : '#991b1b',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                letterSpacing: '0.2px',
+                textShadow: highlightedArea === 'cancel' 
+                  ? '0 1px 3px rgba(220, 38, 38, 0.3)' 
+                  : 'none',
+                lineHeight: '1.2',
+                whiteSpace: 'nowrap'
               }}
             >
               取消
@@ -468,10 +494,13 @@ const ArcButtonLayoutTest: React.FC = () => {
               height: '100%',
               clipPath: `path("${editButtonClipPath}")`,
               backgroundColor: highlightedArea === 'edit' 
-                ? 'rgba(34, 197, 94, 0.3)' 
-                : 'rgba(34, 197, 94, 0.1)',
-              border: `2px solid ${highlightedArea === 'edit' ? '#22c55e' : 'rgba(34, 197, 94, 0.3)'}`,
-              transition: 'all 0.2s ease',
+                ? 'rgba(59, 130, 246, 0.25)' 
+                : 'rgba(59, 130, 246, 0.08)',
+              border: `2px solid ${highlightedArea === 'edit' ? '#3b82f6' : 'rgba(59, 130, 246, 0.25)'}`,
+              boxShadow: highlightedArea === 'edit' 
+                ? '0 4px 12px rgba(59, 130, 246, 0.3)' 
+                : 'none',
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
               cursor: 'pointer',
               zIndex: 1001,
               pointerEvents: 'auto'
@@ -483,26 +512,40 @@ const ArcButtonLayoutTest: React.FC = () => {
               position: 'absolute',
               left: `${editButtonCenter.x}px`,
               top: `${editButtonCenter.y}px`,
-              transform: 'translate(-50%, -50%)',
+              transform: highlightedArea === 'edit' 
+                ? 'translate(-50%, -50%) scale(1.1)' 
+                : 'translate(-50%, -50%) scale(1)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
+              gap: '3px',
               pointerEvents: 'none',
-              zIndex: 1002
+              zIndex: 1002,
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+              // 确保内容不超出按钮边界
+              width: '60px',
+              height: '60px',
+              overflow: 'hidden'
             }}
           >
             <Edit2 
-              size={24} 
-              color={highlightedArea === 'edit' ? '#22c55e' : '#16a34a'} 
+              size={highlightedArea === 'edit' ? 26 : 24} 
+              color={highlightedArea === 'edit' ? '#2563eb' : '#1e40af'} 
+              strokeWidth={highlightedArea === 'edit' ? 2.5 : 2}
             />
             <span
               style={{
-                fontSize: '12px',
-                fontWeight: highlightedArea === 'edit' ? 'bold' : 'normal',
-                color: highlightedArea === 'edit' ? '#22c55e' : '#16a34a',
-                marginTop: '2px',
-                transition: 'all 0.2s ease'
+                fontSize: highlightedArea === 'edit' ? '14px' : '13px',
+                fontWeight: highlightedArea === 'edit' ? '700' : '500',
+                color: highlightedArea === 'edit' ? '#2563eb' : '#1e40af',
+                transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                letterSpacing: '0.2px',
+                textShadow: highlightedArea === 'edit' 
+                  ? '0 1px 3px rgba(37, 99, 235, 0.3)' 
+                  : 'none',
+                lineHeight: '1.2',
+                whiteSpace: 'nowrap'
               }}
             >
               编辑
