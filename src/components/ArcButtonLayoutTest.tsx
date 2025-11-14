@@ -16,8 +16,18 @@ const ArcButtonLayoutTest: React.FC = () => {
 
   // 布局参数
   const containerHeight = 280; // 大元素高度（从350px减少到280px，整体下移70px）
-  const arcRadius = 200; // 圆弧半径（保持不变）
-  const buttonDistance = 120; // 按钮距离圆弧中心的距离（保持不变）
+  const arcRadius = 200; // 圆弧半径（大圆的半径）
+  // 按钮应该落在大圆外侧，所以按钮的内半径应该大于圆弧半径
+  // 增加buttonDistance，确保按钮内半径大于圆弧半径，避免压在大圆边线上
+  const buttonDistance = arcRadius + 40; // 按钮中心距离圆心的距离（240px，落在大圆外侧）
+  const buttonWidth = 50; // 按钮宽度（内外半径差，从30px增加到50px，变厚）
+  const buttonAngleRange = 50; // 按钮覆盖角度（从30度增加到50度，覆盖面积变大）
+  
+  // 按钮角度范围（向中间靠拢，减少中间空档）
+  const cancelButtonStartAngle = -50; // 取消按钮起始角度（从-70°向中间靠拢到-50°）
+  const cancelButtonEndAngle = -15; // 取消按钮结束角度（从-20°向中间靠拢到-15°）
+  const editButtonStartAngle = 15; // 编辑按钮起始角度（从+20°向中间靠拢到+15°）
+  const editButtonEndAngle = 50; // 编辑按钮结束角度（从+70°向中间靠拢到+50°）
 
   // 获取触摸位置
   const getTouchPoint = (e: React.TouchEvent | React.MouseEvent): Point => {
@@ -36,20 +46,65 @@ const ArcButtonLayoutTest: React.FC = () => {
     return { x: 0, y: 0 };
   };
 
-  // 检测触摸点所在区域（基于屏幕区域）
+  // 检测触摸点是否在扇形状按钮内（基于按钮实际形状）
+  const isPointInSector = (
+    pointX: number, 
+    pointY: number, 
+    centerX: number, 
+    centerY: number, 
+    innerRadius: number, 
+    outerRadius: number, 
+    startAngle: number, 
+    endAngle: number
+  ): boolean => {
+    const dx = pointX - centerX;
+    const dy = centerY - pointY; // 屏幕坐标系Y向下为正，向上需要减去
+    
+    // 计算距离
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // 检查距离是否在内外半径之间
+    if (distance < innerRadius || distance > outerRadius) {
+      return false;
+    }
+    
+    // 计算角度（向上为0°，左侧为负，右侧为正）
+    const angle = Math.atan2(dx, dy) * 180 / Math.PI;
+    
+    // 检查角度是否在范围内
+    if (startAngle < 0 && endAngle < 0) {
+      // 负角度范围（取消按钮）
+      return angle >= startAngle && angle <= endAngle;
+    } else {
+      // 正角度范围（编辑按钮）
+      return angle >= startAngle && angle <= endAngle;
+    }
+  };
+
+  // 检测触摸点所在区域（基于按钮实际形状）
   const detectArea = (x: number, y: number, screenWidth: number): 'cancel' | 'edit' | 'send' | null => {
-    // 检测是否在取消区域（左侧30%）
-    if (x < screenWidth * 0.3) {
+    const centerX = screenWidth / 2;
+    // 圆弧是半圆，圆心在底部边缘：top + height = containerHeight - arcRadius + 70 + arcRadius = containerHeight + 70
+    const centerY = containerHeight + 70; // 大圆圆心Y坐标（圆弧底部边缘）
+    
+    const innerRadius = buttonDistance - buttonWidth / 2;
+    const outerRadius = buttonDistance + buttonWidth / 2;
+    
+    // 检测是否在取消按钮内
+    if (isPointInSector(x, y, centerX, centerY, innerRadius, outerRadius, cancelButtonStartAngle, cancelButtonEndAngle)) {
       return 'cancel';
     }
-    // 检测是否在编辑区域（右侧30%）
-    if (x > screenWidth * 0.7) {
+    
+    // 检测是否在编辑按钮内
+    if (isPointInSector(x, y, centerX, centerY, innerRadius, outerRadius, editButtonStartAngle, editButtonEndAngle)) {
       return 'edit';
     }
-    // 检测是否在发送区域（中央40%）
+    
+    // 检测是否在发送区域（中央区域，不在按钮内）
     if (x >= screenWidth * 0.3 && x <= screenWidth * 0.7) {
       return 'send';
     }
+    
     return null;
   };
 
@@ -114,32 +169,87 @@ const ArcButtonLayoutTest: React.FC = () => {
     }
   };
 
-  // 计算按钮位置（基于角度和距离）
-  const calculateButtonPosition = (angle: number, distance: number, screenWidth: number): { x: number; y: number } => {
-    const centerX = screenWidth / 2;
-    // 圆弧中心Y坐标：随圆心下移，从 containerHeight - arcRadius 下移70px
-    const centerY = containerHeight - arcRadius + 70; // 从80px调整到150px
-    // 按钮额外下移：让按钮更靠近底部，更容易触达
-    const buttonAdditionalOffset = 60; // 按钮额外下移60px
+  // 计算扇形状按钮的clip-path路径
+  const calculateSectorClipPath = (
+    centerX: number,
+    centerY: number,
+    innerRadius: number,
+    outerRadius: number,
+    startAngle: number,
+    endAngle: number
+  ): string => {
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
     
-    const angleRad = (angle * Math.PI) / 180;
+    // 计算内外圆弧的四个点
+    const x1Inner = centerX + innerRadius * Math.sin(startRad);
+    const y1Inner = centerY - innerRadius * Math.cos(startRad);
+    const x2Inner = centerX + innerRadius * Math.sin(endRad);
+    const y2Inner = centerY - innerRadius * Math.cos(endRad);
+    const x1Outer = centerX + outerRadius * Math.sin(startRad);
+    const y1Outer = centerY - outerRadius * Math.cos(startRad);
+    const x2Outer = centerX + outerRadius * Math.sin(endRad);
+    const y2Outer = centerY - outerRadius * Math.cos(endRad);
+    
+    // 创建扇形路径：从内弧起点 -> 外弧起点 -> 外弧终点 -> 内弧终点 -> 闭合
+    return `M ${x1Inner} ${y1Inner} L ${x1Outer} ${y1Outer} A ${outerRadius} ${outerRadius} 0 0 1 ${x2Outer} ${y2Outer} L ${x2Inner} ${y2Inner} A ${innerRadius} ${innerRadius} 0 0 0 ${x1Inner} ${y1Inner} Z`;
+  };
+
+  // 计算按钮中心位置（用于放置图标和文字）
+  // 使用统一的圆心，按钮文字应该在按钮内部
+  const calculateButtonCenter = (startAngle: number, endAngle: number, distance: number, screenWidth: number): { x: number; y: number } => {
+    const centerX = screenWidth / 2;
+    // 圆弧是半圆，圆心在底部边缘：top + height = containerHeight - arcRadius + 70 + arcRadius = containerHeight + 70
+    const centerY = containerHeight + 70; // 大圆圆心Y坐标（圆弧底部边缘）
+    
+    // 计算按钮中心角度
+    const centerAngle = (startAngle + endAngle) / 2;
+    const angleRad = (centerAngle * Math.PI) / 180;
+    
+    // 基于统一圆心计算按钮中心位置（不使用额外偏移）
     const x = centerX + distance * Math.sin(angleRad);
-    // 按钮Y坐标：基于圆心计算后，再额外下移
-    const y = centerY - distance * Math.cos(angleRad) + buttonAdditionalOffset;
+    const y = centerY - distance * Math.cos(angleRad);
     
     return { x, y };
   };
 
   const screenWidth = containerRef.current?.clientWidth || window.innerWidth;
   
-  // 计算按钮位置
-  const cancelButtonPos = calculateButtonPosition(-45, buttonDistance, screenWidth);
-  const editButtonPos = calculateButtonPosition(45, buttonDistance, screenWidth);
+  // 计算大圆圆心位置（统一的圆心）
+  // 圆弧是半圆，圆心在底部边缘：top + height = containerHeight - arcRadius + 70 + arcRadius = containerHeight + 70
+  const arcCenterX = screenWidth / 2;
+  const arcCenterY = containerHeight + 70; // 大圆圆心Y坐标（圆弧底部边缘）
+  
+  // 计算按钮参数
+  const buttonInnerRadius = buttonDistance - buttonWidth / 2;
+  const buttonOuterRadius = buttonDistance + buttonWidth / 2;
+  
+  // 计算扇形状按钮的clip-path
+  const cancelButtonClipPath = calculateSectorClipPath(
+    arcCenterX,
+    arcCenterY,
+    buttonInnerRadius,
+    buttonOuterRadius,
+    cancelButtonStartAngle,
+    cancelButtonEndAngle
+  );
+  
+  const editButtonClipPath = calculateSectorClipPath(
+    arcCenterX,
+    arcCenterY,
+    buttonInnerRadius,
+    buttonOuterRadius,
+    editButtonStartAngle,
+    editButtonEndAngle
+  );
+  
+  // 计算按钮中心位置（用于放置图标和文字）
+  const cancelButtonCenter = calculateButtonCenter(cancelButtonStartAngle, cancelButtonEndAngle, buttonDistance, screenWidth);
+  const editButtonCenter = calculateButtonCenter(editButtonStartAngle, editButtonEndAngle, buttonDistance, screenWidth);
+  
   // 松开发送文字位置：在圆弧内部
-  // 圆弧顶部：containerHeight - arcRadius + 70 = 280 - 200 + 70 = 150px
-  // 圆弧中心（垂直方向）：containerHeight - arcRadius + 70 - arcRadius / 2 = 280 - 200 + 70 - 100 = 50px
-  // 文字位置在圆弧内部，随圆心下移70px
-  const sendButtonY = containerHeight - arcRadius + 70 + 50; // 在圆弧内部（150 + 50 = 200px）
+  // 圆心Y坐标是 containerHeight + 70，文字应该在圆心上方，距离圆心约 arcRadius - 50 的位置
+  const sendButtonY = (containerHeight + 70) - (arcRadius - 50); // 在圆弧内部
 
   return (
     <div
@@ -242,27 +352,38 @@ const ArcButtonLayoutTest: React.FC = () => {
             松开发送
           </div>
 
-          {/* 取消按钮（左侧，-45°位置） */}
+          {/* 取消按钮（扇形状，-60°到-30°） */}
           <div
             style={{
               position: 'absolute',
-              left: `${cancelButtonPos.x}px`,
-              top: `${cancelButtonPos.y}px`,
-              transform: 'translate(-50%, -50%)',
-              width: '60px',
-              height: '60px',
-              borderRadius: '50%',
+              left: 0,
+              top: 0,
+              width: '100%',
+              height: '100%',
+              clipPath: `path("${cancelButtonClipPath}")`,
               backgroundColor: highlightedArea === 'cancel' 
                 ? 'rgba(239, 68, 68, 0.3)' 
                 : 'rgba(239, 68, 68, 0.1)',
               border: `2px solid ${highlightedArea === 'cancel' ? '#ef4444' : 'rgba(239, 68, 68, 0.3)'}`,
+              transition: 'all 0.2s ease',
+              cursor: 'pointer',
+              zIndex: 1001,
+              pointerEvents: 'auto'
+            }}
+          />
+          {/* 取消按钮图标和文字（位于按钮中心） */}
+          <div
+            style={{
+              position: 'absolute',
+              left: `${cancelButtonCenter.x}px`,
+              top: `${cancelButtonCenter.y}px`,
+              transform: 'translate(-50%, -50%)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'all 0.2s ease',
-              cursor: 'pointer',
-              zIndex: 1001
+              pointerEvents: 'none',
+              zIndex: 1002
             }}
           >
             <X 
@@ -282,27 +403,38 @@ const ArcButtonLayoutTest: React.FC = () => {
             </span>
           </div>
 
-          {/* 编辑按钮（右侧，+45°位置） */}
+          {/* 编辑按钮（扇形状，+30°到+60°） */}
           <div
             style={{
               position: 'absolute',
-              left: `${editButtonPos.x}px`,
-              top: `${editButtonPos.y}px`,
-              transform: 'translate(-50%, -50%)',
-              width: '60px',
-              height: '60px',
-              borderRadius: '50%',
+              left: 0,
+              top: 0,
+              width: '100%',
+              height: '100%',
+              clipPath: `path("${editButtonClipPath}")`,
               backgroundColor: highlightedArea === 'edit' 
                 ? 'rgba(34, 197, 94, 0.3)' 
                 : 'rgba(34, 197, 94, 0.1)',
               border: `2px solid ${highlightedArea === 'edit' ? '#22c55e' : 'rgba(34, 197, 94, 0.3)'}`,
+              transition: 'all 0.2s ease',
+              cursor: 'pointer',
+              zIndex: 1001,
+              pointerEvents: 'auto'
+            }}
+          />
+          {/* 编辑按钮图标和文字（位于按钮中心） */}
+          <div
+            style={{
+              position: 'absolute',
+              left: `${editButtonCenter.x}px`,
+              top: `${editButtonCenter.y}px`,
+              transform: 'translate(-50%, -50%)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'all 0.2s ease',
-              cursor: 'pointer',
-              zIndex: 1001
+              pointerEvents: 'none',
+              zIndex: 1002
             }}
           >
             <Edit2 
