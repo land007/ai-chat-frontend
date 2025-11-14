@@ -13,8 +13,9 @@ const TTSIntegrationTest = lazy(() => import('./components/TTSIntegrationTest'))
 const TypewriterCodeTest = lazy(() => import('./components/TypewriterCodeTest'));
 const FeedbackAdmin = lazy(() => import('./components/FeedbackAdmin'));
 const WaveformPreview = lazy(() => import('./components/WaveformPreview'));
+const ArcButtonLayoutTest = lazy(() => import('./components/ArcButtonLayoutTest'));
 
-type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback' | 'typewriter-code' | 'waveform-preview';
+type Page = 'chat' | 'audio' | 'stream-segment' | 'tts' | 'feedback' | 'typewriter-code' | 'waveform-preview' | 'arc-button-layout';
 
 function AppContent() {
   const { t } = useTranslation();
@@ -157,6 +158,12 @@ function AppContent() {
           >
             {t('app.waveformPreview')}
           </button>
+          <button 
+            onClick={() => setCurrentPage('arc-button-layout')}
+            style={buttonStyle('arc-button-layout')}
+          >
+            等距圆弧布局
+          </button>
         </div>
       )}
       
@@ -275,6 +282,23 @@ function AppContent() {
               }}
             />
           </div>
+        </Suspense>
+      )}
+      {currentPage === 'arc-button-layout' && (
+        <Suspense fallback={
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100vh',
+            gap: '16px'
+          }}>
+            <Loader2 size={48} style={{ animation: 'spin 1s linear infinite', color: '#3b82f6' }} />
+            <p style={{ color: '#6b7280', fontSize: '16px' }}>加载等距圆弧布局测试...</p>
+          </div>
+        }>
+          <ArcButtonLayoutTest />
         </Suspense>
       )}
     </div>
