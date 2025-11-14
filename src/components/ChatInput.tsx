@@ -895,8 +895,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
     const fullText = finalTextRef.current + currentSegmentRef.current;
     const textToSend = fullText || recognizedText || value.trim();
     if (textToSend && !isLoading) {
-      onChange(textToSend);
-      
       // 清空所有内容，重置所有状态
       finalTextRef.current = '';
       currentSegmentRef.current = '';
@@ -904,8 +902,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
       setInputMode('keyboard');
       setIsRecognizing(false);
       
+      // 发送消息
       setTimeout(() => {
         onSend(textToSend);
+        // 发送后清空父组件的 inputValue
+        onChange('');
       }, 0);
     }
   }, [recognizedText, value, isLoading, onChange, onSend]);
