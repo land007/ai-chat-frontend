@@ -11,6 +11,9 @@ html, body {
   left: 0;
   right: 0;
   bottom: 0;
+  /* 添加安全区域支持，防止iPhone底部Home Indicator遮挡内容 */
+  /* 在旧设备上 env() 返回 0，不会增加额外内边距 */
+  padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
 body {

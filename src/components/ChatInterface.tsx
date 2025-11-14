@@ -1280,7 +1280,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     container: {
       display: 'flex',
       flexDirection: 'column' as const,
-      height: '100vh',
+      /* 在旧设备上 env() 返回 0，height 保持为 100vh，不会减少高度 */
+      height: 'calc(100vh - env(safe-area-inset-top, 0))',
       width: '100vw',
       backgroundColor: bgColor,
       color: textColor,
@@ -1529,7 +1530,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ className = '' }) => {
     inputArea: {
       backgroundColor: surfaceColor,
       borderTop: `1px solid ${borderColor}`,
-      padding: '16px 24px'
+      padding: '16px 24px',
+      /* 在旧设备上 env() 返回 0，paddingBottom 保持为 16px，不会增加额外内边距 */
+      paddingBottom: `calc(16px + env(safe-area-inset-bottom, 0))`
     },
     inputContainer: {
       display: 'flex',
