@@ -172,7 +172,7 @@ const ArcButtonLayoutTest: React.FC = () => {
     }
   };
 
-  // 计算扇形状按钮的clip-path路径
+  // 计算扇形状按钮的clip-path路径（带圆角）
   const calculateSectorClipPath = (
     centerX: number,
     centerY: number,
@@ -183,6 +183,7 @@ const ArcButtonLayoutTest: React.FC = () => {
   ): string => {
     const startRad = (startAngle * Math.PI) / 180;
     const endRad = (endAngle * Math.PI) / 180;
+    const cornerRadius = 8; // 圆角半径（轻微圆角）
     
     // 计算内外圆弧的四个点
     const x1Inner = centerX + innerRadius * Math.sin(startRad);
@@ -194,8 +195,59 @@ const ArcButtonLayoutTest: React.FC = () => {
     const x2Outer = centerX + outerRadius * Math.sin(endRad);
     const y2Outer = centerY - outerRadius * Math.cos(endRad);
     
-    // 创建扇形路径：从内弧起点 -> 外弧起点 -> 外弧终点 -> 内弧终点 -> 闭合
-    return `M ${x1Inner} ${y1Inner} L ${x1Outer} ${y1Outer} A ${outerRadius} ${outerRadius} 0 0 1 ${x2Outer} ${y2Outer} L ${x2Inner} ${y2Inner} A ${innerRadius} ${innerRadius} 0 0 0 ${x1Inner} ${y1Inner} Z`;
+    // 计算圆角：在四个连接点处添加圆角过渡
+    // 1. 左侧连接（内弧起点 → 外弧起点）
+    // 计算从内弧起点到外弧起点的方向向量
+    const dx1 = x1Outer - x1Inner;
+    const dy1 = y1Outer - y1Inner;
+    const dist1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+    const unitX1 = dx1 / dist1;
+    const unitY1 = dy1 / dist1;
+    // 圆角起点和终点（在直线上，距离连接点cornerRadius）
+    const corner1StartX = x1Inner + unitX1 * cornerRadius;
+    const corner1StartY = y1Inner + unitY1 * cornerRadius;
+    const corner1EndX = x1Outer - unitX1 * cornerRadius;
+    const corner1EndY = y1Outer - unitY1 * cornerRadius;
+    // 圆角控制点（在连接点处）
+    const corner1ControlX = x1Inner;
+    const corner1ControlY = y1Inner;
+    
+    // 2. 右侧连接（外弧终点 → 内弧终点）
+    const dx2 = x2Inner - x2Outer;
+    const dy2 = y2Inner - y2Outer;
+    const dist2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+    const unitX2 = dx2 / dist2;
+    const unitY2 = dy2 / dist2;
+    const corner2StartX = x2Outer + unitX2 * cornerRadius;
+    const corner2StartY = y2Outer + unitY2 * cornerRadius;
+    const corner2EndX = x2Inner - unitX2 * cornerRadius;
+    const corner2EndY = y2Inner - unitY2 * cornerRadius;
+    const corner2ControlX = x2Outer;
+    const corner2ControlY = y2Outer;
+    
+    // 3. 调整圆弧起点和终点，为圆角留出空间
+    // 内弧：稍微调整起点和终点角度
+    const innerCornerAngle = (cornerRadius / innerRadius) * (180 / Math.PI); // 转换为角度
+    const innerStartAdjust = startRad + (innerCornerAngle * Math.PI / 180);
+    const innerEndAdjust = endRad - (innerCornerAngle * Math.PI / 180);
+    const innerStartX = centerX + innerRadius * Math.sin(innerStartAdjust);
+    const innerStartY = centerY - innerRadius * Math.cos(innerStartAdjust);
+    const innerEndX = centerX + innerRadius * Math.sin(innerEndAdjust);
+    const innerEndY = centerY - innerRadius * Math.cos(innerEndAdjust);
+    
+    // 外弧：稍微调整起点和终点角度
+    const outerCornerAngle = (cornerRadius / outerRadius) * (180 / Math.PI);
+    const outerStartAdjust = startRad + (outerCornerAngle * Math.PI / 180);
+    const outerEndAdjust = endRad - (outerCornerAngle * Math.PI / 180);
+    const outerStartX = centerX + outerRadius * Math.sin(outerStartAdjust);
+    const outerStartY = centerY - outerRadius * Math.cos(outerStartAdjust);
+    const outerEndX = centerX + outerRadius * Math.sin(outerEndAdjust);
+    const outerEndY = centerY - outerRadius * Math.cos(outerEndAdjust);
+    
+    // 构建路径：从内弧起点（调整后） -> 左侧圆角 -> 外弧起点（调整后） -> 外弧 -> 右侧圆角 -> 内弧终点（调整后） -> 内弧 -> 闭合
+    // 使用二次贝塞尔曲线（Q命令）创建圆角
+    const path = `M ${innerStartX} ${innerStartY} L ${corner1StartX} ${corner1StartY} Q ${corner1ControlX} ${corner1ControlY} ${corner1EndX} ${corner1EndY} L ${outerStartX} ${outerStartY} A ${outerRadius} ${outerRadius} 0 0 1 ${outerEndX} ${outerEndY} L ${corner2StartX} ${corner2StartY} Q ${corner2ControlX} ${corner2ControlY} ${corner2EndX} ${corner2EndY} L ${innerEndX} ${innerEndY} A ${innerRadius} ${innerRadius} 0 0 0 ${innerStartX} ${innerStartY} Z`;
+    return path;
   };
 
   // 计算按钮中心位置（用于放置图标和文字）
