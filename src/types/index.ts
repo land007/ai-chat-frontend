@@ -294,6 +294,97 @@ export interface SpeechRecognitionService {
   onComplete: (callback: () => void) => void;
 }
 
+// 弧形按钮布局相关类型
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export type ArcButtonArea = 'cancel' | 'edit' | 'send' | null;
+
+// 按钮配置
+export interface ArcButtonConfig {
+  text: string;
+  icon?: React.ReactNode;
+  startAngle: number;
+  endAngle: number;
+  color?: {
+    normal: string;
+    highlighted: string;
+    border?: string;
+    borderHighlighted?: string;
+  };
+}
+
+// 中心按钮配置
+export interface ArcCenterButtonConfig {
+  text: string;
+  color?: {
+    normal: string;
+    highlighted: string;
+  };
+}
+
+// 初始按钮配置
+export interface ArcInitialButtonConfig {
+  show?: boolean;
+  text?: string;
+  icon?: React.ReactNode;
+  position?: {
+    bottom?: number;
+  };
+  style?: React.CSSProperties;
+}
+
+// 布局配置（可选）
+export interface ArcLayoutConfig {
+  containerHeight?: number;
+  arcRadius?: number;
+  buttonDistance?: number;
+  buttonWidth?: number;
+  arcCenterOffset?: number; // 圆心Y坐标偏移量，默认70
+  sendAreaWidth?: number; // 发送区域宽度比例，默认0.4 (0.3-0.7)
+}
+
+// 样式配置（可选）
+export interface ArcStyleConfig {
+  containerBackground?: string;
+  containerZIndex?: number;
+  arcColor?: string;
+  cornerRadius?: number;
+}
+
+// 弧形按钮布局组件Props
+export interface ArcButtonLayoutProps {
+  // 回调函数
+  onCancel?: () => void;
+  onEdit?: () => void;
+  onSend?: () => void;
+  
+  // 按钮配置
+  leftButton?: ArcButtonConfig;
+  rightButton?: ArcButtonConfig;
+  centerButton?: ArcCenterButtonConfig;
+  
+  // 初始按钮配置
+  initialButton?: ArcInitialButtonConfig;
+  
+  // 布局配置（可选）
+  layoutConfig?: ArcLayoutConfig;
+  
+  // 样式配置（可选）
+  styleConfig?: ArcStyleConfig;
+  
+  // 调试模式
+  debug?: boolean;
+  
+  // 容器样式
+  containerStyle?: React.CSSProperties;
+  
+  // 是否禁用
+  disabled?: boolean;
+}
+
 // 窗口对象扩展
 declare global {
   interface Window {
