@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Send } from 'lucide-react';
 import { 
   ArcButtonLayoutProps, 
   Point, 
@@ -13,6 +14,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
   onCancel,
   onEdit,
   onSend,
+  onInitialButtonPress,
   leftButton,
   rightButton,
   centerButton,
@@ -22,6 +24,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
   debug = false,
   containerStyle,
   disabled = false,
+  persistOnPress = false, // 默认不保持显示，手指离开后消失
 }) => {
   const [isPressed, setIsPressed] = useState(false);
   const [touchPosition, setTouchPosition] = useState<Point | null>(null);
@@ -29,19 +32,19 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
   
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 默认布局配置
+  // 默认布局配置（缩小尺寸）
   const defaultLayoutConfig: Required<ArcLayoutConfig> = {
-    containerHeight: 220,
-    arcRadius: 200,
-    buttonDistance: 240, // arcRadius + 40
-    buttonWidth: 70,
-    arcCenterOffset: 70,
+    containerHeight: 160, // 从 220 减小到 160
+    arcRadius: 140, // 从 200 减小到 140
+    buttonDistance: 172, // arcRadius + 32，让按钮离圆圈 2px 距离（buttonInnerRadius = 172 - 30 = 142，arcRadius = 140，距离 = 2px）
+    buttonWidth: 50, // 从 60 减小到 50，让按钮更薄
+    arcCenterOffset: 50, // 从 70 减小到 50
     sendAreaWidth: 0.4, // 0.3 to 0.7
   };
 
-  // 默认样式配置
+  // 默认样式配置（统一样式）
   const defaultStyleConfig: Required<ArcStyleConfig> = {
-    containerBackground: 'rgba(255, 255, 255, 0.95)',
+    containerBackground: 'rgba(255, 255, 255, 0.95)', // 统一背景色，带透明度
     containerZIndex: 1000,
     arcColor: 'rgba(59, 130, 246, 0.3)',
     cornerRadius: 8,
@@ -73,12 +76,13 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
     },
   };
 
-  // 默认中心按钮
+  // 默认中心按钮（使用绿色系，表示确认/成功操作）
   const defaultCenterButton: ArcCenterButtonConfig = {
     text: '松开发送',
+    icon: <Send />,
     color: {
-      normal: '#64748b',
-      highlighted: '#2563eb',
+      normal: '#64748b', // 灰色，未高亮时保持中性
+      highlighted: '#10b981', // 绿色，高亮时表示确认/成功操作
     },
   };
 
@@ -149,7 +153,10 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
     const containerTopInViewport = window.innerHeight - layout.containerHeight;
     const yInContainer = y - containerTopInViewport;
     
-    const centerX = screenWidth / 2;
+    // 容器有左右边距 16px，实际容器宽度需要考虑这个
+    const containerPadding = 16;
+    const containerWidth = screenWidth - containerPadding * 2;
+    const centerX = containerPadding + containerWidth / 2; // 屏幕上的绝对坐标（用于触摸检测）
     // 圆弧是半圆，圆心在底部边缘
     const centerY = layout.containerHeight + layout.arcCenterOffset;
     
@@ -182,6 +189,12 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
     if (disabled) return;
     e.preventDefault();
     const point = getTouchPoint(e);
+    
+    // 如果当前未按下且按下了初始按钮区域，调用 onInitialButtonPress
+    if (!isPressed && onInitialButtonPress) {
+      onInitialButtonPress();
+    }
+    
     setIsPressed(true);
     setTouchPosition(point);
     setHighlightedArea(null);
@@ -225,11 +238,17 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
   // 处理离开（防止卡住）
   const handlePointerLeave = () => {
     if (isPressed && !disabled) {
-      setIsPressed(false);
-      setTimeout(() => {
+      // 如果设置了 persistOnPress，不清除 isPressed，只清除高亮状态
+      if (persistOnPress) {
         setTouchPosition(null);
         setHighlightedArea(null);
-      }, 100);
+      } else {
+        setIsPressed(false);
+        setTimeout(() => {
+          setTouchPosition(null);
+          setHighlightedArea(null);
+        }, 100);
+      }
     }
   };
 
@@ -310,9 +329,8 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
     startAngle: number, 
     endAngle: number, 
     distance: number, 
-    screenWidth: number
+    containerCenterX: number // 使用容器中心X坐标
   ): { x: number; y: number } => {
-    const centerX = screenWidth / 2;
     const centerY = layout.containerHeight + layout.arcCenterOffset;
     
     // 计算按钮中心角度
@@ -320,7 +338,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
     const angleRad = (centerAngle * Math.PI) / 180;
     
     // 基于统一圆心计算按钮中心位置
-    const x = centerX + distance * Math.sin(angleRad);
+    const x = containerCenterX + distance * Math.sin(angleRad);
     const y = centerY - distance * Math.cos(angleRad);
     
     return { x, y };
@@ -328,17 +346,23 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
 
   const screenWidth = containerRef.current?.clientWidth || window.innerWidth;
   
+  // 容器有左右边距 16px，实际容器宽度需要考虑这个
+  const containerPadding = 16; // 左右各 16px
+  const containerWidth = screenWidth - containerPadding * 2;
+  
   // 计算大圆圆心位置
-  const arcCenterX = screenWidth / 2;
+  // 注意：按钮的 clip-path 和图标文字是相对于容器的，所以使用容器内的相对坐标
+  const arcCenterXRelative = containerWidth / 2; // 容器内的相对坐标（相对于容器左边缘）
+  const arcCenterXAbsolute = containerPadding + containerWidth / 2; // 屏幕上的绝对坐标（用于触摸检测）
   const arcCenterY = layout.containerHeight + layout.arcCenterOffset;
   
   // 计算按钮参数
   const buttonInnerRadius = layout.buttonDistance - layout.buttonWidth / 2;
   const buttonOuterRadius = layout.buttonDistance + layout.buttonWidth / 2;
   
-  // 计算扇形状按钮的clip-path
+  // 计算扇形状按钮的clip-path（使用容器内的相对坐标）
   const leftButtonClipPath = calculateSectorClipPath(
-    arcCenterX,
+    arcCenterXRelative, // 使用容器内的相对坐标
     arcCenterY,
     buttonInnerRadius,
     buttonOuterRadius,
@@ -347,7 +371,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
   );
   
   const rightButtonClipPath = calculateSectorClipPath(
-    arcCenterX,
+    arcCenterXRelative, // 使用容器内的相对坐标
     arcCenterY,
     buttonInnerRadius,
     buttonOuterRadius,
@@ -355,22 +379,22 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
     rightBtn.endAngle
   );
   
-  // 计算按钮中心位置（用于放置图标和文字）
+  // 计算按钮中心位置（用于放置图标和文字，使用容器内的相对坐标）
   const leftButtonCenter = calculateButtonCenter(
     leftBtn.startAngle, 
     leftBtn.endAngle, 
     layout.buttonDistance, 
-    screenWidth
+    arcCenterXRelative // 使用容器内的相对坐标
   );
   const rightButtonCenter = calculateButtonCenter(
     rightBtn.startAngle, 
     rightBtn.endAngle, 
     layout.buttonDistance, 
-    screenWidth
+    arcCenterXRelative // 使用容器内的相对坐标
   );
   
-  // 中心按钮文字位置：在圆弧内部
-  const centerButtonY = arcCenterY - (layout.arcRadius - 50);
+  // 中心按钮文字位置：在圆弧内部（向下移动）
+  const centerButtonY = arcCenterY - (layout.arcRadius - 40); // 从 30 改为 40，向下移动约 10px
 
   // 从 rgba 颜色中提取对应的实色（用于图标和文字）
   const getSolidColor = (rgbaColor: string, isHighlighted: boolean): string => {
@@ -403,6 +427,11 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
       : (button.color?.normal || 'rgba(59, 130, 246, 0.08)');
     
     const textColor = getSolidColor(bgColor, isHighlighted);
+    
+    // 判断是否是编辑按钮（蓝色系），编辑按钮的图标要小一点
+    const isEditButton = button.text === '编辑' || 
+      (button.color?.normal && button.color.normal.includes('59, 130, 246'));
+    const iconSize = isEditButton ? 20 : 24; // 编辑按钮图标 20px，其他按钮 24px
 
     return (
       <>
@@ -414,7 +443,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
           }}>
             {React.isValidElement(button.icon) 
               ? React.cloneElement(button.icon as React.ReactElement<any>, {
-                  size: isHighlighted ? 26 : 24,
+                  size: iconSize, // 编辑按钮图标更小
                   color: textColor,
                   strokeWidth: isHighlighted ? 2.5 : 2,
                 })
@@ -424,7 +453,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
         )}
         <span
           style={{
-            fontSize: isHighlighted ? '14px' : '13px',
+            fontSize: '12px', // 保持字体大小不变，不高亮时放大
             fontWeight: isHighlighted ? '700' : '500',
             color: textColor,
             transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -467,24 +496,27 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
       onMouseUp={handlePointerUp}
       onMouseLeave={handlePointerLeave}
     >
-      {/* 按下后显示的弧形按钮容器 */}
-      {isPressed && (
+      {/* 按下后显示的弧形按钮容器（整体设计的最底层，包含统一阴影） */}
+      {/* 如果设置了 persistOnPress，则一直显示；否则只在 isPressed 时显示 */}
+      {(isPressed || persistOnPress) && (
         <div
           style={{
             position: 'fixed',
             bottom: 0,
-            left: 0,
-            right: 0,
+            left: '16px',
+            right: '16px',
             height: `${layout.containerHeight}px`,
             backgroundColor: style.containerBackground,
             backdropFilter: 'blur(10px)',
-            boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.1)',
+            borderRadius: '0 0 12px 12px', // 底部圆角，作为整体设计的底部
+            // 统一的整体阴影，让三个组件看起来像一个整体
+            boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.15)',
             zIndex: style.containerZIndex,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'flex-start',
-            paddingTop: '20px',
+            paddingTop: '16px',
             overflow: 'hidden'
           }}
         >
@@ -504,7 +536,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
               pointerEvents: 'none'
             }}
           >
-            {/* 圆弧遮罩 */}
+            {/* 圆弧遮罩（发送区域背景） */}
             <div
               style={{
                 position: 'absolute',
@@ -513,42 +545,76 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
                 transform: 'translateX(-50%)',
                 width: `${layout.arcRadius * 2 * Math.sin(22.5 * Math.PI / 180)}px`,
                 height: '100%',
-                backgroundColor: style.arcColor.replace('0.3', '0.05'),
+                // 发送区域使用绿色背景（默认和高亮都是绿色，高亮时更明显）
+                backgroundColor: isCenterHighlighted 
+                  ? 'rgba(16, 185, 129, 0.08)' // 绿色背景，高亮时更明显
+                  : 'rgba(16, 185, 129, 0.05)', // 绿色背景，默认状态（淡绿色）
                 clipPath: `polygon(
                   0% 0%,
                   50% ${layout.arcRadius * (1 - Math.cos(22.5 * Math.PI / 180))}px,
                   100% 0%,
                   100% 100%,
                   0% 100%
-                )`
+                )`,
+                transition: 'background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
             />
           </div>
 
-          {/* 中心按钮文字 */}
+          {/* 中心按钮（文字和图标） */}
           <div
             style={{
               position: 'absolute',
               top: `${centerButtonY}px`,
               left: '50%',
-              transform: isCenterHighlighted 
-                ? 'translateX(-50%) scale(1.1)' 
-                : 'translateX(-50%) scale(1)',
-              fontSize: isCenterHighlighted ? '20px' : '17px',
-              fontWeight: isCenterHighlighted ? '700' : '500',
-              color: isCenterHighlighted 
-                ? centerBtn.color?.highlighted 
-                : centerBtn.color?.normal,
+              transform: 'translate(-50%, -50%)', // 移除 scale 效果，字体大小不变
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
               transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
               pointerEvents: 'none',
               zIndex: style.containerZIndex + 2,
-              textShadow: isCenterHighlighted 
-                ? '0 2px 8px rgba(37, 99, 235, 0.3)' 
-                : '0 1px 3px rgba(255, 255, 255, 0.9)',
-              letterSpacing: '0.5px'
             }}
           >
-            {centerBtn.text}
+            {/* 文字 */}
+            <span
+              style={{
+                fontSize: '15px', // 保持字体大小不变，不高亮时放大
+                fontWeight: isCenterHighlighted ? '700' : '500',
+                color: isCenterHighlighted 
+                  ? centerBtn.color?.highlighted 
+                  : centerBtn.color?.normal,
+                textShadow: isCenterHighlighted 
+                  ? '0 2px 8px rgba(16, 185, 129, 0.3)' // 绿色阴影，与文字颜色匹配
+                  : '0 1px 3px rgba(255, 255, 255, 0.9)',
+                letterSpacing: '0.5px',
+                lineHeight: '1.2',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {centerBtn.text}
+            </span>
+            {/* 图标 */}
+            {centerBtn.icon && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                {React.isValidElement(centerBtn.icon) 
+                  ? React.cloneElement(centerBtn.icon as React.ReactElement<any>, {
+                      size: 18, // 保持图标大小不变，不高亮时放大
+                      color: isCenterHighlighted 
+                        ? centerBtn.color?.highlighted 
+                        : centerBtn.color?.normal,
+                      strokeWidth: isCenterHighlighted ? 2.5 : 2,
+                    })
+                  : centerBtn.icon
+                }
+              </div>
+            )}
           </div>
 
           {/* 左侧按钮（扇形） */}
@@ -581,9 +647,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
               position: 'absolute',
               left: `${leftButtonCenter.x}px`,
               top: `${leftButtonCenter.y}px`,
-              transform: isLeftHighlighted 
-                ? 'translate(-50%, -50%) scale(1.1)' 
-                : 'translate(-50%, -50%) scale(1)',
+              transform: 'translate(-50%, -50%)', // 移除 scale 效果，字体大小不变
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -630,9 +694,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
               position: 'absolute',
               left: `${rightButtonCenter.x}px`,
               top: `${rightButtonCenter.y}px`,
-              transform: isRightHighlighted 
-                ? 'translate(-50%, -50%) scale(1.1)' 
-                : 'translate(-50%, -50%) scale(1)',
+              transform: 'translate(-50%, -50%)', // 移除 scale 效果，字体大小不变
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -655,8 +717,8 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
       {!isPressed && initialButton?.show !== false && (
         <div
           style={{
-            position: 'absolute',
-            bottom: `${initialButton?.position?.bottom ?? 80}px`,
+            position: 'fixed',
+            bottom: `${initialButton?.position?.bottom ?? 20}px`, // 从 80 降低到 20，更靠近底部
             left: '50%',
             transform: 'translateX(-50%)',
             minWidth: '120px',
@@ -672,7 +734,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
             boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
             cursor: disabled ? 'not-allowed' : 'pointer',
             userSelect: 'none',
-            zIndex: 100,
+            zIndex: 1001,
             transition: 'all 0.2s ease',
             opacity: disabled ? 0.5 : 1,
             ...initialButton?.style,
@@ -691,7 +753,7 @@ const ArcButtonLayout: React.FC<ArcButtonLayoutProps> = ({
           }}
         >
           {initialButton?.icon || null}
-          <span style={{ fontSize: '16px', fontWeight: '500' }}>
+          <span style={{ fontSize: '15px', fontWeight: '500' }}>
             {initialButton?.text || '点击说话'}
           </span>
         </div>

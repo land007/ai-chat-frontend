@@ -319,6 +319,7 @@ export interface ArcButtonConfig {
 // 中心按钮配置
 export interface ArcCenterButtonConfig {
   text: string;
+  icon?: React.ReactNode;
   color?: {
     normal: string;
     highlighted: string;
@@ -356,10 +357,13 @@ export interface ArcStyleConfig {
 
 // 弧形按钮布局组件Props
 export interface ArcButtonLayoutProps {
+  // 是否应该保持显示状态（即使手指离开也不消失）
+  persistOnPress?: boolean;
   // 回调函数
   onCancel?: () => void;
   onEdit?: () => void;
   onSend?: () => void;
+  onInitialButtonPress?: () => void; // 初始按钮按下时的回调
   
   // 按钮配置
   leftButton?: ArcButtonConfig;
