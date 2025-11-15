@@ -222,7 +222,7 @@ const ArcButtonLayoutTest: React.FC = () => {
           text: '松开发送',
           color: {
             normal: '#64748b',
-            highlighted: '#2563eb',
+            highlighted: '#10b981', // 绿色，与编辑按钮的蓝色区分开
           },
         }}
         initialButton={{
